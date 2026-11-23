@@ -1,4 +1,4 @@
-import { Crown, Briefcase, Palette, Database, Mail, FileText, CreditCard, Wallet, Printer, Tablet, Bluetooth, ShieldCheck, Zap, Globe, LayoutTemplate, Bell } from 'lucide-react';
+import { Crown, Briefcase, Palette, Database, Mail, FileText, CreditCard, Printer, Tablet, Bluetooth, ShieldCheck, Zap, Globe, LayoutTemplate, Bell } from 'lucide-react';
 
 // Eén bron voor de Instellingen-onderdelen: gebruikt door zijmenu-dropdown,
 // mobiele sheet en InstellingenHub.
@@ -9,8 +9,7 @@ export const INSTELLINGEN_SECTIONS = [
   { id: 'smtp', label: 'E-mail (SMTP)', desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.', icon: Mail },
   { id: 'invoicing', label: 'Facturen automatisering', desc: 'Automatische maand-facturen na grace periode.', icon: FileText },
   { id: 'deposit', label: 'Borg', desc: 'Stel de standaardborg in als veelvoud van de maandhuur.', icon: ShieldCheck },
-  { id: 'stripe', label: 'Stripe betalingen', desc: 'Laat huurders in de Kiosk betalen met Creditcard of iDEAL.', icon: CreditCard },
-  { id: 'mope', label: 'Mopé betalingen', desc: 'Koppel uw eigen Mopé-webshopaccount voor betalingen in de kiosk.', icon: Wallet, feature: 'allow_mope' },
+  { id: 'betaalmethoden', label: 'Betaalmethoden', desc: 'Beheer Stripe- en Mopé-betalingen voor uw kiosks.', icon: CreditCard, anyFeatures: ['allow_stripe', 'allow_mope'] },
   { id: 'stroom', label: 'Stroom', desc: 'Tuya-koppeling, schakelaars per appartement koppelen en automatisch afsluiten bij achterstand.', icon: Zap, feature: 'allow_power' },
   { id: 'bon', label: 'Bon & afdrukken', desc: 'Kies wat er op de bon staat: bedrijfsnaam, velden en voettekst.', icon: Printer },
   { id: 'bon-printer', label: 'Bon printer', desc: 'Kies KT-V520 of een Bluetooth bonprinter en koppel hem.', icon: Bluetooth },
@@ -22,10 +21,15 @@ export const INSTELLINGEN_SECTIONS = [
 ];
 
 export const availableInstellingenSections = (limits) => INSTELLINGEN_SECTIONS.filter(
-  (section) => !section.feature || limits?.[section.feature] === true,
+  (section) => {
+    const requiredFeatures = section.features || (section.feature ? [section.feature] : []);
+    if (section.anyFeatures) return section.anyFeatures.some((feature) => limits?.[feature] === true);
+    return requiredFeatures.every((feature) => limits?.[feature] === true);
+  },
 );
 
 export const activeInstellingenSection = (hash, limits) => {
-  const h = (hash || '').replace('#', '').trim();
+  const raw = (hash || '').replace('#', '').trim();
+  const h = ['stripe', 'mope'].includes(raw) ? 'betaalmethoden' : raw;
   return availableInstellingenSections(limits).some((s) => s.id === h) ? h : 'abonnement';
 };

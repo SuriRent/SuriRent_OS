@@ -503,8 +503,8 @@ function FeaturesSection({ c = {} }) {
   );
 }
 
-const STARTER = ['Tot 100 appartementen en huurders', 'Kiosk terminal', 'Digitale kwitanties', 'Online betalen', 'SRD/USD/EUR support', 'WhatsApp & E-mail'];
-const PRO = ['Alles uit Starter', 'Tot 500 appartementen en huurders', 'Stroombeheer', 'White-label branding', 'Eigen domein', 'Marketing website', 'Prioriteit support'];
+const STARTER = ['Tot 100 appartementen en huurders', 'Kiosk terminal', 'Digitale kwitanties', 'SRD/USD/EUR support', 'WhatsApp & E-mail'];
+const PRO = ['Alles uit Starter', 'Tot 500 appartementen en huurders', 'Stripe betalingen', 'Mopé betalingen', 'Stroombeheer', 'White-label branding', 'Eigen domein', 'Marketing website', 'Prioriteit support'];
 
 function PricingCard({ name, price, currency = 'SRD', desc, features, cta, onCta, featured, testid }) {
   const isEUR = (currency || 'SRD').toUpperCase() === 'EUR';

@@ -20,8 +20,10 @@ ADMIN_ROLES = ("admin", "owner", "superadmin")
 
 
 async def _admin(user: dict = Depends(_deps.get_current_user)) -> dict:
-    if user.get("role") not in ADMIN_ROLES or not _deps.company_id_of(user):
+    cid = _deps.company_id_of(user)
+    if user.get("role") not in ADMIN_ROLES or not cid:
         raise HTTPException(403, "Alleen de beheerder kan Stripe instellen")
+    await _deps.require_plan_feature(cid, "allow_stripe", "Stripe-betalingen")
     return user
 
 
@@ -105,6 +107,8 @@ async def test_company_stripe(user: dict = Depends(_admin)):
 
 @router.get("/kiosk/stripe/config")
 async def kiosk_stripe_config(session: dict = Depends(_deps.get_kiosk_session)):
+    if not await _deps.company_has_plan_feature(session.get("company_id"), "allow_stripe"):
+        return {"enabled": False, "methods": [], "mode": "test"}
     a = _active((await _cfg_doc(session.get("company_id"))).get("stripe_config") or {})
     return {"enabled": a["enabled"], "methods": a["methods"], "mode": a["mode"]}
 
@@ -120,6 +124,7 @@ class KioskIntentIn(BaseModel):
 @router.post("/kiosk/stripe/intent")
 async def kiosk_stripe_intent(body: KioskIntentIn, session: dict = Depends(_deps.get_kiosk_session)):
     cid = session.get("company_id")
+    await _deps.require_plan_feature(cid, "allow_stripe", "Stripe-betalingen")
     a = _active((await _cfg_doc(cid)).get("stripe_config") or {})
     if not a["enabled"] or body.method not in a["methods"]:
         raise HTTPException(400, "Deze betaalmethode is niet ingeschakeld")

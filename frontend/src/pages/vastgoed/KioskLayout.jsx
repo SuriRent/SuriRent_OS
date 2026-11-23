@@ -7394,10 +7394,14 @@ export default function KioskLayout() {
         setAdminPopup(null);
         setStep(e.detail);
       }
-      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:inst-') && window.innerWidth >= 768
-        && availableInstellingenSections(activeCompany?.limits).some((s) => s.id === e.detail.slice(11))) {
-        setAdminPopup(null);
-        setStep(e.detail);
+      else if (typeof e.detail === 'string' && e.detail.startsWith('admin:inst-') && window.innerWidth >= 768) {
+        const requestedSection = e.detail.slice(11);
+        const sectionId = requestedSection === 'stripe' || requestedSection === 'mope'
+          ? 'betaalmethoden' : requestedSection;
+        if (availableInstellingenSections(activeCompany?.limits).some((s) => s.id === sectionId)) {
+          setAdminPopup(null);
+          setStep(`admin:inst-${sectionId}`);
+        }
       }
       else if (typeof e.detail === 'string' && e.detail.startsWith('admin:')) setAdminPopup(e.detail.slice(6));
     };

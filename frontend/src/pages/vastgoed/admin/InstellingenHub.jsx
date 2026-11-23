@@ -32,6 +32,27 @@ function WebsiteSettings() {
   );
 }
 
+function PaymentMethodsSettings() {
+  const { activeCompany } = useAuth();
+  const limits = activeCompany?.limits || {};
+  return (
+    <div className="space-y-8" data-testid="payment-methods-settings">
+      {limits.allow_stripe === true && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-black text-slate-900">Stripe betalingen</h2>
+          <StripeCompanySettings />
+        </section>
+      )}
+      {limits.allow_mope === true && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-black text-slate-900">Mopé betalingen</h2>
+          <MopeCompanySettings />
+        </section>
+      )}
+    </div>
+  );
+}
+
 // Navigatie tussen onderdelen gebeurt via de Instellingen-dropdown in het
 // zijmenu (desktop) of de mobiele sheet; de sectie volgt de URL-hash.
 export const RENDER = {
@@ -41,8 +62,7 @@ export const RENDER = {
   smtp: () => <SettingsPage initialSection="smtp" hideSubNav />,
   invoicing: () => <SettingsPage initialSection="invoicing" hideSubNav />,
   deposit: () => <SettingsPage initialSection="deposit" hideSubNav />,
-  stripe: () => <StripeCompanySettings />,
-  mope: () => <MopeCompanySettings />,
+  betaalmethoden: () => <PaymentMethodsSettings />,
   stroom: () => <PowerSettings />,
   bon: () => <SettingsPage initialSection="receipts" hideSubNav />,
   'bon-printer': () => <BonPrinter />,
@@ -74,6 +94,7 @@ export default function InstellingenHub({ embedded = false, section = null }) {
       let s = ev?.detail?.section;
       const sub = ev?.detail?.integrationsSection;
       if (s === 'integraties') s = sub || 'smtp';
+      if (s === 'stripe' || s === 'mope') s = 'betaalmethoden';
       if (!sections.some((item) => item.id === s)) return;
       if (embedded) window.dispatchEvent(new CustomEvent('kiosk-nav', { detail: `admin:inst-${s}` }));
       else navigate(`/admin/instellingen#${s}`, { replace: true });

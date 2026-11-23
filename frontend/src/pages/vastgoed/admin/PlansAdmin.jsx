@@ -14,7 +14,7 @@ import { api, formatError } from '../../../lib/api';
 
 function LimitsEditor({ value, onChange, primary = '#047857' }) {
   // value = { max_apartments, max_tenants, max_locations, max_employees,
-  //           allow_kiosk, allow_ocr, allow_power, allow_mope, allow_branding,
+  //           allow_kiosk, allow_ocr, allow_power, allow_stripe, allow_mope, allow_branding,
   //           allow_custom_domain, allow_marketing_site, allow_backup }
   const v = value || {};
   const set = (k, val) => onChange({ ...v, [k]: val });
@@ -28,6 +28,7 @@ function LimitsEditor({ value, onChange, primary = '#047857' }) {
     { key: 'allow_kiosk', label: 'Kiosk terminal' },
     { key: 'allow_ocr', label: 'AI-OCR (Gemini)' },
     { key: 'allow_power', label: 'Stroombeheer' },
+    { key: 'allow_stripe', label: 'Stripe betalingen' },
     { key: 'allow_mope', label: 'Mopé betalingen' },
     { key: 'allow_branding', label: 'White-label branding' },
     { key: 'allow_custom_domain', label: 'Eigen domein' },

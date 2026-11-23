@@ -2364,20 +2364,20 @@ async def company_onboarding(body: CompanyOnboardingIn, user=Depends(get_current
 PLAN_PRICES = {
     "starter": {"name": "Starter", "amount": 3000, "currency": "SRD", "interval": "month",
                 "description": "Voor kleinere vastgoedbeheerders.",
-                "features": ["Kiosk terminal", "Online betalen", "WhatsApp & E-mail"],
+                "features": ["Kiosk terminal", "WhatsApp & E-mail"],
                 "limits": {
                     "max_apartments": 100, "max_tenants": 100, "max_locations": 2, "max_employees": 5,
-                    "allow_kiosk": True, "allow_ocr": True, "allow_power": False, "allow_mope": False,
+                    "allow_kiosk": True, "allow_ocr": True, "allow_power": False, "allow_stripe": False, "allow_mope": False,
                     "allow_branding": False, "allow_custom_domain": False,
                     "allow_marketing_site": False, "allow_backup": True,
                 }},
     "professional": {"name": "Professional", "amount": 5000, "currency": "SRD", "interval": "month",
-                     "description": "Voor grotere vastgoedbeheerders met stroombeheer, white-label branding en een eigen website en domein.",
-                     "features": ["Alles uit Starter", "Stroombeheer", "Mopé betalingen", "White-label branding",
+                     "description": "Voor grotere vastgoedbeheerders met Stripe- en Mopé-betalingen, stroombeheer en een eigen website en domein.",
+                     "features": ["Alles uit Starter", "Stripe betalingen", "Mopé betalingen", "Stroombeheer", "White-label branding",
                                   "Eigen domein", "Marketing website", "Prioriteit support"],
                      "limits": {
                          "max_apartments": 500, "max_tenants": 500, "max_locations": 10, "max_employees": 25,
-                         "allow_kiosk": True, "allow_ocr": True, "allow_power": True, "allow_mope": True,
+                         "allow_kiosk": True, "allow_ocr": True, "allow_power": True, "allow_stripe": True, "allow_mope": True,
                          "allow_branding": True, "allow_custom_domain": True,
                          "allow_marketing_site": True, "allow_backup": True,
                      }},
@@ -2387,7 +2387,7 @@ PLAN_PRICES = {
 # Default limits voor plans die nog geen "limits" veld hebben (legacy DB rows).
 DEFAULT_PLAN_LIMITS = {
     "max_apartments": 50, "max_tenants": 50, "max_locations": 1, "max_employees": 3,
-    "allow_kiosk": False, "allow_ocr": False, "allow_power": False, "allow_mope": False,
+    "allow_kiosk": False, "allow_ocr": False, "allow_power": False, "allow_stripe": False, "allow_mope": False,
     "allow_branding": False, "allow_custom_domain": False,
     "allow_marketing_site": False, "allow_backup": False,
 }
@@ -2419,6 +2419,8 @@ async def _resolve_company_limits(company_id: str) -> dict:
         )
     if "allow_mope" not in plan_limits:
         limits["allow_mope"] = plan_id in ("professional", "lifetime")
+    if "allow_stripe" not in plan_limits:
+        limits["allow_stripe"] = plan_id in ("professional", "lifetime")
     for feature in ("allow_custom_domain", "allow_marketing_site"):
         if feature not in plan_limits:
             limits[feature] = bool(
@@ -2452,7 +2454,7 @@ async def _enforce_count_limit(company_id: str, collection_name: str, limit_key:
 
 
 async def _require_plan_feature(company_id: str, feature_key: str, feature_label: str):
-    """Hard-block: raised HTTP 403 wanneer een feature (allow_kiosk/_ocr/_power/...)
+    """Hard-block: raised HTTP 403 wanneer een feature (allow_kiosk/_ocr/_power/allow_stripe/allow_mope)
     niet beschikbaar is op het huidige plan."""
     limits = await _resolve_company_limits(company_id)
     if not limits.get(feature_key, False):
@@ -2513,6 +2515,8 @@ async def _seed_plan_catalog():
                         )
                     if "allow_mope" not in existing_limits:
                         updates["limits.allow_mope"] = pdata.get("limits", {}).get("allow_mope", False)
+                    if "allow_stripe" not in existing_limits:
+                        updates["limits.allow_stripe"] = pdata.get("limits", {}).get("allow_stripe", False)
                     for feature in ("allow_custom_domain", "allow_marketing_site"):
                         if feature not in existing_limits:
                             updates[f"limits.{feature}"] = existing_limits.get(
@@ -2522,6 +2526,10 @@ async def _seed_plan_catalog():
                 migrated_features = list(existing_features)
                 if pid == "starter" and "Onbeperkt appartementen" in migrated_features:
                     migrated_features[migrated_features.index("Onbeperkt appartementen")] = "Kiosk terminal"
+                if pid == "starter" and migrated_features == ["Kiosk terminal", "Online betalen", "WhatsApp & E-mail"]:
+                    migrated_features = list(pdata.get("features", []))
+                elif pid == "starter" and "Online betalen" in migrated_features:
+                    migrated_features.remove("Online betalen")
                 if pid == "professional" and migrated_features in (
                     ["Alles uit Starter", "Kiosk terminal", "Shelly stroombeheer", "Prioriteit support"],
                     ["Alles uit Starter", "Kiosk terminal", "Stroombeheer", "Prioriteit support"],
@@ -2531,11 +2539,14 @@ async def _seed_plan_catalog():
                     migrated_features[migrated_features.index("Shelly stroombeheer")] = "Stroombeheer"
                 if pid == "professional" and "Mopé betalingen" not in migrated_features:
                     migrated_features.append("Mopé betalingen")
+                if pid == "professional" and "Stripe betalingen" not in migrated_features:
+                    migrated_features.append("Stripe betalingen")
                 if migrated_features != existing_features:
                     updates["features"] = migrated_features
                 if pid == "professional" and existing.get("description") in (
                     "Met Kiosk terminal en alle functies.",
                     "Voor grotere vastgoedbeheerders met stroombeheer en white-label branding.",
+                    "Voor grotere vastgoedbeheerders met stroombeheer, white-label branding en een eigen website en domein.",
                 ):
                     updates["description"] = pdata["description"]
                 if updates:
@@ -2565,6 +2576,7 @@ async def _seed_plan_catalog():
                 {"limits.allow_custom_domain": {"$exists": False}},
                 {"limits.allow_marketing_site": {"$exists": False}},
                 {"limits.allow_mope": {"$exists": False}},
+                {"limits.allow_stripe": {"$exists": False}},
             ]},
             {"_id": 0, "id": 1, "limits": 1},
         ):
@@ -2577,6 +2589,8 @@ async def _seed_plan_catalog():
                 )
             if "allow_mope" not in legacy_limits:
                 feature_updates["limits.allow_mope"] = legacy_id in ("professional", "lifetime")
+            if "allow_stripe" not in legacy_limits:
+                feature_updates["limits.allow_stripe"] = legacy_id in ("professional", "lifetime")
             for feature in ("allow_custom_domain", "allow_marketing_site"):
                 if feature not in legacy_limits:
                     feature_updates[f"limits.{feature}"] = bool(
@@ -7664,22 +7678,24 @@ async def tenant_portal_overview(tenant=Depends(get_tenant_session)):
 
 @api.get("/tenant-portal/payment-methods")
 async def tenant_portal_payment_methods(tenant=Depends(get_tenant_session)):
-    """Betaalmethodes voor de huurderkiosk: PIN altijd, creditcard (QR → telefoon)
-    zodra de beheerder Stripe met kaartbetaling heeft ingeschakeld."""
+    """Betaalmethodes voor de huurderkiosk; online betaalmethoden vereisen Professional."""
     from routes.company_stripe import _active, _cfg_doc
     methods = [{"id": "pin", "label": "PIN", "sub": "Betaal met uw pinpas"}]
-    try:
-        a = _active((await _cfg_doc(tenant.get("company_id"))).get("stripe_config") or {})
-        if a["enabled"] and "card" in a["methods"]:
-            methods.append({"id": "creditcard", "label": "Creditcard", "sub": "Scan de QR-code met uw telefoon"})
-    except Exception as e:  # noqa: BLE001
-        print(f"[tenant-portal] stripe config lezen mislukt: {e}")
-    try:
-        from routes.company_mope import _active as _mope_active, _config as _mope_config
-        if _mope_active(await _mope_config(tenant.get("company_id"))):
-            methods.append({"id": "mope", "label": "Mopé", "sub": "Scan de QR-code en betaal met Mopé"})
-    except Exception as e:  # noqa: BLE001
-        print(f"[tenant-portal] mope config lezen mislukt: {e}")
+    company_id = tenant.get("company_id")
+    if await _company_has_plan_feature(company_id, "allow_stripe"):
+        try:
+            a = _active((await _cfg_doc(company_id)).get("stripe_config") or {})
+            if a["enabled"] and "card" in a["methods"]:
+                methods.append({"id": "creditcard", "label": "Creditcard", "sub": "Scan de QR-code met uw telefoon"})
+        except Exception as e:  # noqa: BLE001
+            print(f"[tenant-portal] stripe config lezen mislukt: {e}")
+    if await _company_has_plan_feature(company_id, "allow_mope"):
+        try:
+            from routes.company_mope import _active as _mope_active, _config as _mope_config
+            if _mope_active(await _mope_config(company_id)):
+                methods.append({"id": "mope", "label": "Mopé", "sub": "Scan de QR-code en betaal met Mopé"})
+        except Exception as e:  # noqa: BLE001
+            print(f"[tenant-portal] mope config lezen mislukt: {e}")
     return {"methods": methods}
 
 

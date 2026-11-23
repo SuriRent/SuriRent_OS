@@ -12,17 +12,18 @@ const BOOKKEEPER_PAGES = new Set(['huurders', 'betalingen', 'facturen', 'regelin
 // gemount zodat secties wisselen zonder opnieuw laden of flikkeren.
 export default function KioskSettingsPage({ id, onBack, user }) {
   const { activeCompany } = useAuth();
+  const sectionId = id === 'stripe' || id === 'mope' ? 'betaalmethoden' : id;
   const sections = useMemo(
     () => availableInstellingenSections(activeCompany?.limits),
     [activeCompany?.limits],
   );
-  const [sec, setSec] = useState(sections.some((s) => s.id === id) ? id : 'abonnement');
+  const [sec, setSec] = useState(sections.some((s) => s.id === sectionId) ? sectionId : 'abonnement');
   const [visited, setVisited] = useState(() => new Set([sec]));
   const [query, setQuery] = useState('');
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
   useEffect(() => {
-    if (sections.some((s) => s.id === id)) setSec(id);
-  }, [id, sections]);
+    if (sections.some((s) => s.id === sectionId)) setSec(sectionId);
+  }, [sectionId, sections]);
   useEffect(() => {
     if (!sections.some((s) => s.id === sec)) setSec('abonnement');
   }, [sections, sec]);
