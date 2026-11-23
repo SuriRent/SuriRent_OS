@@ -22,8 +22,10 @@ export default function KioskSettingsPage({ id, onBack, user }) {
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
   useEffect(() => {
     if (sections.some((s) => s.id === id)) setSec(id);
-    else if (!sections.some((s) => s.id === sec)) setSec('abonnement');
-  }, [id, sections, sec]);
+  }, [id, sections]);
+  useEffect(() => {
+    if (!sections.some((s) => s.id === sec)) setSec('abonnement');
+  }, [sections, sec]);
   useEffect(() => {
     setVisited((v) => (v.has(sec) ? v : new Set(v).add(sec)));
   }, [sec]);
