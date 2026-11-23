@@ -31,6 +31,95 @@ html[data-pwa-role="superadmin"] body {
   max-width: 100%;
 }
 
+[data-testid="saas-console-shell"] {
+  background: #f1f2f4;
+  color: #17213c;
+  font-family: 'Plus Jakarta Sans', 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+[data-testid="saas-console-shell"] main {
+  background: #f1f2f4;
+}
+
+[data-testid="saas-console-mobile-nav"],
+[data-testid="saas-console-header"] {
+  border: 0;
+}
+
+[data-testid="saas-console-mobile-menu-overlay"],
+[data-testid="saas-console-mobile-menu"] {
+  background-color: #f1f2f4;
+}
+
+[data-testid="saas-console-mobile-menu-items"] button {
+  min-height: 8rem;
+  border-radius: 1.25rem;
+}
+
+[data-testid="active-company-scope"] {
+  border-color: #fed7aa;
+  background-color: #fff7ed;
+  color: #9a3412;
+}
+
+[data-testid="saas-console-shell"] main [class*="rounded-2xl"][class*="bg-white"],
+[data-testid="saas-console-shell"] main [class*="rounded-3xl"][class*="bg-white"] {
+  border-color: #e7eaf0;
+  box-shadow: 0 12px 28px -18px rgba(15, 23, 42, 0.4);
+}
+
+[data-testid="saas-console-dock"] button[data-active="true"] {
+  background: linear-gradient(180deg, #ff8a2b, #ff5c00);
+  color: #fff;
+}
+
+[data-testid="saas-console-dock"] button:not([data-active="true"]) {
+  color: #1b2a5c;
+}
+
+[data-testid="saas-console-shell"] main :where(input, select, textarea):focus {
+  border-color: #ff5c00;
+  outline-color: #ff5c00;
+}
+
+html[data-pwa-role="superadmin"] .saas-console-shell .bg-\[\#FF5C00\],
+html[data-pwa-role="superadmin"] .saas-console-shell .bg-\[\#E05200\],
+html[data-pwa-role="superadmin"] .saas-console-shell .bg-\[\#FF8A3D\],
+html[data-pwa-role="superadmin"] .saas-console-shell .bg-orange-500 {
+  background-color: #ff5c00 !important;
+}
+
+html[data-pwa-role="superadmin"] .saas-console-shell .hover\:bg-\[\#E05200\]:hover,
+html[data-pwa-role="superadmin"] .saas-console-shell .hover\:bg-orange-600:hover,
+html[data-pwa-role="superadmin"] .saas-console-shell .bg-orange-600 {
+  background-color: #e05200 !important;
+}
+
+html[data-pwa-role="superadmin"] .saas-console-shell .text-\[\#FF5C00\],
+html[data-pwa-role="superadmin"] .saas-console-shell .text-\[\#C74600\],
+html[data-pwa-role="superadmin"] .saas-console-shell .text-\[\#FF8A3D\],
+html[data-pwa-role="superadmin"] .saas-console-shell .text-orange-500,
+html[data-pwa-role="superadmin"] .saas-console-shell .text-orange-600,
+html[data-pwa-role="superadmin"] .saas-console-shell .text-orange-700 {
+  color: #ff5c00 !important;
+}
+
+.saas-console-dock {
+  min-height: 76px;
+}
+
+@media (max-width: 767px) {
+  .saas-console-dock {
+    min-height: 68px;
+    border-radius: 20px 20px 0 0;
+  }
+
+  [data-testid="saas-console-more"][data-active-mobile="true"] {
+    background: linear-gradient(180deg, #ff8a2b, #ff5c00);
+    color: #fff;
+  }
+}
+
 html[data-pwa-role="superadmin"] .bg-\[\#FF5C00\],
 html[data-pwa-role="superadmin"] .bg-\[\#E05200\],
 html[data-pwa-role="superadmin"] .bg-\[\#FF8A3D\],

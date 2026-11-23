@@ -5037,72 +5037,45 @@ function DesktopTopBar({ user, activeCompany, tab, tabs, onManual }) {
   );
 }
 
-function SaasConsoleSidebar({ user, tab, tabs, onChange, onLogout, badgeCount }) {
-  const groups = groupTabs(tabs);
+const SAAS_DOCK_IDS = [
+  'saas_overview', 'companies', 'saas_clients', 'saas_contracts',
+  'saas_payments', 'saas_invoices', 'plans',
+];
+const SAAS_MOBILE_DOCK_IDS = ['saas_overview', 'companies', 'saas_clients', 'saas_invoices'];
+
+function SaasConsoleDock({ tab, tabs, onChange }) {
+  const byId = Object.fromEntries(tabs.map((item) => [item.id, item]));
   return (
-    <aside className="hidden xl:flex flex-col w-[264px] shrink-0 sticky top-0 h-screen bg-white border-r border-slate-200/80"
-      data-testid="saas-console-sidebar">
-      <div className="px-5 pt-5 pb-4 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-[#E7F5EC] p-2 shrink-0">
-            <img src="/superadmin-favicon.svg" alt="" className="w-full h-full object-contain rounded-lg" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-base font-black text-slate-900 tracking-tight">SuriRent</p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">Beheer</p>
-          </div>
-        </div>
-        <div className="mt-5 flex items-center gap-2 rounded-xl bg-[#F2F8F4] px-3 py-2.5">
-          <Building2 className="w-4 h-4 text-emerald-700" />
-          <span className="text-xs font-bold text-slate-700">Beheer</span>
-        </div>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Beheernavigatie">
-        {groups.map((group) => (
-          <section key={group.key}>
-            <h2 className="px-3 mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{group.label}</h2>
-            <div className="space-y-1">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const selected = item.id === tab;
-                const showBadge = item.id === 'notifications' && badgeCount > 0;
-                return (
-                  <button key={item.id} type="button" onClick={() => onChange(item.id)}
-                    data-testid={`tab-${item.id}`} aria-current={selected ? 'page' : undefined}
-                    className={`relative w-full min-h-11 px-3 py-2 rounded-xl inline-flex items-center gap-3 text-left text-[13px] font-bold transition-colors ${
-                      selected ? 'bg-[#E8F5ED] text-[#087A3D]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}>
-                    {selected && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-emerald-600" />}
-                    <Icon className={`w-[18px] h-[18px] shrink-0 ${selected ? 'text-emerald-700' : 'text-slate-400'}`} strokeWidth={selected ? 2.5 : 2} />
-                    <span className="min-w-0 flex-1 text-left leading-tight">{item.label}</span>
-                    {showBadge && <span data-testid="saas-console-notification-count" className="min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black inline-flex items-center justify-center">{badgeCount > 9 ? '9+' : badgeCount}</span>}
-                    {selected && <ChevronRight className="w-4 h-4 shrink-0 text-emerald-700" />}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </nav>
-
-      <div className="border-t border-slate-100 p-3">
-        <div className="flex items-center gap-2.5 px-2 py-2">
-          <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-black text-sm flex items-center justify-center shrink-0">
-            {(user?.name || user?.email || 'S').slice(0, 1).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-slate-800 truncate">{user?.name || 'Superadmin'}</p>
-            <p className="text-[10px] text-slate-500 truncate">{user?.email}</p>
-          </div>
-          <button type="button" onClick={onLogout} data-testid="saas-console-logout"
-            className="w-10 h-10 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-600 inline-flex items-center justify-center transition-colors"
-            aria-label="Uitloggen" title="Uitloggen">
-            <LogOut className="w-[18px] h-[18px]" />
+    <nav className="saas-console-dock fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-[1920px] items-stretch gap-1 overflow-x-auto rounded-t-[24px] border-t border-slate-100 bg-white px-2 pt-2 shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)]"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}
+      aria-label="Superadmin hoofdnavigatie" data-testid="saas-console-dock">
+      {SAAS_DOCK_IDS.filter((id) => byId[id]).map((id) => {
+        const item = byId[id];
+        const Icon = item.icon;
+        const selected = id === tab;
+        return (
+          <button key={id} type="button" onClick={() => onChange(id)}
+            data-testid={`tab-${id}`} data-active={selected ? 'true' : 'false'}
+            aria-current={selected ? 'page' : undefined}
+            className={`${SAAS_MOBILE_DOCK_IDS.includes(id) ? 'flex' : 'hidden md:flex'} min-w-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center text-[10px] font-bold transition sm:min-w-[76px] sm:text-xs ${
+              selected ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C] hover:bg-orange-50'
+            }`}>
+            <Icon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" strokeWidth={selected ? 2.5 : 2} />
+            <span className="w-full truncate">{item.label}</span>
           </button>
-        </div>
-      </div>
-    </aside>
+        );
+      })}
+      <button type="button" onClick={() => window.dispatchEvent(new Event('saas-open-menu'))}
+        data-testid="saas-console-more" aria-label="Meer superadminpagina's"
+        data-active={!SAAS_DOCK_IDS.includes(tab) ? 'true' : 'false'}
+        data-active-mobile={!SAAS_MOBILE_DOCK_IDS.includes(tab) ? 'true' : 'false'}
+        className={`flex min-w-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center text-[10px] font-bold transition sm:min-w-[76px] sm:text-xs ${
+          !SAAS_DOCK_IDS.includes(tab) ? 'bg-gradient-to-b from-[#FF8A2B] to-[#FF5C00] text-white shadow-md' : 'text-[#1B2A5C] hover:bg-orange-50'
+        }`}>
+        <MoreHorizontal className="h-5 w-5 sm:h-6 sm:w-6" />
+        <span className="w-full truncate">Meer</span>
+      </button>
+    </nav>
   );
 }
 
@@ -5124,23 +5097,29 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [menuOpen]);
+  useEffect(() => {
+    const openMenu = () => setMenuOpen(true);
+    window.addEventListener('saas-open-menu', openMenu);
+    return () => window.removeEventListener('saas-open-menu', openMenu);
+  }, []);
   return (
-    <header className="xl:hidden sticky top-0 z-30 bg-white border-b border-slate-200 shadow-[0_4px_14px_-10px_rgba(15,23,42,0.2)]"
+    <>
+    <header className="xl:hidden sticky top-0 z-30 mx-2 mt-2 rounded-[20px] bg-white shadow-[0_10px_30px_-16px_rgba(15,23,42,0.35)]"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} data-testid="saas-console-mobile-nav">
       <div className="min-h-[64px] flex items-center gap-3 px-3 sm:px-5">
-        <div className="w-10 h-10 rounded-xl bg-[#E7F5EC] p-1.5 shrink-0">
+        <div className="w-10 h-10 rounded-xl bg-orange-50 p-1.5 shrink-0">
           <img src="/superadmin-favicon.svg" alt="SuriRent" className="w-full h-full object-contain rounded-md" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] uppercase tracking-[0.16em] font-black text-emerald-700">Beheer</p>
+          <p className="text-[9px] uppercase tracking-[0.16em] font-black text-[#FF5C00]">Beheer</p>
           <div className="flex items-center gap-2 min-w-0">
-            <CurrentIcon className="w-4 h-4 shrink-0 text-emerald-700" />
+            <CurrentIcon className="w-4 h-4 shrink-0 text-[#FF5C00]" />
             <h1 className="text-base sm:text-lg font-black text-slate-900 truncate" data-testid="saas-console-mobile-page-title">{current?.label || 'Overzicht'}</h1>
           </div>
         </div>
         <span className="hidden sm:inline text-xs font-semibold text-slate-500 truncate max-w-36">{user?.name || user?.email}</span>
         <button type="button" onClick={() => setMenuOpen((open) => !open)}
-          className="w-10 h-10 rounded-xl text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 inline-flex items-center justify-center"
+          className="w-10 h-10 rounded-xl text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00] inline-flex items-center justify-center"
           aria-label={menuOpen ? 'Menu sluiten' : 'Navigatiemenu openen'} aria-expanded={menuOpen}
           aria-controls="saas-console-mobile-menu" data-testid="saas-console-mobile-menu-toggle">
           {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -5152,28 +5131,28 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
         </button>
       </div>
       {menuOpen && createPortal(
-        <div className="fixed inset-0 z-[120] flex flex-col bg-[#E8F5ED]"
+        <div className="fixed inset-0 z-[120] flex flex-col bg-[#F1F2F4]"
           onClick={() => setMenuOpen(false)} data-testid="saas-console-mobile-menu-overlay">
           <div id="saas-console-mobile-menu" role="dialog" aria-modal="true"
             aria-label="Superadmin navigatie" data-testid="saas-console-mobile-menu"
             onClick={(event) => event.stopPropagation()}
-            className="flex min-h-0 flex-1 flex-col bg-[#E8F5ED]"
+            className="flex min-h-0 flex-1 flex-col bg-[#F1F2F4]"
             style={{
               paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)',
               paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
             }}>
-            <div className="flex shrink-0 items-center justify-between border-b border-emerald-200 px-4 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
                   <LayoutDashboard className="h-6 w-6" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Beheer</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FF5C00]">Beheer</p>
                   <h2 className="text-lg font-black text-slate-900">Navigatie</h2>
                 </div>
               </div>
               <button type="button" onClick={() => setMenuOpen(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-emerald-800 shadow-sm hover:bg-emerald-100"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 hover:bg-orange-50 hover:text-[#FF5C00]"
                 aria-label="Menu sluiten" data-testid="saas-console-mobile-menu-close">
                 <X className="h-5 w-5" />
               </button>
@@ -5184,7 +5163,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
                 {groups.map((group) => (
                   <section key={group.key} aria-labelledby={`saas-console-mobile-group-${group.key}`}>
                     <h3 id={`saas-console-mobile-group-${group.key}`}
-                      className="mb-3 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
+                      className="mb-3 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
                       {group.label}
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -5195,17 +5174,17 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
                         return (
                           <button key={item.id} type="button" onClick={() => { onChange(item.id); setMenuOpen(false); }}
                             data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
-                            className={`relative flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-3 text-center shadow-lg transition active:scale-[0.98] ${
-                              selected ? 'border-emerald-100 bg-emerald-50 text-emerald-950'
-                                : 'border-white/80 bg-white/95 text-slate-900 hover:bg-white'
+                            className={`relative flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-3 text-center shadow-[0_12px_28px_-18px_rgba(15,23,42,0.4)] transition active:scale-[0.98] ${
+                              selected ? 'border-orange-200 bg-orange-50 text-slate-950'
+                                : 'border-white bg-white text-slate-900 hover:border-orange-200'
                             }`}>
                             <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
-                              selected ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700'
+                              selected ? 'bg-orange-100 text-[#FF5C00]' : 'bg-slate-100 text-[#1B2A5C]'
                             }`}>
                               <Icon className="h-7 w-7" />
                             </span>
                             <span className="text-sm font-black leading-tight">{item.label}</span>
-                            {showBadge && <span className={`absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-black ${selected ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                            {showBadge && <span className="absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">{badgeCount > 9 ? '9+' : badgeCount}</span>}
                           </button>
                         );
                       })}
@@ -5219,6 +5198,8 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
         document.body
       )}
     </header>
+    <SaasConsoleDock tab={tab} tabs={tabs} onChange={onChange} />
+    </>
   );
 }
 
@@ -5227,15 +5208,27 @@ function SaasConsoleDesktopTopbar({ user, tab, tabs }) {
   const CurrentIcon = current?.icon || LayoutDashboard;
   const group = groupTabs(tabs).find((item) => item.items.some((entry) => entry.id === tab));
   return (
-    <header className="hidden xl:flex h-[76px] shrink-0 items-center justify-between gap-4 px-7 bg-white border-b border-slate-200/80"
+    <header className="hidden xl:flex mx-2 mt-2 h-[76px] shrink-0 items-center justify-between gap-4 rounded-[20px] bg-white px-7 shadow-[0_10px_30px_-16px_rgba(15,23,42,0.35)]"
       data-testid="saas-console-header">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="w-10 h-10 rounded-xl bg-[#E8F5ED] text-emerald-700 flex items-center justify-center shrink-0">
-          <CurrentIcon className="w-5 h-5" />
+      <div className="flex min-w-0 items-center gap-5">
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 p-2">
+            <img src="/superadmin-favicon.svg" alt="" className="h-full w-full object-contain" />
+          </div>
+          <div>
+            <p className="text-xl font-black tracking-tight text-[#1B2A5C]">SuriRent</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#FF5C00]">Superadmin</p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{group?.label || 'Platform'}</p>
-          <h1 className="text-lg font-black text-slate-900 truncate" data-testid="saas-console-page-title">{current?.label || 'Overzicht'}</h1>
+        <span className="h-10 w-px shrink-0 bg-slate-200" aria-hidden="true" />
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F9] text-[#FF5C00]">
+            <CurrentIcon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{group?.label || 'Platform'}</p>
+            <h1 className="truncate text-lg font-black text-slate-900" data-testid="saas-console-page-title">{current?.label || 'Overzicht'}</h1>
+          </div>
         </div>
       </div>
       <div className="flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
@@ -5256,8 +5249,7 @@ export default function AdminDashboard() {
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop
   // blijft op Overzicht starten. We detecteren op basis van window-breedte
   // bij eerste render zodat de PWA-launch direct in de juiste tab opent.
-  // Filter de Overzicht-tab uit voor mobile MobileSheet zodat hij ook niet
-  // in het "+"-menu opduikt. Desktop sidebar laat hem wel staan.
+  // Filter de Overzicht-tab uit voor de gewone beheerder-MobileSheet.
   const sheetTabs = tabs.filter((t) => t.id !== 'overview');
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Auto-open Setup Wizard als bottom-sheet / modal voor nieuwe bedrijven.
@@ -5495,10 +5487,8 @@ export default function AdminDashboard() {
   // Superadmin + impersonators zien uiteraard nooit iets.
 
   return (
-    <div className={`min-h-screen flex ${isSaasConsole ? 'bg-[#F3F8F5]' : 'bg-[#F7F8FA]'}`} data-testid={isSaasConsole ? 'saas-console-shell' : 'admin-shell'}>
-      {isSaasConsole
-        ? <SaasConsoleSidebar user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} />
-        : <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
+    <div className={`${isSaasConsole ? 'min-h-screen flex flex-col bg-[#F1F2F4]' : 'min-h-screen flex bg-[#F7F8FA]'}`} data-testid={isSaasConsole ? 'saas-console-shell' : 'admin-shell'}>
+      {!isSaasConsole && <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
         user={user} tabs={tabs} badgeCount={badgeCount} activeCompany={activeCompany} />}
       <div className="flex-1 flex flex-col min-w-0">
         {isSaasConsole
@@ -5507,7 +5497,7 @@ export default function AdminDashboard() {
         <ImpersonationBanner />
         {!isSaasConsole && <CompanySupportNotice />}
         <TrialBanner />
-        <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F3F8F5]' : ''}`}>
+        <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F1F2F4] md:pb-24' : ''}`}>
           <div className={isSaasConsole ? 'w-full max-w-[1920px] mx-auto' : ''}>
           {isSaasConsole && activeCompanyId && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"
