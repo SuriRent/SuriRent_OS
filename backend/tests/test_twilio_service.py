@@ -44,7 +44,7 @@ def test_send_normalizes_both_sender_and_recipient(monkeypatch):
     assert requests[0]["To"] == ["whatsapp:+5971234567"]
 
 
-@pytest.mark.parametrize("kind", ["receipt", "reminder"])
+@pytest.mark.parametrize("kind", ["receipt", "receipt_media", "reminder"])
 def test_template_uses_content_fields_without_body_or_media(monkeypatch, kind):
     from urllib.parse import parse_qs
     import twilio_service

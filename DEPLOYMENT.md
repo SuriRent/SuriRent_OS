@@ -60,3 +60,31 @@ Save settings, enter a receiving number with country code, choose a template
 under **Testbericht**, then test. Twilio acceptance is not proof of delivery;
 check the message status in Twilio Console. SuriRent cannot grant template
 approval or bypass WhatsApp's messaging window.
+
+### Receipt image template
+
+For a JPG directly in WhatsApp, create and submit a separate `twilio/media`
+image template. Use variables `{{1}}` to `{{4}}` in its body with the same
+meaning as above. Set the media URL to
+`https://<APP_PUBLIC_URL host>/api/public/whatsapp-receipts/{{5}}`:
+replace the host with the exact HTTPS origin shown in the kiosk settings.
+Enter `sample.jpg` as the sample value for `{{5}}`; this resolves to a public
+fictional JPG for template approval. Do not put `{{5}}` in the message body.
+Enter samples for the other variables and submit for WhatsApp approval.
+Sandbox senders have their own template restrictions.
+
+Example body: `Hallo {{1}}, uw betaling aan {{2}} van {{3}} is ontvangen.
+Uw betaalbewijs met referentie {{4}} vindt u als afbeelding bij dit bericht.
+Bedankt.`
+
+Save the approved media template's SID in **Betaalbewijs als afbeelding**.
+It takes priority over the receipt text template. SuriRent passes a signed
+payment-specific token followed by `.jpg` as `{{5}}` for Twilio to retrieve the image; the token
+expires after 24 hours and responses are not cached. Test using
+**Betaalbewijs-afbeeldingstemplate** to send the fictional sample. Payment
+plan notifications without a linked payment fall back to the receipt text
+template if configured; otherwise they cannot use the image template.
+The existing public receipt-image endpoint is unchanged; the signed URL does
+not revoke previously shared URLs.
+The signed URL is a bearer link: anyone holding it can access the image while
+it is valid, including anyone with access to proxy or server access logs.

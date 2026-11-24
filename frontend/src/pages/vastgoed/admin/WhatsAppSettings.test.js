@@ -24,7 +24,10 @@ jest.mock('../../../lib/auto-refresh', () => ({ useAutoRefresh: jest.fn() }));
 test('WhatsApp-instellingen zijn bereikbaar en testen een opgegeven ontvanger', async () => {
   expect(availableInstellingenSections({}).some((section) => section.id === 'twilio')).toBe(true);
   api.get.mockResolvedValue({
-    data: { twilio: { enabled: true, account_sid: '', auth_token: null, whatsapp_from: '', sms_from: '' } },
+    data: {
+      twilio: { enabled: true, account_sid: '', auth_token: null, whatsapp_from: '', sms_from: '' },
+      whatsapp_receipt_media_url: 'https://example.com/api/public/whatsapp-receipts/{{5}}',
+    },
   });
   api.post.mockResolvedValue({ data: { ok: true, detail: 'Testbericht verzonden' } });
   const host = document.createElement('div');
@@ -35,6 +38,8 @@ test('WhatsApp-instellingen zijn bereikbaar en testen een opgegeven ontvanger', 
   try {
     await act(async () => root.render(RENDER.twilio()));
     expect(host.querySelector('[data-testid="twilio-sid"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="twilio-receipt-media-url"]').textContent)
+      .toBe('https://example.com/api/public/whatsapp-receipts/{{5}}');
     const button = host.querySelector('[data-testid="settings-test"]');
     expect(button.disabled).toBe(true);
     const input = host.querySelector('[data-testid="twilio-test-number"]');
@@ -66,6 +71,15 @@ test('WhatsApp-instellingen zijn bereikbaar en testen een opgegeven ontvanger', 
     await act(async () => button.click());
     expect(api.post).toHaveBeenLastCalledWith('/settings/twilio/test', {
       to: '+5971234567', template_kind: 'receipt',
+    });
+    await act(async () => {
+      const select = host.querySelector('[data-testid="twilio-test-template"]');
+      select.value = 'receipt_media';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => button.click());
+    expect(api.post).toHaveBeenLastCalledWith('/settings/twilio/test', {
+      to: '+5971234567', template_kind: 'receipt_media',
     });
   } finally {
     await act(async () => root.unmount());

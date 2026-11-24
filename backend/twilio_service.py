@@ -90,7 +90,7 @@ async def send_whatsapp(cfg: dict, to: str, body: str, media_url: str | None = N
         raise TwilioError("Twilio is niet ingeschakeld")
     content_sid = None
     if template_kind:
-        if template_kind not in ("receipt", "reminder"):
+        if template_kind not in ("receipt", "receipt_media", "reminder"):
             raise TwilioError("Onbekende WhatsApp-template.")
         content_sid = (cfg.get(f"{template_kind}_content_sid") or "").strip()
     return await _send(cfg, "whatsapp", to, body, media_url,

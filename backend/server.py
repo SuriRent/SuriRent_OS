@@ -13855,17 +13855,16 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
 
     if has_wa:
         try:
+            template_kind, variables = _receipt_template(
+                cfg, payment_id, tenant.get("name") or "Huurder", await _brand_name_of(cid),
+                f"{p_enriched['currency']} {p_enriched['amount']:.2f}", p_enriched["receipt_number"], image_link,
+            )
             # JPG kwitantie als inline media-bijlage — toont preview in chat.
             await send_whatsapp(
-                cfg, to, msg, media_url=image_link, template_kind="receipt",
-                variables=whatsapp_variables(
-                    tenant.get("name") or "Huurder", await _brand_name_of(cid),
-                    f"{p_enriched['currency']} {p_enriched['amount']:.2f}",
-                    p_enriched["receipt_number"], image_link,
-                ),
+                cfg, to, msg, media_url=image_link, template_kind=template_kind, variables=variables,
             )
             return {"sent": True, "channel": "whatsapp", "to": to}
-        except TwilioError as e:
+        except (TwilioError, HTTPException) as e:
             print(f"[kiosk-twilio] whatsapp failed payment={payment_id} err={e}")
             # blijf hieronder doorgaan met SMS fallback
 
@@ -15255,6 +15254,27 @@ async def payment_image(payment_id: str):
         media_type="image/jpeg",
         headers={"Content-Disposition": f'inline; filename="bon-{p["receipt_number"]}.jpg"'},
     )
+
+
+@api.get("/public/whatsapp-receipts/{token}.jpg")
+async def whatsapp_receipt_image(token: str):
+    if token == "sample":
+        from PIL import Image, ImageDraw
+        image = Image.new("RGB", (480, 320), "white")
+        ImageDraw.Draw(image).text((40, 100), "Voorbeeld betaalbewijs - TEST", fill="black")
+        data = io.BytesIO()
+        image.save(data, format="JPEG")
+        return Response(content=data.getvalue(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG], options={"require": ["exp", "type", "payment_id"]})
+        if payload["type"] != "whatsapp_receipt_image" or not isinstance(payload["payment_id"], str):
+            raise jwt.InvalidTokenError("Invalid receipt token")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=404, detail="Bon niet beschikbaar")
+    response = await payment_image(payload["payment_id"])
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @api.get("/tenants/{tenant_id}/reminder-image")
@@ -19962,6 +19982,7 @@ async def get_settings(user=Depends(get_current_user)):
     out = {"company_id": cid}
     for s in VALID_SETTINGS_SECTIONS:
         out[s] = _mask_section(s, doc.get(s) or {})
+    out["whatsapp_receipt_media_url"] = _public_url("/api/public/whatsapp-receipts/{{5}}")
     # Verrijk de invoicing-sectie met berekende velden zodat de admin ziet
     # wanneer de volgende auto-run staat gepland (afhankelijk van mode).
     try:
@@ -20026,7 +20047,7 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
     existing_section = doc.get(section) or {}
     merged = _merge_section(section, existing_section, body or {})
     if section == "twilio":
-        for key in ("receipt_content_sid", "reminder_content_sid"):
+        for key in ("receipt_content_sid", "receipt_media_content_sid", "reminder_content_sid"):
             value = str(merged.get(key) or "").strip()
             if value and not re.fullmatch(r"HX[0-9a-fA-F]{32}", value):
                 raise HTTPException(status_code=422, detail="Ongeldige Content SID; verwacht HX gevolgd door 32 hexadecimale tekens.")
@@ -20159,7 +20180,7 @@ async def receipts_preview_remote_print(body: dict, user=Depends(get_current_use
 
 class SettingsTestIn(BaseModel):
     to: Optional[str] = None
-    template_kind: Optional[Literal["receipt", "reminder"]] = None
+    template_kind: Optional[Literal["receipt", "receipt_media", "reminder"]] = None
 
 
 @api.post("/settings/{section}/test")
@@ -20214,10 +20235,12 @@ async def test_settings_section(section: str, body: Optional[SettingsTestIn] = N
                 template_kind = body.template_kind if body else None
                 if template_kind and not cfg.get(f"{template_kind}_content_sid"):
                     raise HTTPException(status_code=400, detail="Bewaar eerst de Content SID voor deze template.")
+                if template_kind == "receipt_media":
+                    _receipt_media_token("test")
                 await send_whatsapp(
                     cfg, target, test_msg, template_kind=template_kind,
                     variables=whatsapp_variables("Testhuurder", brand_name_twil, "SRD 100.00", "TEST-001",
-                                                 _public_url("/kiosk/huurder")),
+                                                 "sample.jpg" if template_kind == "receipt_media" else _public_url("/kiosk/huurder")),
                 )
                 return {"section": section, "ok": True, "detail": f"WhatsApp testbericht verzonden naar {target}"}
             await send_sms(cfg, target, test_msg)
@@ -20963,6 +20986,29 @@ def _public_url(path: str) -> str:
     return f"{base.rstrip('/')}{path}"
 
 
+def _receipt_media_token(payment_id: str) -> str:
+    from urllib.parse import urlsplit
+
+    base = _public_url("")
+    parsed = urlsplit(base)
+    if parsed.scheme != "https" or not parsed.netloc or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        raise HTTPException(status_code=500, detail="APP_PUBLIC_URL moet een publieke HTTPS-apporigin zijn voor WhatsApp-bonafbeeldingen.")
+    return jwt.encode({
+        "type": "whatsapp_receipt_image",
+        "payment_id": payment_id,
+        "exp": now_utc() + timedelta(hours=24),
+    }, JWT_SECRET, algorithm=JWT_ALG)
+
+
+def _receipt_template(cfg: dict, payment_id: Optional[str], name: str, company: str,
+                      amount: str, reference: str, image_url: str):
+    if cfg.get("receipt_media_content_sid") and payment_id:
+        return "receipt_media", whatsapp_variables(name, company, amount, reference, _receipt_media_token(payment_id) + ".jpg")
+    if cfg.get("receipt_media_content_sid") and not payment_id and not cfg.get("receipt_content_sid"):
+        raise HTTPException(status_code=400, detail="Geen betaalbewijs beschikbaar voor de WhatsApp-afbeeldingstemplate.")
+    return "receipt", whatsapp_variables(name, company, amount, reference, image_url)
+
+
 async def _twilio_send(cfg: dict, channel: str, to: str, body: str,
                        *, template_kind: Optional[str] = None, variables: Optional[dict] = None):
     from twilio_service import send_whatsapp, send_sms, TwilioError
@@ -20998,7 +21044,7 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
         f"📷 De bon is als foto meegestuurd — bewaar hem in uw galerij.\n\n"
         f"— {brand_name}"
     )
-    if body.channel == "whatsapp" and not cfg.get("receipt_content_sid"):
+    if body.channel == "whatsapp" and not cfg.get("receipt_content_sid") and not cfg.get("receipt_media_content_sid"):
         from twilio_service import send_whatsapp, TwilioError
         try:
             await send_whatsapp(cfg, to, msg, media_url=_public_url(f"/api/payments/{payment_id}/image"))
@@ -21006,12 +21052,15 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
             print(f"[message-payment] whatsapp media fail, fallback text: {e}")
             await _twilio_send(cfg, body.channel, to, msg)
     else:
+        template_kind, variables = ("receipt", None)
+        if body.channel == "whatsapp":
+            template_kind, variables = _receipt_template(
+                cfg, payment_id, tenant.get("name") or "Huurder", brand_name,
+                f"{p['currency']} {p['amount']:.2f}", p["receipt_number"],
+                _public_url(f"/api/payments/{payment_id}/image"),
+            )
         await _twilio_send(
-            cfg, body.channel, to, msg, template_kind="receipt",
-            variables=whatsapp_variables(
-                tenant.get("name") or "Huurder", brand_name, f"{p['currency']} {p['amount']:.2f}",
-                p["receipt_number"], _public_url(f"/api/payments/{payment_id}/image"),
-            ),
+            cfg, body.channel, to, msg, template_kind=template_kind, variables=variables,
         )
     return {"ok": True, "sent_to": to, "channel": body.channel}
 
@@ -21578,13 +21627,13 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
         if cfg.get("enabled") and phone:
             try:
                 from twilio_service import send_whatsapp
+                template_kind, variables = _receipt_template(
+                    cfg, payment_id, tenant.get("name") or "Huurder", await _brand_name_of(cid),
+                    f"{cur} {amount:.2f}", f"Termijn {seq}/{total_inst}",
+                    receipt_image_url or _public_url("/kiosk/huurder"),
+                )
                 await send_whatsapp(
-                    cfg, phone, body, media_url=receipt_image_url, template_kind="receipt",
-                    variables=whatsapp_variables(
-                        tenant.get("name") or "Huurder", await _brand_name_of(cid),
-                        f"{cur} {amount:.2f}", f"Termijn {seq}/{total_inst}",
-                        receipt_image_url or _public_url("/kiosk/huurder"),
-                    ),
+                    cfg, phone, body, media_url=receipt_image_url, template_kind=template_kind, variables=variables,
                 )
             except Exception as e:  # noqa: BLE001
                 print(f"[plan-notify] twilio fail: {e}")

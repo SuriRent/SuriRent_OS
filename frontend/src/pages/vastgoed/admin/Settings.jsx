@@ -181,7 +181,7 @@ export function DepositForm({ initial }) {
   );
 }
 
-export function TwilioForm({ initial }) {
+export function TwilioForm({ initial, receiptMediaUrl }) {
   const s = useSection('twilio', initial);
   const [testNumber, setTestNumber] = useState('');
   const [testTemplate, setTestTemplate] = useState('');
@@ -200,20 +200,39 @@ export function TwilioForm({ initial }) {
       <div className="space-y-3 rounded-xl border border-slate-200 p-4">
         <p className="text-sm font-bold text-slate-900">Goedgekeurde WhatsApp-templates</p>
         <p className="text-xs text-slate-600">
-          Maak in Twilio Content Template Builder twee teksttemplates aan en laat ze goedkeuren voor WhatsApp.
+          Maak in Twilio Content Template Builder templates aan en laat ze goedkeuren voor WhatsApp.
           Met een ingevulde Content SID gebruikt de app altijd die template voor dat berichttype, ook buiten het 24-uursvenster.
           Zonder SID blijft vrije tekst actief. SMS blijft ongewijzigd.
         </p>
         <TextField label="Betaalbewijs Content SID" testid="twilio-receipt-sid" value={d.receipt_content_sid}
           onChange={(v) => s.onField('receipt_content_sid', v)} placeholder="HX..."
-          helper="Voor betaalbewijzen en betaalde termijnen." />
+          helper="Teksttemplate voor betaalbewijzen en betaalde termijnen." />
+        <TextField label="Betaalbewijs als afbeelding Content SID" testid="twilio-receipt-media-sid" value={d.receipt_media_content_sid}
+          onChange={(v) => s.onField('receipt_media_content_sid', v)} placeholder="HX..."
+          helper="Optioneel: een goedgekeurde WhatsApp-media-template. Deze heeft voorrang op de teksttemplate." />
         <TextField label="Herinnering Content SID" testid="twilio-reminder-sid" value={d.reminder_content_sid}
           onChange={(v) => s.onField('reminder_content_sid', v)} placeholder="HX..."
           helper="Voor facturen, openstaande saldi en betalingsherinneringen." />
         <p className="text-xs text-slate-600">
           Gebruik precies deze invulvelden: {'{{1}}'} naam huurder, {'{{2}}'} bedrijfsnaam,
           {' {{3}}'} bedrag met valuta, {'{{4}}'} bonnummer/factuur/periode, {'{{5}}'} link.
-          De vaste templatetekst vervangt het vrije bericht en eventuele extra tekst. De link vervangt de losse bonbijlage.
+          Dit geldt voor teksttemplates; de vaste tekst vervangt het vrije bericht en eventuele extra tekst.
+        </p>
+        <p className="text-xs text-slate-600">
+          Voor de afbeeldingstemplate: kies in Twilio type Media met een afbeelding en gebruik
+          {' {{1}}'} t/m {'{{4}}'} in de tekst. Vul bij Media URL exact deze URL in:
+        </p>
+        <p className="text-xs text-slate-600">
+          Voorbeeldtekst: Hallo {'{{1}}'}, uw betaling aan {'{{2}}'} van {'{{3}}'} is ontvangen.
+          Uw betaalbewijs met referentie {'{{4}}'} vindt u als afbeelding bij dit bericht. Bedankt.
+        </p>
+        <code data-testid="twilio-receipt-media-url" className="block break-all rounded bg-slate-50 p-2 text-xs">
+          {receiptMediaUrl?.startsWith('https://') ? receiptMediaUrl : 'Configureer eerst een publieke HTTPS APP_PUBLIC_URL voor deze omgeving.'}
+        </code>
+        <p className="text-xs text-slate-600">
+          Geef Twilio voor {'{{5}}'} als voorbeeldwaarde <strong>sample.jpg</strong>. Twilio gebruikt dit voor de
+          voorbeeldafbeelding; bij een echte betaling vult SuriRent een tijdelijk geldige sleutel in.
+          De apporigin moet publiek bereikbaar zijn via HTTPS. De afbeeldingstemplate krijgt geen link in de tekst.
         </p>
         <p className="text-xs text-slate-600">
           Betaalbewijs: {'Hallo {{1}}, {{2}} heeft uw betaling van {{3}} ontvangen. Referentie: {{4}}. Bekijk uw betaalbewijs: {{5}}. Bedankt.'}
@@ -233,6 +252,7 @@ export function TwilioForm({ initial }) {
           className="mt-1 h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3">
           <option value="">Vrije tekst (alleen binnen 24 uur)</option>
           <option value="receipt">Betaalbewijs-template</option>
+          <option value="receipt_media">Betaalbewijs-afbeeldingstemplate</option>
           <option value="reminder">Herinnering-template</option>
         </select>
       </div>
@@ -1127,7 +1147,7 @@ export default function SettingsPage({ initialSection, hideSubNav = false, kiosk
         </div>
       )}
       {section === 'smtp' && <SmtpForm initial={settings.smtp} />}
-      {section === 'twilio' && <TwilioForm initial={settings.twilio} />}
+      {section === 'twilio' && <TwilioForm initial={settings.twilio} receiptMediaUrl={settings.whatsapp_receipt_media_url} />}
       {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
       {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
       {section === 'deposit' && <DepositForm initial={settings.deposit} />}

@@ -90,7 +90,7 @@ def test_twilio_settings_test_rejects_missing_or_invalid_number(monkeypatch, num
     send.assert_not_awaited()
 
 
-@pytest.mark.parametrize("kind", ["receipt", "reminder"])
+@pytest.mark.parametrize("kind", ["receipt", "receipt_media", "reminder"])
 def test_template_test_uses_saved_sid_and_sample_variables(monkeypatch, kind):
     import server
     import twilio_service
@@ -113,7 +113,7 @@ def test_template_test_uses_saved_sid_and_sample_variables(monkeypatch, kind):
     assert send.await_args.kwargs["template_kind"] == kind
     assert send.await_args.kwargs["variables"] == {
         "1": "Testhuurder", "2": "Bedrijf", "3": "SRD 100.00", "4": "TEST-001",
-        "5": "https://example.com/kiosk/huurder",
+        "5": "sample.jpg" if kind == "receipt_media" else "https://example.com/kiosk/huurder",
     }
 
 
@@ -182,13 +182,16 @@ def test_twilio_template_sids_are_persisted_per_company(monkeypatch):
     monkeypatch.setattr(server, "db", SimpleNamespace(company_settings=SimpleNamespace(update_one=update)))
     result = asyncio.run(server.update_settings_section("twilio", {
         "receipt_content_sid": "HX" + "a" * 32, "reminder_content_sid": "HX" + "b" * 32,
+        "receipt_media_content_sid": "HX" + "c" * 32,
     }, user={"id": "admin"}))
     assert result["data"]["receipt_content_sid"] == "HX" + "a" * 32
     assert result["data"]["reminder_content_sid"] == "HX" + "b" * 32
+    assert result["data"]["receipt_media_content_sid"] == "HX" + "c" * 32
     assert update.await_args.args[0] == {"company_id": "company-1"}
 
 
-def test_invalid_content_sid_is_not_saved(monkeypatch):
+@pytest.mark.parametrize("key", ["receipt_content_sid", "receipt_media_content_sid"])
+def test_invalid_content_sid_is_not_saved(monkeypatch, key):
     import server
 
     update = AsyncMock()
@@ -197,7 +200,7 @@ def test_invalid_content_sid_is_not_saved(monkeypatch):
     monkeypatch.setattr(server, "db", SimpleNamespace(company_settings=SimpleNamespace(update_one=update)))
     with pytest.raises(HTTPException) as error:
         asyncio.run(server.update_settings_section("twilio", {
-            "receipt_content_sid": "invalid",
+            key: "invalid",
         }, user={"id": "admin"}))
     assert error.value.status_code == 422
     update.assert_not_awaited()
@@ -249,3 +252,90 @@ def test_overdue_reminder_uses_reminder_template(monkeypatch):
         "1": "Huurder", "2": "Bedrijf", "3": "SRD 50.00", "4": "Openstaand saldo",
         "5": "https://example.com/kiosk/huurder",
     }
+
+
+def test_receipt_media_token_route_and_invalid_tokens(monkeypatch):
+    import jwt
+    import server
+    from fastapi.responses import Response
+
+    monkeypatch.setenv("APP_PUBLIC_URL", "https://example.com")
+    image = AsyncMock(return_value=Response(b"jpeg-data", media_type="image/jpeg"))
+    monkeypatch.setattr(server, "payment_image", image)
+    kind, variables = server._receipt_template(
+        {"receipt_content_sid": "text", "receipt_media_content_sid": "media"},
+        "payment-1", "Huurder", "Bedrijf", "SRD 100", "BON-1", "old-link",
+    )
+    assert kind == "receipt_media"
+    assert variables["5"].endswith(".jpg")
+    token = variables["5"][:-4]
+    expired = jwt.encode({"type": "whatsapp_receipt_image", "payment_id": "payment-1", "exp": 1},
+                         server.JWT_SECRET, algorithm=server.JWT_ALG)
+    wrong_purpose = jwt.encode({"type": "access", "payment_id": "payment-1", "exp": 4102444800},
+                               server.JWT_SECRET, algorithm=server.JWT_ALG)
+    tampered = jwt.encode({"type": "whatsapp_receipt_image", "payment_id": "payment-1", "exp": 4102444800},
+                          "incorrect-secret", algorithm=server.JWT_ALG)
+
+    async def request():
+        async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+            results = []
+            for value in [token, expired, wrong_purpose, tampered, "sample"]:
+                results.append(await client.get(f"/api/public/whatsapp-receipts/{value}.jpg"))
+            return results
+
+    valid, expired_response, wrong_response, tampered_response, sample = asyncio.run(request())
+    assert valid.status_code == 200 and valid.content == b"jpeg-data"
+    assert valid.headers["cache-control"] == "private, no-store"
+    image.assert_awaited_once_with("payment-1")
+    assert [expired_response.status_code, wrong_response.status_code, tampered_response.status_code] == [404, 404, 404]
+    assert sample.status_code == 200 and sample.headers["content-type"] == "image/jpeg"
+    assert sample.content.startswith(b"\xff\xd8")
+
+
+def test_media_template_requires_https_and_falls_back_only_to_configured_text(monkeypatch):
+    import server
+
+    monkeypatch.setenv("APP_PUBLIC_URL", "http://example.com")
+    with pytest.raises(HTTPException):
+        server._receipt_template({"receipt_media_content_sid": "media"}, "payment", "A", "B", "C", "D", "link")
+    with pytest.raises(HTTPException):
+        server._receipt_template({"receipt_media_content_sid": "media"}, None, "A", "B", "C", "D", "link")
+    kind, variables = server._receipt_template(
+        {"receipt_media_content_sid": "media", "receipt_content_sid": "text"},
+        None, "A", "B", "C", "D", "link",
+    )
+    assert kind == "receipt" and variables["5"] == "link"
+
+
+@pytest.mark.parametrize("route", ["kiosk", "manual"])
+def test_receipt_routes_prefer_media_template(monkeypatch, route):
+    import server
+    import twilio_service
+
+    send = AsyncMock()
+    cfg = {"enabled": True, "whatsapp_from": "+14155550100",
+           "receipt_content_sid": "HX" + "a" * 32, "receipt_media_content_sid": "HX" + "b" * 32}
+    payment = {"receipt_number": "BON-1", "currency": "SRD", "amount": 100, "tenant_id": "tenant-1"}
+    monkeypatch.setenv("APP_PUBLIC_URL", "https://example.com")
+    monkeypatch.setattr(server, "get_company_section", AsyncMock(return_value=cfg))
+    monkeypatch.setattr(server, "_twilio_or_400", AsyncMock(return_value=cfg))
+    monkeypatch.setattr(server, "_enrich_payment", AsyncMock(return_value=payment))
+    monkeypatch.setattr(server, "_brand_name_of", AsyncMock(return_value="Bedrijf"))
+    monkeypatch.setattr(server, "scope", lambda user: {"company_id": "company-1"})
+    monkeypatch.setattr(server, "company_id_of", lambda user: "company-1")
+    monkeypatch.setattr(server, "db", SimpleNamespace(
+        payments=SimpleNamespace(find_one=AsyncMock(return_value=payment)),
+        tenants=SimpleNamespace(find_one=AsyncMock(return_value={"name": "Huurder", "phone": "+5971234567"})),
+    ))
+    monkeypatch.setattr(twilio_service, "send_whatsapp", send)
+    if route == "kiosk":
+        result = asyncio.run(server.kiosk_whatsapp_receipt("payment-1", _session={"company_id": "company-1"}))
+        assert result["sent"]
+    else:
+        result = asyncio.run(server.message_payment_receipt(
+            "payment-1", server.MessageSendIn(channel="whatsapp"), user={"id": "admin"}
+        ))
+        assert result["ok"]
+    assert send.await_args.kwargs["template_kind"] == "receipt_media"
+    token = send.await_args.kwargs["variables"]["5"].removesuffix(".jpg")
+    assert server.jwt.decode(token, server.JWT_SECRET, algorithms=[server.JWT_ALG])["payment_id"] == "payment-1"
