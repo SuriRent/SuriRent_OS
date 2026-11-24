@@ -808,13 +808,6 @@ export default function Companies({
       || (statusFilter === 'disabled' && company.active === false);
     return matchesQuery && matchesFilter;
   });
-  const counts = {
-    all: scopedItems.length,
-    active: scopedItems.filter((company) => company.billing_status === 'active').length,
-    trial: scopedItems.filter((company) => company.billing_status === 'trial').length,
-    attention: scopedItems.filter((company) => ['expired', 'past_due', 'cancelled'].includes(company.billing_status)).length,
-  };
-
   if (!isSuper) {
     return (
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-sm text-amber-800">
@@ -839,21 +832,6 @@ export default function Companies({
       </div>
 
       {err && <div role="alert" className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2"><AlertCircle className="w-4 h-4 shrink-0" />{err}</div>}
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {[
-          { id: 'all', label: 'Alle bedrijven', value: counts.all, color: 'text-slate-900' },
-          { id: 'active', label: 'Actieve abonnementen', value: counts.active, color: 'text-emerald-700' },
-          { id: 'trial', label: 'Proefperiodes', value: counts.trial, color: 'text-amber-700' },
-          { id: 'attention', label: 'Aandacht nodig', value: counts.attention, color: 'text-red-700' },
-        ].map((item) => (
-          <button key={item.id} type="button" onClick={() => onStatusFilterChange(item.id)}
-            className={`rounded-2xl border bg-white p-2.5 text-left transition ${statusFilter === item.id ? 'border-orange-400 ring-2 ring-orange-100' : 'border-slate-200 hover:border-slate-300'}`}>
-              <p className="text-[10px] leading-tight font-bold text-slate-500">{item.label}</p>
-              <p className={`text-lg font-black mt-0.5 ${item.color}`}>{loading ? '—' : item.value}</p>
-          </button>
-        ))}
-      </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_138px] gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:hidden">
         <div className="relative min-w-0 xl:hidden">
