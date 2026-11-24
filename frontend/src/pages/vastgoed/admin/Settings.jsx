@@ -67,7 +67,7 @@ function ActionRow({ onSave, onTest, saving, testing, canTest }) {
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Bewaar
       </button>
       {onTest && (
-        <button onClick={onTest} disabled={testing || !canTest} data-testid="settings-test"
+        <button onClick={() => onTest()} disabled={testing || !canTest} data-testid="settings-test"
           className="h-11 px-5 rounded-xl border-2 border-[#FF5C00] text-[#FF5C00] hover:bg-orange-50 font-bold flex items-center gap-2 disabled:opacity-50">
           {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />} Test verbinding
         </button>
@@ -113,10 +113,10 @@ function useSection(section, initial, onSaved, onDirty) {
     } catch (e) { setErr(formatError(e)); }
     finally { setSaving(false); }
   };
-  const test = async () => {
+  const test = async (payload) => {
     setErr(''); setMsg(''); setTesting(true);
     try {
-      const { data: res } = await api.post(`/settings/${section}/test`);
+      const { data: res } = await api.post(`/settings/${section}/test`, payload);
       if (res.ok) setMsg(res.detail || 'Test geslaagd.');
       else setErr(res.detail || 'Test mislukt.');
     } catch (e) { setErr(formatError(e)); }
@@ -183,6 +183,7 @@ export function DepositForm({ initial }) {
 
 export function TwilioForm({ initial }) {
   const s = useSection('twilio', initial);
+  const [testNumber, setTestNumber] = useState('');
   const d = s.data;
   return (
     <SectionShell msg={s.msg} err={s.err}>
@@ -195,7 +196,10 @@ export function TwilioForm({ initial }) {
         <TextField label="WhatsApp afzender" testid="twilio-wa-from" value={d.whatsapp_from} onChange={(v) => s.onField('whatsapp_from', v)} placeholder="whatsapp:+14155238886" helper="Inclusief 'whatsapp:' prefix" />
         <TextField label="SMS afzender" testid="twilio-sms-from" value={d.sms_from} onChange={(v) => s.onField('sms_from', v)} placeholder="+597 xxx xxxx" />
       </div>
-      <ActionRow onSave={s.save} onTest={s.test} saving={s.saving} testing={s.testing} canTest={d.enabled} />
+      <TextField label="Testnummer" testid="twilio-test-number" type="tel" value={testNumber} onChange={setTestNumber}
+        placeholder="+597..." helper="Vul een ontvangend nummer met landcode in. Bewaar eerst de instellingen." />
+      <ActionRow onSave={s.save} onTest={() => s.test({ to: testNumber.trim() })}
+        saving={s.saving} testing={s.testing} canTest={d.enabled && !!testNumber.trim()} />
     </SectionShell>
   );
 }
