@@ -5074,7 +5074,7 @@ function SaasConsoleDock({ tab, tabs, onChange }) {
   );
 }
 
-function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount, contractFilter, onContractFilterChange, contractCounts, paymentTopbarRef }) {
+function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount, contractFilter, onContractFilterChange, contractCounts, paymentTopbarRef, invoiceTopbarRef, onCreatePlan }) {
   const current = tabs.find((item) => item.id === tab);
   const CurrentIcon = current?.icon || LayoutDashboard;
   const groups = groupTabs(tabs);
@@ -5132,6 +5132,17 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount,
       )}
       {tab === 'saas_payments' && (
         <div ref={paymentTopbarRef} className="min-w-0 border-t border-slate-100 px-3 py-2" />
+      )}
+      {tab === 'saas_invoices' && (
+        <div ref={invoiceTopbarRef} className="min-w-0 border-t border-slate-100 px-3 py-2" />
+      )}
+      {tab === 'plans' && (
+        <div className="border-t border-slate-100 px-3 py-2">
+          <button type="button" onClick={onCreatePlan} data-testid="plan-add-mobile-btn"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700">
+            <Plus className="h-4 w-4" /> Nieuw pakket
+          </button>
+        </div>
       )}
       {menuOpen && createPortal(
         <div className="fixed inset-0 z-[120] flex flex-col bg-[#F1F2F4]"
@@ -5208,7 +5219,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount,
 
 function SaasConsoleDesktopTopbar({
   user, tab, tabs, companySearchQuery, onCompanySearchChange, companyStatusFilter, onCompanyStatusChange,
-  onCreateCompany, onRefreshCompanies, contractFilter, onContractFilterChange, contractCounts, paymentTopbarRef,
+  onCreateCompany, onRefreshCompanies, contractFilter, onContractFilterChange, contractCounts, paymentTopbarRef, invoiceTopbarRef, onCreatePlan,
 }) {
   const current = tabs.find((item) => item.id === tab);
   const CurrentIcon = current?.icon || LayoutDashboard;
@@ -5280,7 +5291,16 @@ function SaasConsoleDesktopTopbar({
         {tab === 'saas_payments' && (
           <div ref={paymentTopbarRef} className="min-w-0" />
         )}
-        <div className={`${tab === 'saas_contracts' ? 'hidden 2xl:flex' : 'flex'} shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2`}>
+        {tab === 'saas_invoices' && (
+          <div ref={invoiceTopbarRef} className="min-w-0" />
+        )}
+        {tab === 'plans' && (
+          <button type="button" onClick={onCreatePlan} data-testid="plan-add-btn"
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white hover:bg-emerald-700">
+            <Plus className="h-4 w-4" /> Nieuw pakket
+          </button>
+        )}
+        <div className={`${['saas_contracts', 'saas_invoices'].includes(tab) ? 'hidden 2xl:flex' : 'flex'} shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2`}>
           <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
           <span className="text-xs font-bold text-slate-700">{user?.name || user?.email || 'Superadmin'}</span>
         </div>
@@ -5351,6 +5371,9 @@ export default function AdminDashboard() {
   const [contractFilter, setContractFilter] = useState('all');
   const [paymentTopbar, setPaymentTopbar] = useState(null);
   const [paymentMobileTopbar, setPaymentMobileTopbar] = useState(null);
+  const [invoiceTopbar, setInvoiceTopbar] = useState(null);
+  const [invoiceMobileTopbar, setInvoiceMobileTopbar] = useState(null);
+  const [plansCreateRequest, setPlansCreateRequest] = useState(0);
   const contractCounts = useMemo(() => {
     const scopedItems = activeCompanyId
       ? contractItems.filter((company) => company.id === activeCompanyId)
@@ -5565,6 +5588,8 @@ export default function AdminDashboard() {
           ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount}
             contractFilter={contractFilter} onContractFilterChange={setContractFilter} contractCounts={contractCounts}
             paymentTopbarRef={setPaymentMobileTopbar}
+            invoiceTopbarRef={setInvoiceMobileTopbar}
+            onCreatePlan={() => setPlansCreateRequest((request) => request + 1)}
           /><SaasConsoleDesktopTopbar
             user={user} tab={tab} tabs={tabs} companySearchQuery={companySearchQuery}
             companyStatusFilter={companyStatusFilter}
@@ -5574,6 +5599,8 @@ export default function AdminDashboard() {
             onRefreshCompanies={() => setCompaniesRefreshRequest((request) => request + 1)}
             contractFilter={contractFilter} onContractFilterChange={setContractFilter} contractCounts={contractCounts}
             paymentTopbarRef={setPaymentTopbar}
+            invoiceTopbarRef={setInvoiceTopbar}
+            onCreatePlan={() => setPlansCreateRequest((request) => request + 1)}
           /></>
           : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
         <ImpersonationBanner />
@@ -5612,7 +5639,7 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'subscriptions'} tabId="subscriptions" currentTab={tab}><Subscriptions /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_overview'} tabId="saas_overview" currentTab={tab}><SaasOverview /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_pending'} tabId="saas_pending" currentTab={tab}><Subscriptions viewMode="pending" /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'saas_invoices'} tabId="saas_invoices" currentTab={tab}><Subscriptions viewMode="invoices" /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_invoices'} tabId="saas_invoices" currentTab={tab}><Subscriptions viewMode="invoices" invoiceTopbar={invoiceTopbar} invoiceMobileTopbar={invoiceMobileTopbar} invoiceTopbarActive={tab === 'saas_invoices'} /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_payments'} tabId="saas_payments" currentTab={tab}><Subscriptions viewMode="payments" paymentTopbar={paymentTopbar} paymentMobileTopbar={paymentMobileTopbar} paymentTopbarActive={tab === 'saas_payments'} /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_payment_plans'} tabId="saas_payment_plans" currentTab={tab}><Subscriptions viewMode="payment_plans" /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_kasgeld'} tabId="saas_kasgeld" currentTab={tab}><Subscriptions viewMode="kasgeld" /></KeepAliveTab>
@@ -5621,7 +5648,7 @@ export default function AdminDashboard() {
           <KeepAliveTab active={tab === 'saas_contracts'} tabId="saas_contracts" currentTab={tab}><SaasContracts items={contractItems} setItems={setContractItems} filter={contractFilter} /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_employees'} tabId="saas_employees" currentTab={tab}><SaasEmployees /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_notifications'} tabId="saas_notifications" currentTab={tab}><SaasNotifications /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'plans'} tabId="plans" currentTab={tab}><PlansAdmin /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'plans'} tabId="plans" currentTab={tab}><PlansAdmin createRequest={plansCreateRequest} /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_settings'} tabId="saas_settings" currentTab={tab}><SaasSettings /></KeepAliveTab>
           <KeepAliveTab active={tab === 'landing_editor'} tabId="landing_editor" currentTab={tab}><LandingEditor /></KeepAliveTab>
           <KeepAliveTab active={tab === 'overview'} tabId="overview" currentTab={tab}><Overview /></KeepAliveTab>

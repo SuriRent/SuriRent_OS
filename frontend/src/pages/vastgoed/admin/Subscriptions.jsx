@@ -659,7 +659,10 @@ function Row({ label, value, mono, bold }) {
   );
 }
 
-export default function Subscriptions({ viewMode = 'all', paymentTopbar, paymentMobileTopbar, paymentTopbarActive = null } = {}) {
+export default function Subscriptions({
+  viewMode = 'all', paymentTopbar, paymentMobileTopbar, paymentTopbarActive = null,
+  invoiceTopbar, invoiceMobileTopbar, invoiceTopbarActive = null,
+} = {}) {
   const { activeCompanyId } = useAuth();
   const [overview, setOverview] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -732,6 +735,12 @@ export default function Subscriptions({ viewMode = 'all', paymentTopbar, payment
     { v: 'bank', l: 'Bank', c: filterPayments(scopedPayments, 'bank').length },
     { v: 'ocr', l: 'OCR', c: filterPayments(scopedPayments, 'ocr').length },
   ];
+  const invoiceFilterOptions = [
+    { v: 'all', l: 'Alles', c: scopedInvoices.length },
+    { v: 'open', l: 'Open', c: scopedInvoices.filter((x) => !['paid', 'superseded'].includes(x.status) && !isOverdue(x)).length },
+    { v: 'paid', l: 'Betaald', c: scopedInvoices.filter((x) => x.status === 'paid').length },
+    { v: 'overdue', l: 'Vervallen', c: scopedInvoices.filter(isOverdue).length },
+  ];
 
   const approvePending = async (pr) => {
     if (!window.confirm(`OCR-betaling van ${pr.company_name} goedkeuren? Het abonnement wordt direct geactiveerd.`)) return;
@@ -800,7 +809,7 @@ export default function Subscriptions({ viewMode = 'all', paymentTopbar, payment
           <button onClick={load} disabled={loading} className="shrink-0 font-bold underline disabled:opacity-50">Opnieuw laden</button>
         </div>
       )}
-      {viewMode !== 'payments' && <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+      {!['payments', 'invoices'].includes(viewMode) && <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <Crown className="w-6 h-6 text-orange-500" />
@@ -826,7 +835,7 @@ export default function Subscriptions({ viewMode = 'all', paymentTopbar, payment
         </div>
       </div>}
 
-      {viewMode === 'invoices' && (
+      {viewMode === 'invoices' && invoiceTopbarActive === null && (
         <div className="mb-4">
           <button onClick={() => setShowNewInv(true)} data-testid="new-invoice-btn"
             className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm inline-flex items-center gap-2 shadow-md shadow-orange-500/25">
@@ -945,16 +954,19 @@ export default function Subscriptions({ viewMode = 'all', paymentTopbar, payment
 
       {tab === 'invoices' && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
+          {(viewMode !== 'invoices' || invoiceTopbarActive === null) && (
             <FilterPills value={invFilter} onChange={setInvFilter}
-              options={[
-                { v: 'all', l: 'Alles', c: scopedInvoices.length },
-                { v: 'open', l: 'Open', c: scopedInvoices.filter((x) => !['paid', 'superseded'].includes(x.status) && !isOverdue(x)).length },
-                { v: 'paid', l: 'Betaald', c: scopedInvoices.filter((x) => x.status === 'paid').length },
-                { v: 'overdue', l: 'Vervallen', c: scopedInvoices.filter(isOverdue).length },
-              ]}
+              options={invoiceFilterOptions}
               testidPrefix="saas-inv-filter" />
-          </div>
+          )}
+          {viewMode === 'invoices' && invoiceTopbarActive && invoiceTopbar && createPortal(
+            <InvoiceTopbar value={invFilter} onChange={setInvFilter} options={invoiceFilterOptions} onCreate={() => setShowNewInv(true)} />,
+            invoiceTopbar,
+          )}
+          {viewMode === 'invoices' && invoiceTopbarActive && invoiceMobileTopbar && createPortal(
+            <InvoiceTopbar value={invFilter} onChange={setInvFilter} options={invoiceFilterOptions} onCreate={() => setShowNewInv(true)} mobile />,
+            invoiceMobileTopbar,
+          )}
           <SaasInvoiceList invoices={filterInvoices(scopedInvoices, invFilter)} />
         </div>
       )}
@@ -1154,6 +1166,19 @@ function FilterPills({ value, onChange, options, testidPrefix, topbar = false })
           }`}>{o.c}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+function InvoiceTopbar({ value, onChange, options, onCreate, mobile = false }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
+      <button type="button" onClick={onCreate} data-testid={mobile ? 'new-invoice-mobile-btn' : 'new-invoice-btn'}
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700">
+        <Plus className="h-4 w-4" /> Nieuwe factuur
+      </button>
+      <FilterPills value={value} onChange={onChange} options={options}
+        testidPrefix={mobile ? 'saas-inv-mobile-filter' : 'saas-inv-filter'} topbar />
     </div>
   );
 }

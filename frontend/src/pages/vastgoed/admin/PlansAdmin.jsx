@@ -36,7 +36,7 @@ function LimitsEditor({ value, onChange, primary = '#047857' }) {
     { key: 'allow_backup', label: 'Backup & Herstel' },
   ];
   return (
-    <div className="space-y-3 bg-slate-50 rounded-xl p-4">
+    <div className="space-y-3 bg-slate-50 rounded-xl p-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {numericFields.map((f) => (
           <div key={f.key}>
@@ -45,7 +45,7 @@ function LimitsEditor({ value, onChange, primary = '#047857' }) {
               <input type="number" value={v[f.key] ?? 0}
                 onChange={(e) => set(f.key, parseInt(e.target.value, 10) || 0)}
                 data-testid={`plan-limit-${f.key}`}
-                className="w-full h-9 px-2.5 rounded-lg border border-slate-200 focus:border-orange-500 outline-none text-sm font-mono" />
+                className="min-w-0 w-full h-9 px-2.5 rounded-lg border border-slate-200 focus:border-orange-500 outline-none text-sm font-mono" />
               <button onClick={() => set(f.key, -1)} title="Onbeperkt"
                 className="px-2 h-9 rounded-lg border border-slate-200 hover:border-orange-400 text-xs font-bold text-slate-600 shrink-0">∞</button>
             </div>
@@ -55,7 +55,7 @@ function LimitsEditor({ value, onChange, primary = '#047857' }) {
           </div>
         ))}
       </div>
-      <div className="pt-3 border-t border-slate-200 grid grid-cols-2 gap-2">
+      <div className="pt-3 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2">
         {booleanFields.map((f) => (
           <label key={f.key} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 hover:border-orange-400 cursor-pointer">
             <input type="checkbox" checked={!!v[f.key]}
@@ -86,7 +86,7 @@ function FeaturesEditor({ value, onChange, primary = '#047857' }) {
           <Check className="w-4 h-4 shrink-0" style={{ color: primary }} />
           <input value={f} onChange={(e) => update(i, e.target.value)}
             data-testid={`plan-feature-input-${i}`}
-            className="flex-1 h-9 px-3 rounded-lg border border-slate-200 focus:border-orange-500 outline-none text-sm" />
+            className="min-w-0 flex-1 h-9 px-3 rounded-lg border border-slate-200 focus:border-orange-500 outline-none text-sm" />
           <button onClick={() => remove(i)} data-testid={`plan-feature-remove-${i}`}
             className="w-9 h-9 rounded-lg hover:bg-red-50 text-red-500 flex items-center justify-center">
             <X className="w-4 h-4" />
@@ -121,16 +121,16 @@ function PlanCard({ plan, onSave, onDelete, isNew = false, onCancel }) {
   };
 
   return (
-    <div className={`bg-white rounded-2xl border-2 ${draft.active ? 'border-slate-100' : 'border-slate-200 opacity-70'} overflow-hidden`}
+    <div className={`min-w-0 bg-white rounded-2xl border-2 ${draft.active ? 'border-slate-100' : 'border-slate-200 opacity-70'} overflow-hidden`}
       data-testid={`plan-card-${plan.id || 'new'}`}>
-      <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50">
-        <div className="flex items-center gap-2.5">
+      <div className="px-3 py-3 border-b border-slate-100 flex items-center justify-between gap-2 bg-gradient-to-r from-orange-50 to-amber-50">
+        <div className="flex min-w-0 items-center gap-2.5">
           <div className="w-9 h-9 rounded-lg bg-orange-500 text-white flex items-center justify-center">
             <Package className="w-4.5 h-4.5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Plan ID</p>
-            <p className="text-sm font-extrabold text-slate-900 font-mono">{plan.id || 'nieuw'}</p>
+            <p className="truncate text-sm font-extrabold text-slate-900 font-mono" title={plan.id || 'nieuw'}>{plan.id || 'nieuw'}</p>
           </div>
         </div>
         <label className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
@@ -142,7 +142,7 @@ function PlanCard({ plan, onSave, onDelete, isNew = false, onCancel }) {
         </label>
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="p-3 space-y-3">
         {isNew && (
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Plan ID (slug)</label>
@@ -170,8 +170,8 @@ function PlanCard({ plan, onSave, onDelete, isNew = false, onCancel }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="min-w-0">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-2">
+          <div className="min-w-0 xl:col-span-2">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Prijs</label>
             <input type="number" step="0.01" value={draft.amount ?? 0}
               onChange={(e) => update('amount', parseFloat(e.target.value) || 0)}
@@ -259,7 +259,7 @@ function PlanCard({ plan, onSave, onDelete, isNew = false, onCancel }) {
   );
 }
 
-export default function PlansAdmin() {
+export default function PlansAdmin({ createRequest = 0 } = {}) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -278,6 +278,9 @@ export default function PlansAdmin() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (createRequest > 0) setCreating(true);
+  }, [createRequest]);
 
   const handleSave = async (draft) => {
     await api.put(`/superadmin/plans/${draft.id}`, draft);
@@ -300,22 +303,7 @@ export default function PlansAdmin() {
   };
 
   return (
-    <div className="space-y-6" data-testid="plans-admin-page">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Pakketten</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Bepaal welke abonnementen klanten kunnen kiezen, met prijzen en features.
-            Wijzigingen verschijnen direct op de marketing landing page.
-          </p>
-        </div>
-        <button onClick={() => setCreating(true)} disabled={creating}
-          data-testid="plan-add-btn"
-          className="h-11 px-5 rounded-lg bg-slate-900 hover:bg-orange-500 text-white text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-50">
-          <Plus className="w-4 h-4" /> Nieuw pakket
-        </button>
-      </div>
-
+    <div className="space-y-4" data-testid="plans-admin-page">
       {error && (
         <div className="px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 flex items-center justify-between gap-3">
           <span>{error}</span>
@@ -328,7 +316,7 @@ export default function PlansAdmin() {
           <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
         </div>
       ) : (
-        <div className="grid lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4" data-testid="plan-grid">
           {creating && (
             <PlanCard
               plan={{ id: '', name: '', amount: 0, currency: 'SRD', interval: 'month', description: '', features: [], active: true, sort_order: 50 }}
