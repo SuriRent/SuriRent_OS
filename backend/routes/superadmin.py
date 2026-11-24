@@ -25,6 +25,7 @@ from saas_invoicing import (
     append_company_invoice_charge,
     consolidate_company_invoices,
 )
+from saas_billing_calendar import saas_invoice_overdue_at
 
 router = APIRouter()
 
@@ -320,14 +321,10 @@ async def saas_auto_invoice_tick() -> list[dict]:
         plan_id = c.get("plan") or "starter"
         plan = await _deps.get_plan(plan_id)
         interval = str((plan or {}).get("interval") or "month").lower()
-        is_trial_expiry = c.get("billing_status") == "expired"
-        if is_trial_expiry and (
-            interval != "month"
-            or c.get("subscription_started_at")
-            or c.get("subscription_renews_at")
-            or not c.get("trial_ends_at")
-        ):
+        expired = c.get("billing_status") == "expired"
+        if expired and (interval != "month" or not c.get("trial_ends_at")):
             continue
+        is_trial_expiry = expired and not c.get("subscription_renews_at") and not c.get("subscription_started_at")
 
         summary = await _deps.billing_summary(c)
         amount = float(summary.get("monthly_amount") or 0)
@@ -349,7 +346,7 @@ async def saas_auto_invoice_tick() -> list[dict]:
             period_start, period_end, next_invoice_at = _deps.first_monthly_invoice_after_trial(
                 trial_ends_at,
             )
-            due_date = _deps.saas_due_date(now)
+            due_date = _deps.saas_due_date(period_end + timedelta(days=1))
         elif interval == "month":
             renews_at_raw = c.get("subscription_renews_at")
             try:
@@ -370,9 +367,9 @@ async def saas_auto_invoice_tick() -> list[dict]:
             next_invoice_at = _deps.fixed_monthly_invoice_date(
                 renews_at, include_current=False,
             )
-            due_date = _deps.saas_due_date(renews_at)
+            due_date = _deps.saas_due_date(period_end + timedelta(days=1))
         else:
-            if is_trial_expiry:
+            if expired:
                 continue
             renews_at_raw = c.get("subscription_renews_at")
             if not renews_at_raw:
@@ -408,7 +405,7 @@ async def saas_auto_invoice_tick() -> list[dict]:
         cycle_fields = _deps.saas_invoice_cycle_fields(plan)
         if interval == "month":
             cycle_fields.update({
-                "billing_cycle": "fixed_28_advance",
+                "billing_cycle": "fixed_28_arrears",
                 "next_invoice_at": _deps.iso(next_invoice_at),
             })
         inv = {
@@ -502,11 +499,11 @@ async def superadmin_kasregister(user: dict = Depends(_superadmin)):
             balance_due = float(i.get("balance_due", float(i.get("amount") or 0) - float(i.get("paid_amount") or 0)))
             outstanding_by_cur[cur] = outstanding_by_cur.get(cur, 0.0) + balance_due
             try:
-                pe = datetime.fromisoformat(str(i.get("period_end") or "").replace("Z", "+00:00"))
-                if pe < now:
+                overdue_at = saas_invoice_overdue_at(i)
+                if overdue_at and overdue_at <= now:
                     overdue += 1
-            except Exception:
-                pass
+            except (TypeError, ValueError) as exc:
+                print(f"[saas-invoice] invalid due date for {i.get('id')}: {exc}")
         last_pmt = pmts[0] if pmts else None
         summary = await _deps.billing_summary(c)
         # Bepaal status voor kasregister
@@ -848,7 +845,7 @@ async def check_invoice_reminders() -> list[dict]:
     vervallen is. Idempotent via `sent_invoice_reminders` collectie (dedup
     per (invoice_id, days_bucket) — één herinnering per drempel-passage)."""
     db = _deps.db
-    if db is None or _deps.saas_email is None:
+    if db is None:
         return []
     now = _deps.now_utc()
     threshold = now - timedelta(days=3)
@@ -861,19 +858,15 @@ async def check_invoice_reminders() -> list[dict]:
         due_raw = inv.get("due_date")
         due_display = None
         try:
+            pe = saas_invoice_overdue_at(inv)
+            if pe is None:
+                continue
             if due_raw:
-                due_day = datetime.fromisoformat(str(due_raw)[:10]).date()
-                due_display = due_day
-                pe = datetime.combine(due_day + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+                due_display = datetime.fromisoformat(str(due_raw)[:10]).date()
             else:
-                pe_raw = inv.get("period_end")
-                if not pe_raw:
-                    continue
-                pe = datetime.fromisoformat(str(pe_raw).replace("Z", "+00:00"))
-                if pe.tzinfo is None:
-                    pe = pe.replace(tzinfo=timezone.utc)
                 due_display = pe.date()
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
+            print(f"[saas-invoice] invalid due date for {inv.get('id')}: {exc}")
             continue
         if pe <= now and inv.get("status") == "open":
             await db.subscription_invoices.update_one(
@@ -881,6 +874,8 @@ async def check_invoice_reminders() -> list[dict]:
                 {"$set": {"status": "overdue"}},
             )
             inv["status"] = "overdue"
+        if _deps.saas_email is None:
+            continue
         if pe > threshold:
             continue  # nog niet vervallen genoeg
 

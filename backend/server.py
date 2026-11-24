@@ -810,7 +810,7 @@ async def _daily_billing_checks_loop():
             except Exception as e:
                 _log.warning(f"[billing-cron] cycle failed: {e}")
             # SaaS auto-invoice: first full monthly invoice after trial expiry,
-            # then advance invoices on the 28th for the following calendar month.
+            # then invoices on the 28th for that calendar month.
             try:
                 from routes.superadmin import saas_auto_invoice_tick as _saas_inv
                 new_invoices = await _saas_inv()
@@ -3381,6 +3381,7 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
                 )
             period_start_dt, period_end_dt = _fixed_monthly_billing_period(renews_at)
             next_invoice_at = _fixed_monthly_invoice_date(renews_at, include_current=False)
+        due_date = _saas_invoice_due_date(period_end_dt + timedelta(days=1))
         amount = float(plan.get("amount") or 0)
     else:
         period_start = c.get("subscription_renews_at") or iso(now)
@@ -3391,12 +3392,13 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
         period_start_dt = _plan_period_start(plan, period_start_dt)
         period_end_dt = _plan_period_end(plan, period_start_dt)
         amount = _saas_invoice_amount(plan, plan["amount"], period_start_dt, period_end_dt)
+        due_date = _saas_invoice_due_date(now)
     period_start = iso(period_start_dt)
     period_end = iso(period_end_dt) if period_end_dt else None
     cycle_fields = _saas_invoice_cycle_fields(plan)
     if interval == "month":
         cycle_fields.update({
-            "billing_cycle": "fixed_28_advance",
+            "billing_cycle": "fixed_28_arrears",
             "next_invoice_at": iso(next_invoice_at),
         })
     inv = {
@@ -3410,7 +3412,7 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
         "kind": "subscription",
         "period_start": period_start,
         "period_end": period_end,
-        "due_date": _saas_invoice_due_date(now),
+        "due_date": due_date,
         "created_at": iso(now),
         "created_by": user_email or "self_checkout",
         **cycle_fields,
@@ -5860,10 +5862,12 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
         period_start, period_end, next_invoice_at = _first_monthly_invoice_after_trial(
             initial_start,
         )
+        due_date = _saas_invoice_due_date(period_end + timedelta(days=1))
     else:
         period_start = _plan_period_start(plan, now)
         period_end = _plan_period_end(plan, period_start)
         amount = _saas_invoice_amount(plan, amount, period_start, period_end)
+        due_date = _saas_invoice_due_date(now)
     inv = None
     pending_invoice_id = c.get("pending_invoice_id")
     if pending_invoice_id:
@@ -5894,13 +5898,13 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
                 "kind": "subscription",
                 "period_start": iso(period_start),
                 "period_end": iso(period_end) if period_end else None,
-                "due_date": _saas_invoice_due_date(now),
+                "due_date": due_date,
                 "created_at": iso(now),
                 "created_by": user.get("email"),
                 "manual": True,
                 **_saas_invoice_cycle_fields(plan),
                 **({
-                    "billing_cycle": "fixed_28_advance",
+                    "billing_cycle": "fixed_28_arrears",
                     "next_invoice_at": iso(next_invoice_at),
                 } if next_invoice_at else {}),
             }

@@ -1110,9 +1110,11 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 // =====================================================================
 function isOverdue(inv) {
   if (['paid', 'superseded'].includes(inv.status)) return false;
-  const due = inv.due_date || inv.period_end;
-  if (!due) return false;
-  try { return new Date(due) < new Date(); } catch { return false; }
+  if (inv.due_date) {
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Paramaribo' }).format(new Date());
+    return String(inv.due_date).slice(0, 10) < today;
+  }
+  return !!inv.period_end && new Date(inv.period_end) < new Date();
 }
 function filterInvoices(list, f) {
   if (f === 'all') return list;
@@ -1401,7 +1403,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
                     <div key={iv.id} title={`T${iv.installment_seq}: ${fmt(iv.amount, iv.currency)}`}
                       className={`h-6 rounded-md flex items-center justify-center text-[10px] font-black ${
                         iv.status === 'paid' ? 'bg-emerald-500 text-white'
-                          : new Date(iv.period_end || 0) < new Date() ? 'bg-red-100 text-red-700'
+                          : isOverdue(iv) ? 'bg-red-100 text-red-700'
                           : 'bg-slate-100 text-slate-500'
                       }`}>
                       T{iv.installment_seq}

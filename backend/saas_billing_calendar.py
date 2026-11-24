@@ -59,15 +59,6 @@ def next_monthly_invoice_date(period_end: datetime) -> datetime:
     )
 
 
-def add_calendar_month(value: datetime) -> datetime:
-    """Add one calendar month, clamping the day when the next month is shorter."""
-    month_index = value.year * 12 + value.month
-    year, month = divmod(month_index, 12)
-    month += 1
-    day = min(value.day, calendar.monthrange(year, month)[1])
-    return value.replace(year=year, month=month, day=day)
-
-
 def fixed_monthly_invoice_date(value: datetime, *, include_current: bool = True) -> datetime:
     """Return the next fixed monthly invoice date on or after ``value``."""
     if value.tzinfo is None:
@@ -83,11 +74,11 @@ def fixed_monthly_invoice_date(value: datetime, *, include_current: bool = True)
 
 
 def fixed_monthly_billing_period(issue_at: datetime) -> tuple[datetime, datetime]:
-    """An invoice on the 28th covers the following calendar month."""
+    """A fixed 28th invoice covers the current calendar month."""
     if issue_at.tzinfo is None:
         issue_at = issue_at.replace(tzinfo=timezone.utc)
-    period_start = add_calendar_month(
-        issue_at.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
+    period_start = issue_at.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0,
     )
     period_end = period_start.replace(
         day=calendar.monthrange(period_start.year, period_start.month)[1],
@@ -98,18 +89,18 @@ def fixed_monthly_billing_period(issue_at: datetime) -> tuple[datetime, datetime
 def first_monthly_invoice_after_trial(
     trial_ends_at: datetime,
 ) -> tuple[datetime, datetime, datetime]:
-    """Return the initial full-price bridge period and its next 28th invoice date."""
+    """Return the trial-ending month's full-price invoice and the next 28th."""
     if trial_ends_at.tzinfo is None:
         trial_ends_at = trial_ends_at.replace(tzinfo=timezone.utc)
-    next_invoice_at = fixed_monthly_invoice_date(
-        add_calendar_month(trial_ends_at),
-        include_current=True,
+    period_start = trial_ends_at.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0,
     )
-    period_end = next_invoice_at.replace(
-        day=calendar.monthrange(next_invoice_at.year, next_invoice_at.month)[1],
+    period_end = period_start.replace(
+        day=calendar.monthrange(period_start.year, period_start.month)[1],
         hour=0, minute=0, second=0, microsecond=0,
     )
-    return trial_ends_at, period_end, next_invoice_at
+    next_invoice_at = fixed_monthly_invoice_date(period_end, include_current=False)
+    return period_start, period_end, next_invoice_at
 
 
 def invoice_covers_period(invoice: Optional[dict], period_start: datetime,
@@ -188,3 +179,17 @@ def saas_invoice_due_date(issued_at: Optional[datetime] = None) -> str:
         year, month = (issued_on.year + 1, 1) if issued_on.month == 12 else (issued_on.year, issued_on.month + 1)
         due = due.replace(year=year, month=month)
     return due.isoformat()
+
+
+def saas_invoice_overdue_at(invoice: dict) -> Optional[datetime]:
+    """Return when the invoice becomes overdue, after the due day in Suriname."""
+    due = invoice.get("due_date")
+    if due:
+        day = datetime.fromisoformat(str(due)[:10]).date()
+        suriname = timezone(timedelta(hours=-3))
+        return datetime.combine(day + timedelta(days=1), datetime.min.time(), tzinfo=suriname)
+    period_end = invoice.get("period_end")
+    if not period_end:
+        return None
+    end = datetime.fromisoformat(str(period_end).replace("Z", "+00:00"))
+    return end if end.tzinfo else end.replace(tzinfo=timezone.utc)
