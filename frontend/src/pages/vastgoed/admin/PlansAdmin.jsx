@@ -316,7 +316,7 @@ export default function PlansAdmin({ createRequest = 0 } = {}) {
           <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4" data-testid="plan-grid">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="plan-grid">
           {creating && (
             <PlanCard
               plan={{ id: '', name: '', amount: 0, currency: 'SRD', interval: 'month', description: '', features: [], active: true, sort_order: 50 }}
