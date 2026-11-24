@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, Loader2, TrendingUp, Clock, AlertCircle, CheckCircle, XCircle,
@@ -658,7 +659,10 @@ function Row({ label, value, mono, bold }) {
   );
 }
 
-export default function Subscriptions({ viewMode = 'all' } = {}) {
+export default function Subscriptions({
+  viewMode = 'all', paymentTopbar, paymentMobileTopbar, paymentTopbarActive = null,
+  invoiceTopbar, invoiceMobileTopbar, invoiceTopbarActive = null,
+} = {}) {
   const { activeCompanyId } = useAuth();
   const [overview, setOverview] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -725,6 +729,18 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
   const scopedPending = activeCompanyId
     ? pending.filter((payment) => payment.company_id === activeCompanyId)
     : pending;
+  const paymentFilterOptions = [
+    { v: 'all', l: 'Alles', c: scopedPayments.length },
+    { v: 'contant', l: 'Contant', c: filterPayments(scopedPayments, 'contant').length },
+    { v: 'bank', l: 'Bank', c: filterPayments(scopedPayments, 'bank').length },
+    { v: 'ocr', l: 'OCR', c: filterPayments(scopedPayments, 'ocr').length },
+  ];
+  const invoiceFilterOptions = [
+    { v: 'all', l: 'Alles', c: scopedInvoices.length },
+    { v: 'open', l: 'Open', c: scopedInvoices.filter((x) => !['paid', 'superseded'].includes(x.status) && !isOverdue(x)).length },
+    { v: 'paid', l: 'Betaald', c: scopedInvoices.filter((x) => x.status === 'paid').length },
+    { v: 'overdue', l: 'Vervallen', c: scopedInvoices.filter(isOverdue).length },
+  ];
 
   const approvePending = async (pr) => {
     if (!window.confirm(`OCR-betaling van ${pr.company_name} goedkeuren? Het abonnement wordt direct geactiveerd.`)) return;
@@ -793,7 +809,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
           <button onClick={load} disabled={loading} className="shrink-0 font-bold underline disabled:opacity-50">Opnieuw laden</button>
         </div>
       )}
-      <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+      {!['payments', 'invoices'].includes(viewMode) && <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <Crown className="w-6 h-6 text-orange-500" />
@@ -817,9 +833,9 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
               : 'Alle bedrijven, abonnementen, facturen en betalingen op één plek.'}
           </p>
         </div>
-      </div>
+      </div>}
 
-      {viewMode === 'invoices' && (
+      {viewMode === 'invoices' && invoiceTopbarActive === null && (
         <div className="mb-4">
           <button onClick={() => setShowNewInv(true)} data-testid="new-invoice-btn"
             className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-extrabold text-sm inline-flex items-center gap-2 shadow-md shadow-orange-500/25">
@@ -938,16 +954,19 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 
       {tab === 'invoices' && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
+          {(viewMode !== 'invoices' || invoiceTopbarActive === null) && (
             <FilterPills value={invFilter} onChange={setInvFilter}
-              options={[
-                { v: 'all', l: 'Alles', c: scopedInvoices.length },
-                { v: 'open', l: 'Open', c: scopedInvoices.filter((x) => !['paid', 'superseded'].includes(x.status) && !isOverdue(x)).length },
-                { v: 'paid', l: 'Betaald', c: scopedInvoices.filter((x) => x.status === 'paid').length },
-                { v: 'overdue', l: 'Vervallen', c: scopedInvoices.filter(isOverdue).length },
-              ]}
+              options={invoiceFilterOptions}
               testidPrefix="saas-inv-filter" />
-          </div>
+          )}
+          {viewMode === 'invoices' && invoiceTopbarActive && invoiceTopbar && createPortal(
+            <InvoiceTopbar value={invFilter} onChange={setInvFilter} options={invoiceFilterOptions} onCreate={() => setShowNewInv(true)} />,
+            invoiceTopbar,
+          )}
+          {viewMode === 'invoices' && invoiceTopbarActive && invoiceMobileTopbar && createPortal(
+            <InvoiceTopbar value={invFilter} onChange={setInvFilter} options={invoiceFilterOptions} onCreate={() => setShowNewInv(true)} mobile />,
+            invoiceMobileTopbar,
+          )}
           <SaasInvoiceList invoices={filterInvoices(scopedInvoices, invFilter)} />
         </div>
       )}
@@ -1027,14 +1046,17 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 
       {tab === 'payments' && (
         <div className="space-y-3">
-          <FilterPills value={payFilter} onChange={setPayFilter}
-            options={[
-              { v: 'all', l: 'Alles', c: scopedPayments.length },
-              { v: 'contant', l: 'Contant', c: scopedPayments.filter((p) => (p.method || '').toLowerCase().includes('contant')).length },
-              { v: 'bank', l: 'Bank', c: scopedPayments.filter((p) => (p.method || '').toLowerCase().includes('bank') || (p.method || '').toLowerCase().includes('overboek')).length },
-              { v: 'ocr', l: 'OCR', c: scopedPayments.filter((p) => p.source === 'ocr' || (p.method || '').toLowerCase().includes('ocr')).length },
-            ]}
-            testidPrefix="saas-pay-filter" />
+          {(viewMode !== 'payments' || paymentTopbarActive === null) && (
+            <FilterPills value={payFilter} onChange={setPayFilter} options={paymentFilterOptions} testidPrefix="saas-pay-filter" />
+          )}
+          {viewMode === 'payments' && paymentTopbarActive && paymentTopbar && createPortal(
+            <FilterPills value={payFilter} onChange={setPayFilter} options={paymentFilterOptions} testidPrefix="saas-pay-filter" topbar />,
+            paymentTopbar,
+          )}
+          {viewMode === 'payments' && paymentTopbarActive && paymentMobileTopbar && createPortal(
+            <FilterPills value={payFilter} onChange={setPayFilter} options={paymentFilterOptions} testidPrefix="saas-pay-mobile-filter" topbar />,
+            paymentMobileTopbar,
+          )}
           <SaasPaymentList payments={filterPayments(scopedPayments, payFilter)} />
         </div>
       )}
@@ -1110,9 +1132,11 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 // =====================================================================
 function isOverdue(inv) {
   if (['paid', 'superseded'].includes(inv.status)) return false;
-  const due = inv.due_date || inv.period_end;
-  if (!due) return false;
-  try { return new Date(due) < new Date(); } catch { return false; }
+  if (inv.due_date) {
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Paramaribo' }).format(new Date());
+    return String(inv.due_date).slice(0, 10) < today;
+  }
+  return !!inv.period_end && new Date(inv.period_end) < new Date();
 }
 function filterInvoices(list, f) {
   if (f === 'all') return list;
@@ -1127,14 +1151,14 @@ function filterPayments(list, f) {
   return list.filter((p) => (p.method || '').toLowerCase().includes(term) || (f === 'bank' && (p.method || '').toLowerCase().includes('overboek')) || (f === 'ocr' && p.source === 'ocr'));
 }
 
-function FilterPills({ value, onChange, options, testidPrefix }) {
+function FilterPills({ value, onChange, options, testidPrefix, topbar = false }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap" data-testid={`${testidPrefix}-bar`}>
+    <div className={`flex min-w-0 items-center gap-2 ${topbar ? 'overflow-x-auto' : 'flex-wrap'}`} data-testid={`${testidPrefix}-bar`}>
       {options.map((o) => (
-        <button key={o.v} onClick={() => onChange(o.v)}
+        <button key={o.v} type="button" onClick={() => onChange(o.v)} aria-pressed={value === o.v}
           data-testid={`${testidPrefix}-${o.v}`}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-            value === o.v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          className={`inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+            value === o.v ? (topbar ? 'bg-emerald-600 text-white' : 'bg-[#FF5C00] text-white') : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}>
           {o.l}
           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
@@ -1142,6 +1166,19 @@ function FilterPills({ value, onChange, options, testidPrefix }) {
           }`}>{o.c}</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+function InvoiceTopbar({ value, onChange, options, onCreate, mobile = false }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
+      <button type="button" onClick={onCreate} data-testid={mobile ? 'new-invoice-mobile-btn' : 'new-invoice-btn'}
+        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700">
+        <Plus className="h-4 w-4" /> Nieuwe factuur
+      </button>
+      <FilterPills value={value} onChange={onChange} options={options}
+        testidPrefix={mobile ? 'saas-inv-mobile-filter' : 'saas-inv-filter'} topbar />
     </div>
   );
 }
@@ -1401,7 +1438,7 @@ function SaasPaymentPlansView({ invoices, companies, onNewPlan }) {
                     <div key={iv.id} title={`T${iv.installment_seq}: ${fmt(iv.amount, iv.currency)}`}
                       className={`h-6 rounded-md flex items-center justify-center text-[10px] font-black ${
                         iv.status === 'paid' ? 'bg-emerald-500 text-white'
-                          : new Date(iv.period_end || 0) < new Date() ? 'bg-red-100 text-red-700'
+                          : isOverdue(iv) ? 'bg-red-100 text-red-700'
                           : 'bg-slate-100 text-slate-500'
                       }`}>
                       T{iv.installment_seq}

@@ -25,7 +25,7 @@ export default function SuperadminLogin() {
     if (redirectingToApp) {
       window.location.replace(appLoginUrl);
     } else if (!authLoading && user?.role === 'superadmin') {
-      navigate('/admin/saas_overview', { replace: true });
+      navigate('/admin/companies', { replace: true });
     }
   }, [appLoginUrl, authLoading, navigate, redirectingToApp, user]);
 
@@ -61,7 +61,7 @@ export default function SuperadminLogin() {
     setError('');
     try {
       await loginSuperadminPin(value);
-      navigate('/admin/saas_overview', { replace: true });
+      navigate('/admin/companies', { replace: true });
     } catch (err) {
       setError(formatError(err, 'Ongeldige pincode. Probeer opnieuw.'));
       setPin('');

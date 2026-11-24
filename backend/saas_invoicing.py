@@ -19,6 +19,8 @@ def _period_entry(invoice: dict, charge_key: str) -> dict:
         "installment_total": invoice.get("installment_total"),
         "due_date": invoice.get("due_date"),
         "saas_plan_id": invoice.get("saas_plan_id"),
+        "billing_cycle": invoice.get("billing_cycle"),
+        "next_invoice_at": invoice.get("next_invoice_at"),
     }
 
 
@@ -93,6 +95,20 @@ async def consolidate_company_invoices(db, company_id: str) -> dict | None:
         changes["period_end"] = max(ends)
     if due_dates:
         changes["due_date"] = min(due_dates)
+    latest_next_invoice = next(
+        (entry.get("next_invoice_at") for entry in reversed(charge_history)
+         if entry.get("next_invoice_at")),
+        None,
+    )
+    if latest_next_invoice:
+        changes["next_invoice_at"] = latest_next_invoice
+    latest_billing_cycle = next(
+        (entry.get("billing_cycle") for entry in reversed(charge_history)
+         if entry.get("billing_cycle")),
+        None,
+    )
+    if latest_billing_cycle:
+        changes["billing_cycle"] = latest_billing_cycle
     await db.subscription_invoices.update_one({"id": master["id"]}, {"$set": changes})
 
     if secondary:
@@ -294,24 +310,28 @@ async def append_company_invoice_charge(db, invoice: dict, charge_key: str) -> t
             return existing, False
 
         old_balance = float(existing.get("amount") or 0) - float(existing.get("paid_amount") or 0)
+        invoice_updates = {
+            "balance_due": round(max(old_balance + amount, 0), 2),
+            "status": "overdue" if old_balance > 0 and existing.get("status") == "overdue" else "open",
+            "period_end": invoice.get("period_end") or existing.get("period_end"),
+            "due_date": min(
+                [value for value in (existing.get("due_date"), invoice.get("due_date")) if value]
+            ) if old_balance > 0 else invoice.get("due_date"),
+            "plan": invoice.get("plan") or existing.get("plan"),
+            "kind": "subscription",
+            "company_name": invoice.get("company_name") or existing.get("company_name"),
+            "master_invoice": True,
+        }
+        for field in ("billing_cycle", "next_invoice_at"):
+            if invoice.get(field):
+                invoice_updates[field] = invoice[field]
         update = await db.subscription_invoices.update_one(
             {"id": existing["id"], "charge_keys": {"$ne": charge_key}},
             {
                 "$inc": {"amount": amount},
                 "$addToSet": {"charge_keys": charge_key},
                 "$push": {"charge_history": _period_entry(invoice, charge_key)},
-                "$set": {
-                    "balance_due": round(max(old_balance + amount, 0), 2),
-                    "status": "overdue" if old_balance > 0 and existing.get("status") == "overdue" else "open",
-                    "period_end": invoice.get("period_end") or existing.get("period_end"),
-                    "due_date": min(
-                        [value for value in (existing.get("due_date"), invoice.get("due_date")) if value]
-                    ) if old_balance > 0 else invoice.get("due_date"),
-                    "plan": invoice.get("plan") or existing.get("plan"),
-                    "kind": "subscription",
-                    "company_name": invoice.get("company_name") or existing.get("company_name"),
-                    "master_invoice": True,
-                },
+                "$set": invoice_updates,
             },
         )
         updated = await db.subscription_invoices.find_one({"id": existing["id"]}, {"_id": 0})

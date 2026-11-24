@@ -42,6 +42,7 @@ De backend draait bewust met één worker: achtergrondtaken en PIN-throttling ge
 
 - Bij de eerste start maakt de backend een adminaccount aan met `ADMIN_EMAIL` en `ADMIN_PASSWORD`. Bij volgende starts wordt het wachtwoord van dat account opnieuw gelijkgezet aan `ADMIN_PASSWORD`; houd deze variabele daarom bij als bron van waarheid.
 - De superadmin wordt alleen aangemaakt als `SUPERADMIN_EMAIL` nog niet bestaat. Een bestaand account wordt niet automatisch bijgewerkt als de variabelen wijzigen. Wijzig bij gebruik van een bestaande database het eerder standaard aangemaakte superadmin-wachtwoord voordat de deployment publiek bereikbaar wordt.
+- `SUPERADMIN_PIN` is optioneel en wordt alleen gebruikt om een ontbrekende superadmin-pincode eenmalig in te stellen. De PIN wordt gehasht opgeslagen; een bestaande PIN wordt nooit overschreven. Verwijder de variabele uit Coolify nadat de eerste start met succes is afgerond. Als de database al een PIN-hash bevat, wordt deze variabele genegeerd.
 - De standaard databasenaam is `vastgoed_kiosk`; die naam staat ook in `.env.example`.
 - De Compose-configuratie schakelt het opnieuw instellen van de demo-PIN en de periodieke demo-reset uit.
 
@@ -61,6 +62,7 @@ Vul placeholders met eigen waarden in voordat je deployt. Zet geen productiegehe
 | `ADMIN_PASSWORD` | Ja | Wachtwoord van het adminaccount; dit wordt bij elke backendstart toegepast. |
 | `SUPERADMIN_EMAIL` | Ja | E-mailadres voor het initiële superadminaccount. |
 | `SUPERADMIN_PASSWORD` | Ja | Wachtwoord dat wordt gebruikt wanneer het superadminaccount voor het eerst wordt aangemaakt. |
+| `SUPERADMIN_PIN` | Nee | Eenmalige initiële superadmin-PIN van precies vier cijfers; alleen ingesteld als het account nog geen PIN-hash heeft. |
 | `APP_PUBLIC_URL` | Ja | Publieke URL van de app, inclusief `https://`. |
 | `APP_PUBLIC_HOST` | Nee | Publieke hostname zonder schema, gebruikt voor host-/domeinfuncties. |
 | `CORS_ORIGINS` | Ja | Toegestane frontend-origin(s), zoals `https://rent.example.com`. |

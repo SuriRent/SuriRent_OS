@@ -95,7 +95,7 @@ export default function SaasKasregister() {
       <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <button onClick={() => nav('/admin/saas_overview')} data-testid="kasregister-back"
+            <button onClick={() => nav('/admin/companies')} data-testid="kasregister-back"
               className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-orange-200 hover:text-[#FF5C00]">
               <ArrowLeft className="h-4 w-4" />
             </button>

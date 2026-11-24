@@ -14,7 +14,7 @@ import {
   FileText, ShieldCheck, Wrench, FileSignature, Bell, Briefcase, Mail,
   Power, Menu, MoreHorizontal, MapPin, Paintbrush,
   Gauge, Activity, Clock as ClockIcon, Monitor, QrCode, Printer,
-  ReceiptText, UsersRound, Building, Calendar, ArrowLeft,
+  ReceiptText, UsersRound, Building, Calendar, ArrowLeft, RefreshCw,
   AlertCircle, UserPlus, TrendingUp, ArrowUpRight, Package,
   ScanLine, Settings as SettingsIcon, Image as ImageIcon, PenTool, MessageCircle,
   UserCircle, Sparkles, StickyNote, Scissors, BookOpen,
@@ -291,10 +291,30 @@ function SaasClients() {
 // SaasContracts — abonnement-contracten met platform-klanten. Toont voor
 // elk bedrijf status van hun SaaS-abonnement (actief/trial/verlopen).
 // =====================================================================
-function SaasContracts() {
+const SAAS_CONTRACT_FILTERS = [
+  ['all', 'Alles'], ['active', 'Actief'], ['trial', 'Proefperiode'],
+  ['past_due', 'Openstaand'], ['expired', 'Verlopen'], ['cancelled', 'Opgezegd'],
+];
+
+function SaasContractFilters({ filter, onFilterChange, counts, mobile = false }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto" aria-label="Contracten filteren">
+      {SAAS_CONTRACT_FILTERS.map(([value, label]) => (
+        <button key={value} type="button" onClick={() => onFilterChange(value)}
+          aria-pressed={filter === value}
+          data-testid={`saas-contract-${mobile ? 'mobile-' : ''}filter-${value}`}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold ${
+            filter === value ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          }`}>
+          {label} <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${filter === value ? 'bg-white/20 text-white' : 'bg-white text-slate-500'}`}>{counts[value]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SaasContracts({ items, setItems, filter }) {
   const { activeCompanyId } = useAuth();
-  const [items, setItems] = useState([]);
-  const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
@@ -308,38 +328,15 @@ function SaasContracts() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setItems]);
   useEffect(() => { load(); }, [load]);
   const bs = (c) => (c.billing_status || 'trial').toLowerCase();
   const scopedItems = activeCompanyId
     ? items.filter((company) => company.id === activeCompanyId)
     : items;
   const filtered = scopedItems.filter((c) => filter === 'all' || bs(c) === filter);
-  const counts = {
-    all: scopedItems.length,
-    active: scopedItems.filter((c) => bs(c) === 'active').length,
-    trial: scopedItems.filter((c) => bs(c) === 'trial').length,
-    expired: scopedItems.filter((c) => bs(c) === 'expired').length,
-    past_due: scopedItems.filter((c) => bs(c) === 'past_due').length,
-    cancelled: scopedItems.filter((c) => bs(c) === 'cancelled').length,
-  };
   return (
     <div className="space-y-4 pb-24 sm:pb-6" data-testid="saas-contracts-page">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-black text-slate-900">Contracten</h1>
-        <p className="text-sm text-slate-500 mt-0.5">{scopedItems.length} abonnement-contracten{activeCompanyId ? ' voor dit bedrijf.' : ' op het platform.'}</p>
-      </div>
-      <div className="flex items-center gap-2 flex-wrap">
-        {[['all', 'Alles'], ['active', 'Actief'], ['trial', 'Proefperiode'], ['past_due', 'Openstaand'], ['expired', 'Verlopen'], ['cancelled', 'Opgezegd']].map(([v, l]) => (
-          <button key={v} onClick={() => setFilter(v)}
-            data-testid={`saas-contract-filter-${v}`}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold ${
-              filter === v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}>
-            {l} <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${filter === v ? 'bg-white/20 text-white' : 'bg-white text-slate-500'}`}>{counts[v]}</span>
-          </button>
-        ))}
-      </div>
       {error && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
           <span>{error}</span>
@@ -648,9 +645,7 @@ const BASE_TABS = [
   { id: 'instellingen', label: 'Instellingen', icon: SettingsIcon },
 ];
 const SUPER_TABS = [
-  { id: 'saas_overview', label: 'Overzicht', icon: LayoutDashboard },
   { id: 'companies', label: 'Bedrijven', icon: Briefcase },
-  { id: 'saas_clients', label: 'Klanten', icon: Users },
   { id: 'plans', label: 'Pakketten', icon: Package },
   { id: 'saas_contracts', label: 'Contracten', icon: FileSignature },
   { id: 'saas_payments', label: 'Betalingen', icon: Banknote },
@@ -683,7 +678,7 @@ const SIDEBAR_GROUPS = {
   account: { label: 'Account', ids: ['instellingen'] },
 };
 const SAAS_SIDEBAR_GROUPS = {
-  saas_platform: { label: 'Platform & bedrijven', ids: ['saas_overview', 'companies', 'saas_clients', 'plans', 'saas_contracts'] },
+  saas_platform: { label: 'Platform & bedrijven', ids: ['companies', 'plans', 'saas_contracts'] },
   saas_billing: { label: 'Financieel', ids: ['saas_payments', 'saas_invoices', 'saas_payment_plans', 'saas_kasgeld', 'saas_client_payments'] },
   saas_operations: { label: 'Beheer', ids: ['saas_employees', 'saas_notifications', 'saas_pending', 'saas_kiosk'] },
   saas_content: { label: 'Website', ids: ['landing_editor'] },
@@ -691,7 +686,7 @@ const SAAS_SIDEBAR_GROUPS = {
 };
 function groupTabs(tabs) {
   const byId = Object.fromEntries(tabs.map((t) => [t.id, t]));
-  const groups = byId.saas_overview ? SAAS_SIDEBAR_GROUPS : SIDEBAR_GROUPS;
+  const groups = byId.companies ? SAAS_SIDEBAR_GROUPS : SIDEBAR_GROUPS;
   return Object.entries(groups).map(([key, group]) => ({
     key, label: group.label,
     items: group.ids.map((id) => byId[id]).filter(Boolean),
@@ -926,7 +921,7 @@ const MOBILE_TAB_ICON_OVERRIDES = {
   tenants: UsersRound,
   apartments: Building,
 };
-const MOBILE_SUPER_PRIMARY_IDS = ['saas_overview', 'companies', 'saas_pending', 'saas_invoices'];
+const MOBILE_SUPER_PRIMARY_IDS = ['companies', 'saas_pending', 'saas_invoices'];
 
 function MobileHeader_REMOVED({ activeCompany, user, onOpenMenu }) {
   void activeCompany; void user; void onOpenMenu;
@@ -5037,76 +5032,49 @@ function DesktopTopBar({ user, activeCompany, tab, tabs, onManual }) {
   );
 }
 
-function SaasConsoleSidebar({ user, tab, tabs, onChange, onLogout, badgeCount }) {
-  const groups = groupTabs(tabs);
+const SAAS_DOCK_IDS = [
+  'companies', 'saas_contracts',
+  'saas_payments', 'saas_invoices', 'plans',
+];
+const SAAS_MOBILE_DOCK_IDS = ['companies', 'saas_invoices'];
+
+function SaasConsoleDock({ tab, tabs, onChange }) {
+  const byId = Object.fromEntries(tabs.map((item) => [item.id, item]));
   return (
-    <aside className="hidden xl:flex flex-col w-[264px] shrink-0 sticky top-0 h-screen bg-white border-r border-slate-200/80"
-      data-testid="saas-console-sidebar">
-      <div className="px-5 pt-5 pb-4 border-b border-slate-100">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-[#E7F5EC] p-2 shrink-0">
-            <img src="/superadmin-favicon.svg" alt="" className="w-full h-full object-contain rounded-lg" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-base font-black text-slate-900 tracking-tight">SuriRent</p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">Beheer</p>
-          </div>
-        </div>
-        <div className="mt-5 flex items-center gap-2 rounded-xl bg-[#F2F8F4] px-3 py-2.5">
-          <Building2 className="w-4 h-4 text-emerald-700" />
-          <span className="text-xs font-bold text-slate-700">Beheer</span>
-        </div>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5" aria-label="Beheernavigatie">
-        {groups.map((group) => (
-          <section key={group.key}>
-            <h2 className="px-3 mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{group.label}</h2>
-            <div className="space-y-1">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const selected = item.id === tab;
-                const showBadge = item.id === 'notifications' && badgeCount > 0;
-                return (
-                  <button key={item.id} type="button" onClick={() => onChange(item.id)}
-                    data-testid={`tab-${item.id}`} aria-current={selected ? 'page' : undefined}
-                    className={`relative w-full min-h-11 px-3 py-2 rounded-xl inline-flex items-center gap-3 text-left text-[13px] font-bold transition-colors ${
-                      selected ? 'bg-[#E8F5ED] text-[#087A3D]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}>
-                    {selected && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-emerald-600" />}
-                    <Icon className={`w-[18px] h-[18px] shrink-0 ${selected ? 'text-emerald-700' : 'text-slate-400'}`} strokeWidth={selected ? 2.5 : 2} />
-                    <span className="min-w-0 flex-1 text-left leading-tight">{item.label}</span>
-                    {showBadge && <span data-testid="saas-console-notification-count" className="min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[10px] font-black inline-flex items-center justify-center">{badgeCount > 9 ? '9+' : badgeCount}</span>}
-                    {selected && <ChevronRight className="w-4 h-4 shrink-0 text-emerald-700" />}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </nav>
-
-      <div className="border-t border-slate-100 p-3">
-        <div className="flex items-center gap-2.5 px-2 py-2">
-          <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-black text-sm flex items-center justify-center shrink-0">
-            {(user?.name || user?.email || 'S').slice(0, 1).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-slate-800 truncate">{user?.name || 'Superadmin'}</p>
-            <p className="text-[10px] text-slate-500 truncate">{user?.email}</p>
-          </div>
-          <button type="button" onClick={onLogout} data-testid="saas-console-logout"
-            className="w-10 h-10 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-600 inline-flex items-center justify-center transition-colors"
-            aria-label="Uitloggen" title="Uitloggen">
-            <LogOut className="w-[18px] h-[18px]" />
+    <nav className="saas-console-dock fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-[1920px] items-stretch gap-1 overflow-x-auto rounded-t-[24px] border-t border-slate-100 bg-white px-2 pt-2 shadow-[0_-10px_30px_-14px_rgba(15,23,42,0.3)]"
+      style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}
+      aria-label="Superadmin hoofdnavigatie" data-testid="saas-console-dock">
+      {SAAS_DOCK_IDS.filter((id) => byId[id]).map((id) => {
+        const item = byId[id];
+        const Icon = item.icon;
+        const selected = id === tab;
+        return (
+          <button key={id} type="button" onClick={() => onChange(id)}
+            data-testid={`tab-${id}`} data-active={selected ? 'true' : 'false'}
+            aria-current={selected ? 'page' : undefined}
+            className={`${SAAS_MOBILE_DOCK_IDS.includes(id) ? 'flex' : 'hidden md:flex'} min-w-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center text-[10px] font-bold transition sm:min-w-[76px] sm:text-xs ${
+              selected ? 'bg-gradient-to-b from-emerald-500 to-emerald-700 text-white shadow-md' : 'text-[#1B2A5C] hover:bg-orange-50'
+            }`}>
+            <Icon className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" strokeWidth={selected ? 2.5 : 2} />
+            <span className="w-full truncate">{item.label}</span>
           </button>
-        </div>
-      </div>
-    </aside>
+        );
+      })}
+      <button type="button" onClick={() => window.dispatchEvent(new Event('saas-open-menu'))}
+        data-testid="saas-console-more" aria-label="Meer superadminpagina's"
+        data-active={!SAAS_DOCK_IDS.includes(tab) ? 'true' : 'false'}
+        data-active-mobile={!SAAS_MOBILE_DOCK_IDS.includes(tab) ? 'true' : 'false'}
+        className={`flex min-w-[64px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center text-[10px] font-bold transition sm:min-w-[76px] sm:text-xs ${
+          !SAAS_DOCK_IDS.includes(tab) ? 'bg-gradient-to-b from-emerald-500 to-emerald-700 text-white shadow-md' : 'text-[#1B2A5C] hover:bg-orange-50'
+        }`}>
+        <MoreHorizontal className="h-5 w-5 sm:h-6 sm:w-6" />
+        <span className="w-full truncate">Meer</span>
+      </button>
+    </nav>
   );
 }
 
-function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount }) {
+function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount, contractFilter, onContractFilterChange, contractCounts, paymentTopbarRef, invoiceTopbarRef, onCreatePlan }) {
   const current = tabs.find((item) => item.id === tab);
   const CurrentIcon = current?.icon || LayoutDashboard;
   const groups = groupTabs(tabs);
@@ -5124,23 +5092,29 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [menuOpen]);
+  useEffect(() => {
+    const openMenu = () => setMenuOpen(true);
+    window.addEventListener('saas-open-menu', openMenu);
+    return () => window.removeEventListener('saas-open-menu', openMenu);
+  }, []);
   return (
-    <header className="xl:hidden sticky top-0 z-30 bg-white border-b border-slate-200 shadow-[0_4px_14px_-10px_rgba(15,23,42,0.2)]"
+    <>
+    <header className="xl:hidden sticky top-0 z-30 mx-2 mt-2 rounded-[20px] bg-white shadow-[0_10px_30px_-16px_rgba(15,23,42,0.35)]"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} data-testid="saas-console-mobile-nav">
       <div className="min-h-[64px] flex items-center gap-3 px-3 sm:px-5">
-        <div className="w-10 h-10 rounded-xl bg-[#E7F5EC] p-1.5 shrink-0">
+        <div className="w-10 h-10 rounded-xl bg-orange-50 p-1.5 shrink-0">
           <img src="/superadmin-favicon.svg" alt="SuriRent" className="w-full h-full object-contain rounded-md" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[9px] uppercase tracking-[0.16em] font-black text-emerald-700">Beheer</p>
+          <p className="text-[9px] uppercase tracking-[0.16em] font-black text-[#FF5C00]">Beheer</p>
           <div className="flex items-center gap-2 min-w-0">
-            <CurrentIcon className="w-4 h-4 shrink-0 text-emerald-700" />
+            <CurrentIcon className="w-4 h-4 shrink-0 text-[#FF5C00]" />
             <h1 className="text-base sm:text-lg font-black text-slate-900 truncate" data-testid="saas-console-mobile-page-title">{current?.label || 'Overzicht'}</h1>
           </div>
         </div>
         <span className="hidden sm:inline text-xs font-semibold text-slate-500 truncate max-w-36">{user?.name || user?.email}</span>
         <button type="button" onClick={() => setMenuOpen((open) => !open)}
-          className="w-10 h-10 rounded-xl text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 inline-flex items-center justify-center"
+          className="w-10 h-10 rounded-xl text-slate-600 hover:bg-orange-50 hover:text-[#FF5C00] inline-flex items-center justify-center"
           aria-label={menuOpen ? 'Menu sluiten' : 'Navigatiemenu openen'} aria-expanded={menuOpen}
           aria-controls="saas-console-mobile-menu" data-testid="saas-console-mobile-menu-toggle">
           {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -5151,29 +5125,48 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
           <LogOut className="w-[18px] h-[18px]" />
         </button>
       </div>
+      {tab === 'saas_contracts' && (
+        <div className="border-t border-slate-100 px-3 py-2">
+          <SaasContractFilters filter={contractFilter} onFilterChange={onContractFilterChange} counts={contractCounts} mobile />
+        </div>
+      )}
+      {tab === 'saas_payments' && (
+        <div ref={paymentTopbarRef} className="min-w-0 border-t border-slate-100 px-3 py-2" />
+      )}
+      {tab === 'saas_invoices' && (
+        <div ref={invoiceTopbarRef} className="min-w-0 border-t border-slate-100 px-3 py-2" />
+      )}
+      {tab === 'plans' && (
+        <div className="border-t border-slate-100 px-3 py-2">
+          <button type="button" onClick={onCreatePlan} data-testid="plan-add-mobile-btn"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700">
+            <Plus className="h-4 w-4" /> Nieuw pakket
+          </button>
+        </div>
+      )}
       {menuOpen && createPortal(
-        <div className="fixed inset-0 z-[120] flex flex-col bg-[#E8F5ED]"
+        <div className="fixed inset-0 z-[120] flex flex-col bg-[#F1F2F4]"
           onClick={() => setMenuOpen(false)} data-testid="saas-console-mobile-menu-overlay">
           <div id="saas-console-mobile-menu" role="dialog" aria-modal="true"
             aria-label="Superadmin navigatie" data-testid="saas-console-mobile-menu"
             onClick={(event) => event.stopPropagation()}
-            className="flex min-h-0 flex-1 flex-col bg-[#E8F5ED]"
+            className="flex min-h-0 flex-1 flex-col bg-[#F1F2F4]"
             style={{
               paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)',
               paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
             }}>
-            <div className="flex shrink-0 items-center justify-between border-b border-emerald-200 px-4 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-4 shadow-sm">
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-50 text-[#FF5C00]">
                   <LayoutDashboard className="h-6 w-6" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">Beheer</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FF5C00]">Beheer</p>
                   <h2 className="text-lg font-black text-slate-900">Navigatie</h2>
                 </div>
               </div>
               <button type="button" onClick={() => setMenuOpen(false)}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-emerald-800 shadow-sm hover:bg-emerald-100"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700 hover:bg-orange-50 hover:text-[#FF5C00]"
                 aria-label="Menu sluiten" data-testid="saas-console-mobile-menu-close">
                 <X className="h-5 w-5" />
               </button>
@@ -5184,7 +5177,7 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
                 {groups.map((group) => (
                   <section key={group.key} aria-labelledby={`saas-console-mobile-group-${group.key}`}>
                     <h3 id={`saas-console-mobile-group-${group.key}`}
-                      className="mb-3 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
+                      className="mb-3 px-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
                       {group.label}
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -5195,17 +5188,17 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
                         return (
                           <button key={item.id} type="button" onClick={() => { onChange(item.id); setMenuOpen(false); }}
                             data-testid={`tab-mobile-${item.id}`} aria-current={selected ? 'page' : undefined}
-                            className={`relative flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-3 text-center shadow-lg transition active:scale-[0.98] ${
-                              selected ? 'border-emerald-100 bg-emerald-50 text-emerald-950'
-                                : 'border-white/80 bg-white/95 text-slate-900 hover:bg-white'
+                            className={`relative flex min-h-32 flex-col items-center justify-center gap-3 rounded-2xl border p-3 text-center shadow-[0_12px_28px_-18px_rgba(15,23,42,0.4)] transition active:scale-[0.98] ${
+                              selected ? 'border-orange-200 bg-orange-50 text-slate-950'
+                                : 'border-white bg-white text-slate-900 hover:border-orange-200'
                             }`}>
                             <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
-                              selected ? 'bg-emerald-200 text-emerald-800' : 'bg-emerald-100 text-emerald-700'
+                              selected ? 'bg-orange-100 text-[#FF5C00]' : 'bg-slate-100 text-[#1B2A5C]'
                             }`}>
                               <Icon className="h-7 w-7" />
                             </span>
                             <span className="text-sm font-black leading-tight">{item.label}</span>
-                            {showBadge && <span className={`absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-black ${selected ? 'bg-white text-emerald-700' : 'bg-red-500 text-white'}`}>{badgeCount > 9 ? '9+' : badgeCount}</span>}
+                            {showBadge && <span className="absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black text-white">{badgeCount > 9 ? '9+' : badgeCount}</span>}
                           </button>
                         );
                       })}
@@ -5219,28 +5212,98 @@ function SaasConsoleMobileNav({ user, tab, tabs, onChange, onLogout, badgeCount 
         document.body
       )}
     </header>
+    <SaasConsoleDock tab={tab} tabs={tabs} onChange={onChange} />
+    </>
   );
 }
 
-function SaasConsoleDesktopTopbar({ user, tab, tabs }) {
+function SaasConsoleDesktopTopbar({
+  user, tab, tabs, companySearchQuery, onCompanySearchChange, companyStatusFilter, onCompanyStatusChange,
+  onCreateCompany, onRefreshCompanies, contractFilter, onContractFilterChange, contractCounts, paymentTopbarRef, invoiceTopbarRef, onCreatePlan,
+}) {
   const current = tabs.find((item) => item.id === tab);
   const CurrentIcon = current?.icon || LayoutDashboard;
   const group = groupTabs(tabs).find((item) => item.items.some((entry) => entry.id === tab));
   return (
-    <header className="hidden xl:flex h-[76px] shrink-0 items-center justify-between gap-4 px-7 bg-white border-b border-slate-200/80"
+    <header className="hidden xl:flex mx-2 mt-2 h-[76px] shrink-0 items-center justify-between gap-4 rounded-[20px] bg-white px-7 shadow-[0_10px_30px_-16px_rgba(15,23,42,0.35)]"
       data-testid="saas-console-header">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="w-10 h-10 rounded-xl bg-[#E8F5ED] text-emerald-700 flex items-center justify-center shrink-0">
-          <CurrentIcon className="w-5 h-5" />
+      <div className="flex min-w-0 items-center gap-5">
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 p-2">
+            <img src="/superadmin-favicon.svg" alt="" className="h-full w-full object-contain" />
+          </div>
+          <div>
+            <p className="text-xl font-black tracking-tight text-[#1B2A5C]">SuriRent</p>
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-[#FF5C00]">Superadmin</p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{group?.label || 'Platform'}</p>
-          <h1 className="text-lg font-black text-slate-900 truncate" data-testid="saas-console-page-title">{current?.label || 'Overzicht'}</h1>
+        <span className="h-10 w-px shrink-0 bg-slate-200" aria-hidden="true" />
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F1F3F9] text-[#FF5C00]">
+            <CurrentIcon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{group?.label || 'Platform'}</p>
+            <h1 className="truncate text-lg font-black text-slate-900" data-testid="saas-console-page-title">{current?.label || 'Overzicht'}</h1>
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
-        <span className="text-xs font-bold text-slate-700">{user?.name || user?.email || 'Superadmin'}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        {tab === 'companies' && (
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="relative min-w-[190px] w-[240px] max-w-[22vw]">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input type="text" value={companySearchQuery} onChange={(event) => onCompanySearchChange(event.target.value)}
+                placeholder="Zoek naam, e-mail, pakket of slug"
+                aria-label="Bedrijven zoeken" data-testid="company-topbar-search"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 text-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100" />
+              {companySearchQuery && (
+                <button type="button" onClick={() => onCompanySearchChange('')}
+                  aria-label="Zoekopdracht wissen" data-testid="company-topbar-search-clear"
+                  className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <select value={companyStatusFilter} onChange={(event) => onCompanyStatusChange(event.target.value)}
+              aria-label="Filter bedrijven op status" data-testid="company-topbar-status"
+              className="h-10 w-[162px] shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100">
+              <option value="all">Alle status</option>
+              <option value="active">Actief abonnement</option>
+              <option value="trial">Proefperiode</option>
+              <option value="attention">Aandacht nodig</option>
+              <option value="disabled">Toegang uitgeschakeld</option>
+            </select>
+            <button type="button" onClick={onCreateCompany} data-testid="company-topbar-new-btn"
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-[#FF5C00] px-3 text-sm font-bold text-white shadow-sm hover:bg-[#E05200]">
+              <Plus className="h-4 w-4" /> Nieuw bedrijf
+            </button>
+            <button type="button" onClick={onRefreshCompanies} data-testid="company-topbar-refresh"
+              aria-label="Bedrijven vernieuwen"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {tab === 'saas_contracts' && (
+          <SaasContractFilters filter={contractFilter} onFilterChange={onContractFilterChange} counts={contractCounts} />
+        )}
+        {tab === 'saas_payments' && (
+          <div ref={paymentTopbarRef} className="min-w-0" />
+        )}
+        {tab === 'saas_invoices' && (
+          <div ref={invoiceTopbarRef} className="min-w-0" />
+        )}
+        {tab === 'plans' && (
+          <button type="button" onClick={onCreatePlan} data-testid="plan-add-btn"
+            className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-sm font-bold text-white hover:bg-emerald-700">
+            <Plus className="h-4 w-4" /> Nieuw pakket
+          </button>
+        )}
+        <div className={`${['saas_contracts', 'saas_invoices'].includes(tab) ? 'hidden 2xl:flex' : 'flex'} shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2`}>
+          <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
+          <span className="text-xs font-bold text-slate-700">{user?.name || user?.email || 'Superadmin'}</span>
+        </div>
       </div>
     </header>
   );
@@ -5256,8 +5319,7 @@ export default function AdminDashboard() {
   // Mobiel landt direct op Betalingen (geen Overzicht meer) — tablet/desktop
   // blijft op Overzicht starten. We detecteren op basis van window-breedte
   // bij eerste render zodat de PWA-launch direct in de juiste tab opent.
-  // Filter de Overzicht-tab uit voor mobile MobileSheet zodat hij ook niet
-  // in het "+"-menu opduikt. Desktop sidebar laat hem wel staan.
+  // Filter de Overzicht-tab uit voor de gewone beheerder-MobileSheet.
   const sheetTabs = tabs.filter((t) => t.id !== 'overview');
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Auto-open Setup Wizard als bottom-sheet / modal voor nieuwe bedrijven.
@@ -5303,19 +5365,41 @@ export default function AdminDashboard() {
   }, { enabled: !!user && ['admin', 'employee', 'boekhouder'].includes(user.role) });
   const location = useLocation();
   const { count: badgeCount } = useBadge();
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [companyStatusFilter, setCompanyStatusFilter] = useState('all');
+  const [contractItems, setContractItems] = useState([]);
+  const [contractFilter, setContractFilter] = useState('all');
+  const [paymentTopbar, setPaymentTopbar] = useState(null);
+  const [paymentMobileTopbar, setPaymentMobileTopbar] = useState(null);
+  const [invoiceTopbar, setInvoiceTopbar] = useState(null);
+  const [invoiceMobileTopbar, setInvoiceMobileTopbar] = useState(null);
+  const [plansCreateRequest, setPlansCreateRequest] = useState(0);
+  const contractCounts = useMemo(() => {
+    const scopedItems = activeCompanyId
+      ? contractItems.filter((company) => company.id === activeCompanyId)
+      : contractItems;
+    return SAAS_CONTRACT_FILTERS.reduce((counts, [value]) => {
+      counts[value] = value === 'all'
+        ? scopedItems.length
+        : scopedItems.filter((company) => (company.billing_status || 'trial').toLowerCase() === value).length;
+      return counts;
+    }, {});
+  }, [contractItems, activeCompanyId]);
+  const [companiesCreateRequest, setCompaniesCreateRequest] = useState(0);
+  const [companiesRefreshRequest, setCompaniesRefreshRequest] = useState(0);
 
   // TAB-STATE = URL-derived (single source of truth). We lezen de actieve
   // tab uit `location.pathname` — geen aparte useState meer die uit sync
   // kon raken en dubbele renders veroorzaakte bij navigatie.
   const tab = (() => {
     if (user?.role === 'superadmin' && (!location.pathname || location.pathname === '/admin')) {
-      return 'saas_overview';
+      return 'companies';
     }
     const seg = location.pathname.split('/').filter(Boolean);
     const adminIdx = seg.indexOf('admin');
     const wanted = adminIdx >= 0 && seg[adminIdx + 1] ? seg[adminIdx + 1] : null;
     if (wanted && tabs.find((t) => t.id === wanted)) return wanted;
-    if (user?.role === 'superadmin') return 'saas_overview';
+    if (user?.role === 'superadmin') return 'companies';
     // Fallback: mobile → invoices (facturen als landingpagina op verzoek
     // gebruiker feb 2026), anders overview.
     try {
@@ -5353,13 +5437,14 @@ export default function AdminDashboard() {
   useEffect(() => {
     const seg = location.pathname.split('/').filter(Boolean);
     const adminIdx = seg.indexOf('admin');
-    if (adminIdx === -1 || !seg[adminIdx + 1]) return;
-    const wanted = seg[adminIdx + 1];
+    if (adminIdx === -1) return;
+    const wanted = seg[adminIdx + 1] || null;
     if (user?.role === 'superadmin'
-      && (wanted === 'overview' || !SUPER_TABS.some((item) => item.id === wanted))) {
-      navigate('/admin/saas_overview', { replace: true });
+      && (!wanted || wanted === 'overview' || !SUPER_TABS.some((item) => item.id === wanted))) {
+      navigate('/admin/companies', { replace: true });
       return;
     }
+    if (!wanted) return;
     const LEGACY_TO_HUB = {
       mijn_abonnement: 'abonnement',
       mijn_landing: 'landing',
@@ -5495,19 +5580,34 @@ export default function AdminDashboard() {
   // Superadmin + impersonators zien uiteraard nooit iets.
 
   return (
-    <div className={`min-h-screen flex ${isSaasConsole ? 'bg-[#F3F8F5]' : 'bg-[#F7F8FA]'}`} data-testid={isSaasConsole ? 'saas-console-shell' : 'admin-shell'}>
-      {isSaasConsole
-        ? <SaasConsoleSidebar user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} />
-        : <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
+    <div className={`${isSaasConsole ? 'min-h-screen flex flex-col bg-[#F1F2F4]' : 'min-h-screen flex bg-[#F7F8FA]'}`} data-testid={isSaasConsole ? 'saas-console-shell' : 'admin-shell'}>
+      {!isSaasConsole && <Sidebar active={tab} onChange={handleSetTab} onLogout={doLogout}
         user={user} tabs={tabs} badgeCount={badgeCount} activeCompany={activeCompany} />}
       <div className="flex-1 flex flex-col min-w-0">
         {isSaasConsole
-          ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount} /><SaasConsoleDesktopTopbar user={user} tab={tab} tabs={tabs} /></>
+          ? <><SaasConsoleMobileNav user={user} tab={tab} tabs={tabs} onChange={handleSetTab} onLogout={doLogout} badgeCount={badgeCount}
+            contractFilter={contractFilter} onContractFilterChange={setContractFilter} contractCounts={contractCounts}
+            paymentTopbarRef={setPaymentMobileTopbar}
+            invoiceTopbarRef={setInvoiceMobileTopbar}
+            onCreatePlan={() => setPlansCreateRequest((request) => request + 1)}
+          /><SaasConsoleDesktopTopbar
+            user={user} tab={tab} tabs={tabs} companySearchQuery={companySearchQuery}
+            companyStatusFilter={companyStatusFilter}
+            onCompanySearchChange={setCompanySearchQuery}
+            onCompanyStatusChange={setCompanyStatusFilter}
+            onCreateCompany={() => setCompaniesCreateRequest((request) => request + 1)}
+            onRefreshCompanies={() => setCompaniesRefreshRequest((request) => request + 1)}
+            contractFilter={contractFilter} onContractFilterChange={setContractFilter} contractCounts={contractCounts}
+            paymentTopbarRef={setPaymentTopbar}
+            invoiceTopbarRef={setInvoiceTopbar}
+            onCreatePlan={() => setPlansCreateRequest((request) => request + 1)}
+          /></>
           : <><MobileTopLogo user={user} activeCompany={activeCompany} /><DesktopTopBar user={user} activeCompany={activeCompany} tab={tab} tabs={tabs} onManual={() => setManualOpen(true)} /></>}
         <ImpersonationBanner />
         {!isSaasConsole && <CompanySupportNotice />}
         <TrialBanner />
-        <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F3F8F5]' : ''}`}>
+        <main className={`flex-1 min-w-0 p-3 sm:p-5 md:px-6 md:py-5 lg:px-8 lg:pt-6 pb-24 md:pb-8 w-full ${isSaasConsole ? 'bg-[#F1F2F4] md:pb-24' : ''}`}
+          style={isSaasConsole ? { paddingBottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' } : undefined}>
           <div className={isSaasConsole ? 'w-full max-w-[1920px] mx-auto' : ''}>
           {isSaasConsole && activeCompanyId && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"
@@ -5526,21 +5626,29 @@ export default function AdminDashboard() {
             </div>
           )}
           <Suspense fallback={<div className="min-h-[60vh]" aria-hidden="true" />}>
-          <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}><Companies /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'companies'} tabId="companies" currentTab={tab}>
+            <Companies
+              searchQuery={companySearchQuery}
+              onSearchQueryChange={setCompanySearchQuery}
+              statusFilter={companyStatusFilter}
+              onStatusFilterChange={setCompanyStatusFilter}
+              createRequest={companiesCreateRequest}
+              refreshRequest={companiesRefreshRequest}
+            />
+          </KeepAliveTab>
           <KeepAliveTab active={tab === 'subscriptions'} tabId="subscriptions" currentTab={tab}><Subscriptions /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_overview'} tabId="saas_overview" currentTab={tab}><SaasOverview /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_pending'} tabId="saas_pending" currentTab={tab}><Subscriptions viewMode="pending" /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'saas_invoices'} tabId="saas_invoices" currentTab={tab}><Subscriptions viewMode="invoices" /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'saas_payments'} tabId="saas_payments" currentTab={tab}><Subscriptions viewMode="payments" /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_invoices'} tabId="saas_invoices" currentTab={tab}><Subscriptions viewMode="invoices" invoiceTopbar={invoiceTopbar} invoiceMobileTopbar={invoiceMobileTopbar} invoiceTopbarActive={tab === 'saas_invoices'} /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_payments'} tabId="saas_payments" currentTab={tab}><Subscriptions viewMode="payments" paymentTopbar={paymentTopbar} paymentMobileTopbar={paymentMobileTopbar} paymentTopbarActive={tab === 'saas_payments'} /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_payment_plans'} tabId="saas_payment_plans" currentTab={tab}><Subscriptions viewMode="payment_plans" /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_kasgeld'} tabId="saas_kasgeld" currentTab={tab}><Subscriptions viewMode="kasgeld" /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_client_payments'} tabId="saas_client_payments" currentTab={tab}><SaasClientPayments /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_kiosk'} tabId="saas_kiosk" currentTab={tab}><SaasKasregister /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'saas_clients'} tabId="saas_clients" currentTab={tab}><SaasClients /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'saas_contracts'} tabId="saas_contracts" currentTab={tab}><SaasContracts /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'saas_contracts'} tabId="saas_contracts" currentTab={tab}><SaasContracts items={contractItems} setItems={setContractItems} filter={contractFilter} /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_employees'} tabId="saas_employees" currentTab={tab}><SaasEmployees /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_notifications'} tabId="saas_notifications" currentTab={tab}><SaasNotifications /></KeepAliveTab>
-          <KeepAliveTab active={tab === 'plans'} tabId="plans" currentTab={tab}><PlansAdmin /></KeepAliveTab>
+          <KeepAliveTab active={tab === 'plans'} tabId="plans" currentTab={tab}><PlansAdmin createRequest={plansCreateRequest} /></KeepAliveTab>
           <KeepAliveTab active={tab === 'saas_settings'} tabId="saas_settings" currentTab={tab}><SaasSettings /></KeepAliveTab>
           <KeepAliveTab active={tab === 'landing_editor'} tabId="landing_editor" currentTab={tab}><LandingEditor /></KeepAliveTab>
           <KeepAliveTab active={tab === 'overview'} tabId="overview" currentTab={tab}><Overview /></KeepAliveTab>

@@ -90,8 +90,63 @@ from saas_billing_calendar import (
     saas_next_renewal as _saas_next_renewal,
     monthly_billing_period as _monthly_billing_period,
     next_monthly_invoice_date as _next_monthly_invoice_date,
+    fixed_monthly_invoice_date as _fixed_monthly_invoice_date,
+    fixed_monthly_billing_period as _fixed_monthly_billing_period,
+    first_monthly_invoice_after_trial as _first_monthly_invoice_after_trial,
     invoice_covers_period as _invoice_covers_period,
+    invoice_fully_covers_period as _invoice_fully_covers_period,
 )
+
+
+def _validated_superadmin_pin(value: Optional[str]) -> Optional[str]:
+    pin = (value or "").strip()
+    if not pin:
+        return None
+    if not pin.isdigit() or len(pin) != 4:
+        raise RuntimeError("SUPERADMIN_PIN must contain exactly four digits.")
+    return pin
+
+
+async def _bootstrap_superadmin_pin(user_id: str, pin: Optional[str]) -> bool:
+    if not pin:
+        return False
+
+    account = await db.users.find_one(
+        {"id": user_id}, {"_id": 0, "personal_pin_hash": 1},
+    )
+    if account is None:
+        raise RuntimeError("Could not find the seeded superadmin to initialize its PIN.")
+    if account.get("personal_pin_hash"):
+        return False
+
+    other_superadmins = await db.users.find(
+        {
+            "id": {"$ne": user_id},
+            "role": "superadmin",
+            "disabled": {"$ne": True},
+            "personal_pin_hash": {"$exists": True, "$ne": None},
+        },
+        {"_id": 0, "personal_pin_hash": 1},
+    ).to_list(100)
+    for other in other_superadmins:
+        if await asyncio.to_thread(verify_password, pin, other.get("personal_pin_hash", "")):
+            raise RuntimeError("SUPERADMIN_PIN is already assigned to another active superadmin.")
+
+    result = await db.users.update_one(
+        {
+            "id": user_id,
+            "$or": [
+                {"personal_pin_hash": {"$exists": False}},
+                {"personal_pin_hash": None},
+                {"personal_pin_hash": ""},
+            ],
+        },
+        {"$set": {
+            "personal_pin_hash": hash_password(pin),
+            "personal_pin_set_at": iso(now_utc()),
+        }},
+    )
+    return result.modified_count > 0
 
 
 # =====================================================================
@@ -406,6 +461,7 @@ BACKUP_COMPANY_KEEP = {"id", "slug", "billing_status", "plan_id", "plan", "next_
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    superadmin_pin = _validated_superadmin_pin(os.environ.get("SUPERADMIN_PIN"))
     # ---------- Indexes ----------
     # Hot-path indexes voor snelle queries op alle collecties die de
     # app gebruikt. Worden bij elke startup idempotent gegarandeerd.
@@ -597,7 +653,7 @@ async def lifespan(app: FastAPI):
     super_pw = os.environ.get("SUPERADMIN_PASSWORD", "super123")
     sa = await db.users.find_one({"email": super_email})
     if sa is None:
-        await db.users.insert_one({
+        sa = {
             "id": new_id(),
             "email": super_email,
             "name": "Superadmin",
@@ -605,7 +661,9 @@ async def lifespan(app: FastAPI):
             "company_id": None,
             "password_hash": hash_password(super_pw),
             "created_at": iso(now_utc()),
-        })
+        }
+        await db.users.insert_one(sa)
+    await _bootstrap_superadmin_pin(sa["id"], superadmin_pin)
 
     # Gedeelde kiosk-PIN is afgeschaft: alleen persoonlijke medewerker-PINs.
     await db.kiosk_pins.delete_many({})
@@ -751,9 +809,8 @@ async def _daily_billing_checks_loop():
                 _log.info(f"[billing-cron] expired {len(expired)} companies @ {datetime.now(timezone.utc).isoformat()}")
             except Exception as e:
                 _log.warning(f"[billing-cron] cycle failed: {e}")
-            # SaaS auto-invoice cyclus: 1x per dag, genereert nieuwe
-            # maand-factuur voor elk actief bedrijf waar `subscription_renews_at`
-            # verlopen is en er nog geen open factuur bestaat.
+            # SaaS auto-invoice: first full monthly invoice after trial expiry,
+            # then invoices on the 28th for that calendar month.
             try:
                 from routes.superadmin import saas_auto_invoice_tick as _saas_inv
                 new_invoices = await _saas_inv()
@@ -3284,30 +3341,81 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
     plan_id = c.get("plan", "starter")
     plan = await _plan_for_company(plan_id, c)
     now = now_utc()
-    period_start = c.get("subscription_renews_at") or iso(now)
-    try:
-        period_start_dt = datetime.fromisoformat(str(period_start).replace("Z", "+00:00"))
-    except ValueError:
-        period_start_dt = now
-        period_start = iso(now)
-    period_start_dt = _plan_period_start(plan, period_start_dt)
+    interval = str((plan or {}).get("interval") or "month").lower()
+    next_invoice_at = None
+    if interval == "month":
+        if c.get("trial_ends_at") and not c.get("subscription_started_at"):
+            try:
+                trial_ends_at = datetime.fromisoformat(
+                    str(c["trial_ends_at"]).replace("Z", "+00:00"),
+                )
+                if trial_ends_at.tzinfo is None:
+                    trial_ends_at = trial_ends_at.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=409, detail="De einddatum van de proefperiode is ongeldig")
+            period_start_dt, period_end_dt, next_invoice_at = _first_monthly_invoice_after_trial(
+                trial_ends_at,
+            )
+        else:
+            renews_at_raw = c.get("subscription_renews_at")
+            try:
+                renews_at = datetime.fromisoformat(str(renews_at_raw).replace("Z", "+00:00"))
+                if renews_at.tzinfo is None:
+                    renews_at = renews_at.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                renews_at = _fixed_monthly_invoice_date(now, include_current=True)
+                await db.companies.update_one(
+                    {"id": cid},
+                    {"$set": {"subscription_renews_at": iso(renews_at)}},
+                )
+            if renews_at.day != 28:
+                renews_at = _fixed_monthly_invoice_date(now, include_current=True)
+                await db.companies.update_one(
+                    {"id": cid},
+                    {"$set": {"subscription_renews_at": iso(renews_at)}},
+                )
+            if renews_at > now:
+                raise HTTPException(
+                    status_code=409,
+                    detail="De volgende abonnementsfactuur wordt op de 28e aangemaakt",
+                )
+            period_start_dt, period_end_dt = _fixed_monthly_billing_period(renews_at)
+            next_invoice_at = _fixed_monthly_invoice_date(renews_at, include_current=False)
+        due_date = _saas_invoice_due_date(period_end_dt + timedelta(days=1))
+        amount = float(plan.get("amount") or 0)
+    else:
+        period_start = c.get("subscription_renews_at") or iso(now)
+        try:
+            period_start_dt = datetime.fromisoformat(str(period_start).replace("Z", "+00:00"))
+        except ValueError:
+            period_start_dt = now
+        period_start_dt = _plan_period_start(plan, period_start_dt)
+        period_end_dt = _plan_period_end(plan, period_start_dt)
+        amount = _saas_invoice_amount(plan, plan["amount"], period_start_dt, period_end_dt)
+        due_date = _saas_invoice_due_date(now)
     period_start = iso(period_start_dt)
-    period_end = _plan_period_end(plan, period_start_dt)
+    period_end = iso(period_end_dt) if period_end_dt else None
+    cycle_fields = _saas_invoice_cycle_fields(plan)
+    if interval == "month":
+        cycle_fields.update({
+            "billing_cycle": "fixed_28_arrears",
+            "next_invoice_at": iso(next_invoice_at),
+        })
     inv = {
         "id": new_id(),
         "company_id": cid,
         "company_name": c.get("name", ""),
         "plan": plan_id,
-        "amount": _saas_invoice_amount(plan, plan["amount"], period_start_dt, period_end),
+        "amount": amount,
         "currency": plan["currency"],
         "status": "open",
         "kind": "subscription",
         "period_start": period_start,
-        "period_end": iso(period_end) if period_end else None,
-        "due_date": _saas_invoice_due_date(now),
+        "period_end": period_end,
+        "due_date": due_date,
         "created_at": iso(now),
         "created_by": user_email or "self_checkout",
-        **_saas_invoice_cycle_fields(plan),
+        **cycle_fields,
     }
     try:
         inv, _ = await append_company_invoice_charge(
@@ -3315,6 +3423,11 @@ async def _ensure_open_invoice_for_company(c: dict, user_email: str) -> dict:
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    if interval == "month":
+        await db.companies.update_one(
+            {"id": cid},
+            {"$set": {"subscription_renews_at": iso(next_invoice_at)}},
+        )
     return inv
 
 
@@ -3402,7 +3515,13 @@ async def _record_saas_payment_manual(
         "installment_seq": installment_seq,
         "method": method,
         "reference": reference,
-        "note": "Auto-goedgekeurd na OCR-controle van bankafschrift" if auto_approved else "",
+        "note": (
+            "Auto-goedgekeurd na OCR-controle van bankafschrift"
+            if auto_approved and method == "bank"
+            else "Contante betaling handmatig geregistreerd"
+            if auto_approved and method == "contant"
+            else ""
+        ),
         "paid_at": paid_at,
         "created_at": paid_at,
         "created_by": approved_by,
@@ -3429,10 +3548,48 @@ async def _record_saas_payment_manual(
     }
 
 
+@api.post("/superadmin/subscription-invoices/{invoice_id}/cash-payment")
+async def superadmin_record_saas_cash_payment(
+    invoice_id: str,
+    user=Depends(require_role("superadmin")),
+):
+    """Register a cash subscription payment against an invoice and activate it when settled."""
+    invoice = await db.subscription_invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    if invoice.get("merged_into_invoice_id") or invoice.get("status") in {
+        "paid", "merged", "superseded", "cancelled", "void",
+    }:
+        raise HTTPException(status_code=400, detail="Deze factuur kan niet contant worden betaald")
+    company = await db.companies.find_one({"id": invoice.get("company_id")}, {"_id": 0})
+    if not company:
+        raise HTTPException(status_code=404, detail="Bedrijf niet gevonden")
+    balance_value = invoice.get("balance_due")
+    if balance_value is None:
+        balance_value = float(invoice.get("amount") or 0) - float(invoice.get("paid_amount") or 0)
+    balance = float(balance_value or 0)
+    if not math.isfinite(balance) or balance <= 0:
+        raise HTTPException(status_code=400, detail="Deze factuur heeft geen openstaand saldo")
+
+    return await _record_saas_payment_manual(
+        invoice=invoice,
+        company=company,
+        amount=balance,
+        currency=invoice.get("currency") or "SRD",
+        method="contant",
+        reference=f"Contante betaling — {invoice.get('invoice_number') or invoice_id[:8]}",
+        statement_id=None,
+        ocr_meta={"source": "superadmin_cash"},
+        auto_approved=True,
+        approved_by=user.get("email") or "superadmin",
+    )
+
+
 @api.post("/billing/me/bank-confirm")
 async def billing_me_bank_confirm(
     file: UploadFile = File(...),
     invoice_id: Optional[str] = Form(None),
+    target_company_id: Optional[str] = Form(None),
     user=Depends(get_current_user),
 ):
     """Admin upload bankafschrift voor zijn lopende abonnement-factuur. Wij:
@@ -3445,6 +3602,12 @@ async def billing_me_bank_confirm(
     Returns: `{status: 'paid'|'pending_approval', ocr: {...}, invoice_id, mismatch_reasons?}`
     """
     cid = company_id_of(user)
+    if target_company_id:
+        if user.get("role") != "superadmin":
+            raise HTTPException(status_code=403, detail="Alleen superadmin kan voor een bedrijf betalen")
+        if not invoice_id:
+            raise HTTPException(status_code=400, detail="Factuur is verplicht voor een superadminbetaling")
+        cid = target_company_id
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
     c = await db.companies.find_one({"id": cid}, {"_id": 0})
@@ -3471,6 +3634,8 @@ async def billing_me_bank_confirm(
             )
             if not inv:
                 raise HTTPException(status_code=404, detail="Hoofdfactuur niet gevonden")
+        if target_company_id and (inv.get("currency") or "SRD").upper() != "SRD":
+            raise HTTPException(status_code=400, detail="Bankoverschrijving is alleen beschikbaar voor SRD-facturen")
         if inv.get("status") == "paid":
             raise HTTPException(status_code=400, detail="Deze factuur is al betaald")
     else:
@@ -5681,9 +5846,28 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
     price = await _plan_for_company(plan_id, c)
     amount = float(price.get("amount") or 0)
     currency = (price.get("currency") or "SRD").upper()
-    period_start = _plan_period_start(plan, now)
-    period_end = _plan_period_end(plan, period_start)
-    amount = _saas_invoice_amount(plan, amount, period_start, period_end)
+    interval = str((plan or {}).get("interval") or "month").lower()
+    next_invoice_at = None
+    if interval == "month":
+        initial_start = now
+        if c.get("trial_ends_at") and not c.get("subscription_started_at"):
+            try:
+                initial_start = datetime.fromisoformat(
+                    str(c["trial_ends_at"]).replace("Z", "+00:00"),
+                )
+                if initial_start.tzinfo is None:
+                    initial_start = initial_start.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                initial_start = now
+        period_start, period_end, next_invoice_at = _first_monthly_invoice_after_trial(
+            initial_start,
+        )
+        due_date = _saas_invoice_due_date(period_end + timedelta(days=1))
+    else:
+        period_start = _plan_period_start(plan, now)
+        period_end = _plan_period_end(plan, period_start)
+        amount = _saas_invoice_amount(plan, amount, period_start, period_end)
+        due_date = _saas_invoice_due_date(now)
     inv = None
     pending_invoice_id = c.get("pending_invoice_id")
     if pending_invoice_id:
@@ -5714,11 +5898,15 @@ async def activate_subscription(cid: str, user=Depends(require_role("superadmin"
                 "kind": "subscription",
                 "period_start": iso(period_start),
                 "period_end": iso(period_end) if period_end else None,
-                "due_date": _saas_invoice_due_date(now),
+                "due_date": due_date,
                 "created_at": iso(now),
                 "created_by": user.get("email"),
                 "manual": True,
                 **_saas_invoice_cycle_fields(plan),
+                **({
+                    "billing_cycle": "fixed_28_arrears",
+                    "next_invoice_at": iso(next_invoice_at),
+                } if next_invoice_at else {}),
             }
             try:
                 inv, _ = await append_company_invoice_charge(
@@ -21231,7 +21419,11 @@ _route_deps.saas_invoice_amount = _saas_invoice_amount
 _route_deps.saas_invoice_cycle_fields = _saas_invoice_cycle_fields
 _route_deps.monthly_billing_period = _monthly_billing_period
 _route_deps.next_monthly_invoice_date = _next_monthly_invoice_date
+_route_deps.fixed_monthly_invoice_date = _fixed_monthly_invoice_date
+_route_deps.fixed_monthly_billing_period = _fixed_monthly_billing_period
+_route_deps.first_monthly_invoice_after_trial = _first_monthly_invoice_after_trial
 _route_deps.invoice_covers_period = _invoice_covers_period
+_route_deps.invoice_fully_covers_period = _invoice_fully_covers_period
 _route_deps.saas_due_date = _saas_invoice_due_date
 _route_deps.is_online = _is_online
 _route_deps.activate_company_after_payment = _activate_company_after_saas_payment
