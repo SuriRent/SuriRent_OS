@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, Loader2, TrendingUp, Clock, AlertCircle, CheckCircle, XCircle,
@@ -658,7 +659,7 @@ function Row({ label, value, mono, bold }) {
   );
 }
 
-export default function Subscriptions({ viewMode = 'all' } = {}) {
+export default function Subscriptions({ viewMode = 'all', paymentTopbar, paymentMobileTopbar, paymentTopbarActive = null } = {}) {
   const { activeCompanyId } = useAuth();
   const [overview, setOverview] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -725,6 +726,12 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
   const scopedPending = activeCompanyId
     ? pending.filter((payment) => payment.company_id === activeCompanyId)
     : pending;
+  const paymentFilterOptions = [
+    { v: 'all', l: 'Alles', c: scopedPayments.length },
+    { v: 'contant', l: 'Contant', c: filterPayments(scopedPayments, 'contant').length },
+    { v: 'bank', l: 'Bank', c: filterPayments(scopedPayments, 'bank').length },
+    { v: 'ocr', l: 'OCR', c: filterPayments(scopedPayments, 'ocr').length },
+  ];
 
   const approvePending = async (pr) => {
     if (!window.confirm(`OCR-betaling van ${pr.company_name} goedkeuren? Het abonnement wordt direct geactiveerd.`)) return;
@@ -793,7 +800,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
           <button onClick={load} disabled={loading} className="shrink-0 font-bold underline disabled:opacity-50">Opnieuw laden</button>
         </div>
       )}
-      <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+      {viewMode !== 'payments' && <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <Crown className="w-6 h-6 text-orange-500" />
@@ -817,7 +824,7 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
               : 'Alle bedrijven, abonnementen, facturen en betalingen op één plek.'}
           </p>
         </div>
-      </div>
+      </div>}
 
       {viewMode === 'invoices' && (
         <div className="mb-4">
@@ -1027,14 +1034,17 @@ export default function Subscriptions({ viewMode = 'all' } = {}) {
 
       {tab === 'payments' && (
         <div className="space-y-3">
-          <FilterPills value={payFilter} onChange={setPayFilter}
-            options={[
-              { v: 'all', l: 'Alles', c: scopedPayments.length },
-              { v: 'contant', l: 'Contant', c: scopedPayments.filter((p) => (p.method || '').toLowerCase().includes('contant')).length },
-              { v: 'bank', l: 'Bank', c: scopedPayments.filter((p) => (p.method || '').toLowerCase().includes('bank') || (p.method || '').toLowerCase().includes('overboek')).length },
-              { v: 'ocr', l: 'OCR', c: scopedPayments.filter((p) => p.source === 'ocr' || (p.method || '').toLowerCase().includes('ocr')).length },
-            ]}
-            testidPrefix="saas-pay-filter" />
+          {(viewMode !== 'payments' || paymentTopbarActive === null) && (
+            <FilterPills value={payFilter} onChange={setPayFilter} options={paymentFilterOptions} testidPrefix="saas-pay-filter" />
+          )}
+          {viewMode === 'payments' && paymentTopbarActive && paymentTopbar && createPortal(
+            <FilterPills value={payFilter} onChange={setPayFilter} options={paymentFilterOptions} testidPrefix="saas-pay-filter" topbar />,
+            paymentTopbar,
+          )}
+          {viewMode === 'payments' && paymentTopbarActive && paymentMobileTopbar && createPortal(
+            <FilterPills value={payFilter} onChange={setPayFilter} options={paymentFilterOptions} testidPrefix="saas-pay-mobile-filter" topbar />,
+            paymentMobileTopbar,
+          )}
           <SaasPaymentList payments={filterPayments(scopedPayments, payFilter)} />
         </div>
       )}
@@ -1129,14 +1139,14 @@ function filterPayments(list, f) {
   return list.filter((p) => (p.method || '').toLowerCase().includes(term) || (f === 'bank' && (p.method || '').toLowerCase().includes('overboek')) || (f === 'ocr' && p.source === 'ocr'));
 }
 
-function FilterPills({ value, onChange, options, testidPrefix }) {
+function FilterPills({ value, onChange, options, testidPrefix, topbar = false }) {
   return (
-    <div className="flex items-center gap-2 flex-wrap" data-testid={`${testidPrefix}-bar`}>
+    <div className={`flex min-w-0 items-center gap-2 ${topbar ? 'overflow-x-auto' : 'flex-wrap'}`} data-testid={`${testidPrefix}-bar`}>
       {options.map((o) => (
-        <button key={o.v} onClick={() => onChange(o.v)}
+        <button key={o.v} type="button" onClick={() => onChange(o.v)} aria-pressed={value === o.v}
           data-testid={`${testidPrefix}-${o.v}`}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-            value === o.v ? 'bg-[#FF5C00] text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+          className={`inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+            value === o.v ? (topbar ? 'bg-emerald-600 text-white' : 'bg-[#FF5C00] text-white') : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}>
           {o.l}
           <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
