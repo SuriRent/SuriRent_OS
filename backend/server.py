@@ -20143,8 +20143,12 @@ async def receipts_preview_remote_print(body: dict, user=Depends(get_current_use
     return {"job_id": await _publish_remote_print(cid, printer_id, {"data": data})}
 
 
+class SettingsTestIn(BaseModel):
+    to: Optional[str] = None
+
+
 @api.post("/settings/{section}/test")
-async def test_settings_section(section: str, user=Depends(get_current_user)):
+async def test_settings_section(section: str, body: Optional[SettingsTestIn] = None, user=Depends(get_current_user)):
     if section not in VALID_SETTINGS_SECTIONS:
         raise HTTPException(status_code=404, detail="Onbekende sectie")
     cid = company_id_of(user)
@@ -20180,12 +20184,11 @@ async def test_settings_section(section: str, user=Depends(get_current_user)):
         co = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
         brand_name_twil = co.get("name") or "Vastgoed"
         test_msg = f"{brand_name_twil} test bericht — als je dit ontvangt is je Twilio configuratie correct."
-        # Find a destination: prefer admin's own phone from user record (not stored normally),
-        # so we test by sending to the configured `from` itself (will fail with sandbox not paired,
-        # but at minimum validates credentials).
-        target = cfg.get("whatsapp_from") or cfg.get("sms_from")
-        if not target:
+        if not cfg.get("whatsapp_from") and not cfg.get("sms_from"):
             raise HTTPException(status_code=400, detail="Vul minimaal WhatsApp- of SMS-afzender in")
+        target = (body.to or "").strip() if body else ""
+        if not re.fullmatch(r"\+[1-9]\d{6,14}", target):
+            raise HTTPException(status_code=400, detail="Vul een geldig testnummer met landcode in, bijvoorbeeld +5971234567.")
         try:
             if cfg.get("whatsapp_from"):
                 await send_whatsapp(cfg, target, test_msg)
