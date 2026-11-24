@@ -184,6 +184,7 @@ export function DepositForm({ initial }) {
 export function TwilioForm({ initial }) {
   const s = useSection('twilio', initial);
   const [testNumber, setTestNumber] = useState('');
+  const [testTemplate, setTestTemplate] = useState('');
   const d = s.data;
   return (
     <SectionShell msg={s.msg} err={s.err}>
@@ -196,9 +197,46 @@ export function TwilioForm({ initial }) {
         <TextField label="WhatsApp afzender" testid="twilio-wa-from" value={d.whatsapp_from} onChange={(v) => s.onField('whatsapp_from', v)} placeholder="whatsapp:+14155238886" helper="Inclusief 'whatsapp:' prefix" />
         <TextField label="SMS afzender" testid="twilio-sms-from" value={d.sms_from} onChange={(v) => s.onField('sms_from', v)} placeholder="+597 xxx xxxx" />
       </div>
+      <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+        <p className="text-sm font-bold text-slate-900">Goedgekeurde WhatsApp-templates</p>
+        <p className="text-xs text-slate-600">
+          Maak in Twilio Content Template Builder twee teksttemplates aan en laat ze goedkeuren voor WhatsApp.
+          Met een ingevulde Content SID gebruikt de app altijd die template voor dat berichttype, ook buiten het 24-uursvenster.
+          Zonder SID blijft vrije tekst actief. SMS blijft ongewijzigd.
+        </p>
+        <TextField label="Betaalbewijs Content SID" testid="twilio-receipt-sid" value={d.receipt_content_sid}
+          onChange={(v) => s.onField('receipt_content_sid', v)} placeholder="HX..."
+          helper="Voor betaalbewijzen en betaalde termijnen." />
+        <TextField label="Herinnering Content SID" testid="twilio-reminder-sid" value={d.reminder_content_sid}
+          onChange={(v) => s.onField('reminder_content_sid', v)} placeholder="HX..."
+          helper="Voor facturen, openstaande saldi en betalingsherinneringen." />
+        <p className="text-xs text-slate-600">
+          Gebruik precies deze invulvelden: {'{{1}}'} naam huurder, {'{{2}}'} bedrijfsnaam,
+          {' {{3}}'} bedrag met valuta, {'{{4}}'} bonnummer/factuur/periode, {'{{5}}'} link.
+          De vaste templatetekst vervangt het vrije bericht en eventuele extra tekst. De link vervangt de losse bonbijlage.
+        </p>
+        <p className="text-xs text-slate-600">
+          Betaalbewijs: {'Hallo {{1}}, {{2}} heeft uw betaling van {{3}} ontvangen. Referentie: {{4}}. Bekijk uw betaalbewijs: {{5}}. Bedankt.'}
+        </p>
+        <p className="text-xs text-slate-600">
+          Herinnering: {'Hallo {{1}}, een betalingsherinnering van {{2}} voor {{3}}. Referentie: {{4}}. Bekijk de gegevens: {{5}}. Neem contact op bij vragen.'}
+        </p>
+        <p className="text-xs text-slate-600">
+          Verstuur alleen naar huurders die toestemming hebben gegeven voor WhatsApp-berichten.
+        </p>
+      </div>
       <TextField label="Testnummer" testid="twilio-test-number" type="tel" value={testNumber} onChange={setTestNumber}
         placeholder="+597..." helper="Vul een ontvangend nummer met landcode in. Bewaar eerst de instellingen." />
-      <ActionRow onSave={s.save} onTest={() => s.test({ to: testNumber.trim() })}
+      <div>
+        <FieldLabel>Testbericht</FieldLabel>
+        <select value={testTemplate} onChange={(event) => setTestTemplate(event.target.value)} data-testid="twilio-test-template"
+          className="mt-1 h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3">
+          <option value="">Vrije tekst (alleen binnen 24 uur)</option>
+          <option value="receipt">Betaalbewijs-template</option>
+          <option value="reminder">Herinnering-template</option>
+        </select>
+      </div>
+      <ActionRow onSave={s.save} onTest={() => s.test({ to: testNumber.trim(), ...(testTemplate ? { template_kind: testTemplate } : {}) })}
         saving={s.saving} testing={s.testing} canTest={d.enabled && !!testNumber.trim()} />
     </SectionShell>
   );

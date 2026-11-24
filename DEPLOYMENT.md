@@ -24,3 +24,39 @@ Optional third-party integrations (AI, Stripe, push notifications, SMTP) are dis
 Use the Coolify resource to redeploy, inspect logs, and restart services. Back up MongoDB regularly; the named volume is persistent storage, not a backup. Before restoring or moving data, back up the `mongo_data` volume using `mongodump` with the configured MongoDB root credentials.
 
 The public health endpoint is `https://<your-domain>/api/health`.
+
+## WhatsApp templates (Twilio)
+
+In Kiosk Beheer, open **Instellingen > WhatsApp (Twilio)**. Each company uses its
+own Twilio account and WhatsApp sender. Configure `APP_PUBLIC_URL` as the public
+HTTPS app origin so receipt and invoice links work outside the kiosk.
+
+Create two text templates in Twilio Content Template Builder and obtain WhatsApp
+approval. Use exactly these five variables in both templates:
+
+| Variable | Value |
+|----------|-------|
+| `{{1}}` | Tenant name |
+| `{{2}}` | Company name |
+| `{{3}}` | Amount including currency |
+| `{{4}}` | Receipt number, invoice number, period or installment reference |
+| `{{5}}` | Receipt/invoice image URL, or tenant portal URL for grouped reminders |
+
+Example receipt: `Hallo {{1}}, {{2}} heeft uw betaling van {{3}} ontvangen. Referentie: {{4}}. Bekijk uw betaalbewijs: {{5}}. Bedankt.`
+
+Example reminder: `Hallo {{1}}, een betalingsherinnering van {{2}} voor {{3}}. Referentie: {{4}}. Bekijk de gegevens: {{5}}. Neem contact op bij vragen.`
+
+Save the approved `HX...` Content SIDs in the receipt and reminder fields.
+Configured templates are used for kiosk receipts, manually sent receipts and
+invoices, paid installment notifications, and manual/automatic payment reminders.
+The fixed template replaces free text (including any custom message); the link
+replaces the separate media attachment. SMS and unrelated WhatsApp messages
+(such as PIN recovery or contract signing) retain their existing behavior.
+An empty SID retains free-text sending, which requires an open 24-hour WhatsApp
+customer-service window.
+
+Obtain the recipient's WhatsApp opt-in before enabling automatic messages.
+Save settings, enter a receiving number with country code, choose a template
+under **Testbericht**, then test. Twilio acceptance is not proof of delivery;
+check the message status in Twilio Console. SuriRent cannot grant template
+approval or bypass WhatsApp's messaging window.

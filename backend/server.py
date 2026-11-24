@@ -51,6 +51,7 @@ from landing_content import (
     ALLOWED_FEATURE_ICONS,
 )
 from billing_access import billing_access_state
+from twilio_service import whatsapp_variables
 
 # =====================================================================
 # Config
@@ -13855,7 +13856,14 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
     if has_wa:
         try:
             # JPG kwitantie als inline media-bijlage — toont preview in chat.
-            await send_whatsapp(cfg, to, msg, media_url=image_link)
+            await send_whatsapp(
+                cfg, to, msg, media_url=image_link, template_kind="receipt",
+                variables=whatsapp_variables(
+                    tenant.get("name") or "Huurder", await _brand_name_of(cid),
+                    f"{p_enriched['currency']} {p_enriched['amount']:.2f}",
+                    p_enriched["receipt_number"], image_link,
+                ),
+            )
             return {"sent": True, "channel": "whatsapp", "to": to}
         except TwilioError as e:
             print(f"[kiosk-twilio] whatsapp failed payment={payment_id} err={e}")
@@ -13869,7 +13877,7 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
             print(f"[kiosk-twilio] sms failed payment={payment_id} err={e}")
             return {"sent": False, "reason": "send_failed"}
 
-    return {"sent": False, "reason": "no_channel_configured"}
+    return {"sent": False, "reason": "send_failed" if has_wa else "no_channel_configured"}
 
 
 # =====================================================================
@@ -20017,6 +20025,12 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
     doc = await _get_company_settings_doc(cid)
     existing_section = doc.get(section) or {}
     merged = _merge_section(section, existing_section, body or {})
+    if section == "twilio":
+        for key in ("receipt_content_sid", "reminder_content_sid"):
+            value = str(merged.get(key) or "").strip()
+            if value and not re.fullmatch(r"HX[0-9a-fA-F]{32}", value):
+                raise HTTPException(status_code=422, detail="Ongeldige Content SID; verwacht HX gevolgd door 32 hexadecimale tekens.")
+            merged[key] = value
     if section == "domain":
         if merged.get("enabled") and merged.get("custom_domain"):
             await _require_plan_feature(cid, "allow_custom_domain", "Eigen domein")
@@ -20145,6 +20159,7 @@ async def receipts_preview_remote_print(body: dict, user=Depends(get_current_use
 
 class SettingsTestIn(BaseModel):
     to: Optional[str] = None
+    template_kind: Optional[Literal["receipt", "reminder"]] = None
 
 
 @api.post("/settings/{section}/test")
@@ -20187,11 +20202,23 @@ async def test_settings_section(section: str, body: Optional[SettingsTestIn] = N
         if not cfg.get("whatsapp_from") and not cfg.get("sms_from"):
             raise HTTPException(status_code=400, detail="Vul minimaal WhatsApp- of SMS-afzender in")
         target = (body.to or "").strip() if body else ""
-        if not re.fullmatch(r"\+[1-9]\d{6,14}", target):
-            raise HTTPException(status_code=400, detail="Vul een geldig testnummer met landcode in, bijvoorbeeld +5971234567.")
+        from twilio_service import _validate_number
         try:
+            target = _validate_number(target, "sms")
+        except TwilioError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        try:
+            if body and body.template_kind and not cfg.get("whatsapp_from"):
+                raise HTTPException(status_code=400, detail="Vul eerst de WhatsApp-afzender in om een template te testen.")
             if cfg.get("whatsapp_from"):
-                await send_whatsapp(cfg, target, test_msg)
+                template_kind = body.template_kind if body else None
+                if template_kind and not cfg.get(f"{template_kind}_content_sid"):
+                    raise HTTPException(status_code=400, detail="Bewaar eerst de Content SID voor deze template.")
+                await send_whatsapp(
+                    cfg, target, test_msg, template_kind=template_kind,
+                    variables=whatsapp_variables("Testhuurder", brand_name_twil, "SRD 100.00", "TEST-001",
+                                                 _public_url("/kiosk/huurder")),
+                )
                 return {"section": section, "ok": True, "detail": f"WhatsApp testbericht verzonden naar {target}"}
             await send_sms(cfg, target, test_msg)
             return {"section": section, "ok": True, "detail": f"SMS testbericht verzonden naar {target}"}
@@ -20936,11 +20963,12 @@ def _public_url(path: str) -> str:
     return f"{base.rstrip('/')}{path}"
 
 
-async def _twilio_send(cfg: dict, channel: str, to: str, body: str):
+async def _twilio_send(cfg: dict, channel: str, to: str, body: str,
+                       *, template_kind: Optional[str] = None, variables: Optional[dict] = None):
     from twilio_service import send_whatsapp, send_sms, TwilioError
     try:
         if channel == "whatsapp":
-            await send_whatsapp(cfg, to, body)
+            await send_whatsapp(cfg, to, body, template_kind=template_kind, variables=variables)
         else:
             await send_sms(cfg, to, body)
     except TwilioError as e:
@@ -20970,16 +20998,21 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
         f"📷 De bon is als foto meegestuurd — bewaar hem in uw galerij.\n\n"
         f"— {brand_name}"
     )
-    # Voor WhatsApp: stuur JPG kwitantie als media-bijlage (inline preview).
-    if body.channel == "whatsapp":
+    if body.channel == "whatsapp" and not cfg.get("receipt_content_sid"):
+        from twilio_service import send_whatsapp, TwilioError
         try:
-            from twilio_service import send_whatsapp as _swa
-            await _swa(cfg, to, msg, media_url=_public_url(f"/api/payments/{payment_id}/image"))
-        except Exception as e:  # noqa: BLE001
+            await send_whatsapp(cfg, to, msg, media_url=_public_url(f"/api/payments/{payment_id}/image"))
+        except TwilioError as e:
             print(f"[message-payment] whatsapp media fail, fallback text: {e}")
             await _twilio_send(cfg, body.channel, to, msg)
     else:
-        await _twilio_send(cfg, body.channel, to, msg)
+        await _twilio_send(
+            cfg, body.channel, to, msg, template_kind="receipt",
+            variables=whatsapp_variables(
+                tenant.get("name") or "Huurder", brand_name, f"{p['currency']} {p['amount']:.2f}",
+                p["receipt_number"], _public_url(f"/api/payments/{payment_id}/image"),
+            ),
+        )
     return {"ok": True, "sent_to": to, "channel": body.channel}
 
 
@@ -21008,7 +21041,13 @@ async def message_invoice(invoice_id: str, body: MessageSendIn, user=Depends(get
         f"Bon JPG: {_public_url(f'/api/invoices/{invoice_id}/image')}\n\n"
         f"— {brand_name}"
     )
-    await _twilio_send(cfg, body.channel, to, msg)
+    await _twilio_send(
+        cfg, body.channel, to, msg, template_kind="reminder",
+        variables=whatsapp_variables(
+            tenant.get("name") or "Huurder", brand_name, f"{inv['currency']} {inv['amount']:.2f}",
+            inv["invoice_number"], _public_url(f"/api/invoices/{invoice_id}/image"),
+        ),
+    )
     return {"ok": True, "sent_to": to, "channel": body.channel}
 
 
@@ -21105,7 +21144,13 @@ async def tenant_payment_reminder(
         f"Periodes: {period_label}\n\n"
         f"Gelieve zo spoedig mogelijk te betalen.\n\n— {brand_name}"
     )
-    await _twilio_send(cfg, channel, to, msg)
+    await _twilio_send(
+        cfg, channel, to, msg, template_kind="reminder",
+        variables=whatsapp_variables(
+            tenant.get("name") or "Huurder", brand_name, f"{cur} {total:.2f}",
+            period_label, _public_url("/kiosk/huurder"),
+        ),
+    )
     return {"sent": True, "channel": channel, "to": to, "count": len(invs)}
 
 
@@ -21163,7 +21208,13 @@ async def message_overdue_reminder(tenant_id: str, body: MessageSendIn, user=Dep
         f"Je kunt langskomen bij ons kantoor of via de Kiosk betalen.\n\n"
         f"— {brand_name}"
     )
-    await _twilio_send(cfg, body.channel, to, msg)
+    await _twilio_send(
+        cfg, body.channel, to, msg, template_kind="reminder",
+        variables=whatsapp_variables(
+            t.get("name") or "Huurder", brand_name, f"{bal['currency']} {bal['balance']:.2f}",
+            "Openstaand saldo", _public_url("/kiosk/huurder"),
+        ),
+    )
     return {"ok": True, "sent_to": to, "channel": body.channel}
 
 
@@ -21527,7 +21578,14 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
         if cfg.get("enabled") and phone:
             try:
                 from twilio_service import send_whatsapp
-                await send_whatsapp(cfg, phone, body, media_url=receipt_image_url)
+                await send_whatsapp(
+                    cfg, phone, body, media_url=receipt_image_url, template_kind="receipt",
+                    variables=whatsapp_variables(
+                        tenant.get("name") or "Huurder", await _brand_name_of(cid),
+                        f"{cur} {amount:.2f}", f"Termijn {seq}/{total_inst}",
+                        receipt_image_url or _public_url("/kiosk/huurder"),
+                    ),
+                )
             except Exception as e:  # noqa: BLE001
                 print(f"[plan-notify] twilio fail: {e}")
         # Optionele e-mail — met bon-JPG als bijlage indien beschikbaar.
@@ -22304,8 +22362,15 @@ async def _send_upcoming_invoice_reminders():
             wa_ok = False
             if twilio_cfg.get("enabled") and phone:
                 try:
-                    channel = "whatsapp" if twilio_cfg.get("whatsapp_number") else "sms"
-                    await _twilio_send(twilio_cfg, channel, phone, wa_msg)
+                    channel = "whatsapp" if twilio_cfg.get("whatsapp_from") else "sms"
+                    await _twilio_send(
+                        twilio_cfg, channel, phone, wa_msg, template_kind="reminder",
+                        variables=whatsapp_variables(
+                            tenant.get("name") or "Huurder", brand, f"{currency} {remaining:.2f}",
+                            inv.get("invoice_number") or inv["id"],
+                            _public_url(f"/api/invoices/{inv['id']}/image"),
+                        ),
+                    )
                     wa_ok = True
                 except Exception as e:  # noqa: BLE001
                     print(f"[reminder-upcoming] twilio fail inv={inv['id'][:8]}: {e}")
@@ -22458,7 +22523,13 @@ async def _send_overdue_installment_reminders():
                 f"Gelieve zo spoedig mogelijk te voldoen via onze kiosk of betaalapp.\n\n— {brand_name_wa}"
             )
             try:
-                await _twilio_send(twilio_cfg, "whatsapp", tenant["phone"], msg)
+                await _twilio_send(
+                    twilio_cfg, "whatsapp", tenant["phone"], msg, template_kind="reminder",
+                    variables=whatsapp_variables(
+                        tenant.get("name") or "Huurder", brand_name_wa, f"{cur} {total:.2f}",
+                        f"{n} achterstallige termijnen", _public_url("/kiosk/huurder"),
+                    ),
+                )
             except Exception as e:  # noqa: BLE001
                 print(f"[reminder] twilio installment fail: {e}")
 
