@@ -126,16 +126,16 @@ The claim and subsequent payment allocation are still separate writes, so a
 failed or interrupted booking requires reconciliation and is not proof of a
 fully booked provider request.
 
-The internal reconciliation function can resume an open, verified or booked
-attempt, verifying the provider before booking and preserving uncertain
-attempts for manual investigation. It is not scheduled or exposed; closing the
-browser does not yet trigger recovery. Any future caller must authorize the
-exact attempt and run recovery independently of the link's expiry.
+The reconciliation function can resume an open, verified or booked attempt,
+verifying the provider before booking and preserving uncertain attempts for
+manual investigation. A bounded background scanner can recover such attempts
+even after a link expires or the browser closes; it starts only when checkout
+is enabled. Public callers must authorize the exact attempt.
 
 The experimental checkout orchestrator accepts only an item authorized by an
 unexpired SMS grant, derives its amount from the database, and checks the
 provider before booking. Its public start and finish endpoints are hard-disabled;
-there is no checkout UI or automatic recovery yet. Stripe currently accepts EUR
+there is no checkout UI yet. Stripe currently accepts EUR
 or SRD with a current configured rate; USD and amounts below the Stripe minimum
 are rejected, not silently converted or increased.
 

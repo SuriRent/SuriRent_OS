@@ -701,6 +701,11 @@ async def lifespan(app: FastAPI):
         import asyncio as _aio
         _auto_invoice_task_handle = _aio.create_task(_auto_invoice_loop())
 
+    _sms_reconciliation_task = None
+    if _SMS_CHECKOUT_READY:
+        from sms_payment_reconciliation import sms_payment_reconciliation_loop
+        _sms_reconciliation_task = asyncio.create_task(sms_payment_reconciliation_loop(db, client))
+
     # --- Start demo-omgeving reset loop (elke 30 minuten) ---
     _demo_reset_task_handle = None
     if os.environ.get("DISABLE_DEMO_RESET") != "1":
@@ -788,6 +793,12 @@ async def lifespan(app: FastAPI):
         _demo_reset_task_handle.cancel()
     if _billing_cron_handle:
         _billing_cron_handle.cancel()
+    if _sms_reconciliation_task:
+        _sms_reconciliation_task.cancel()
+        try:
+            await _sms_reconciliation_task
+        except asyncio.CancelledError:
+            pass
     client.close()
 
 
@@ -21382,6 +21393,9 @@ async def sms_checkout_start(
         return await start_sms_checkout(db, client, token=token, item=body.item, method=body.method)
     except PaymentAttemptConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc), headers=_SMS_PAYMENT_HEADERS) from exc
+    except HTTPException as exc:
+        exc.headers = {**(exc.headers or {}), **_SMS_PAYMENT_HEADERS}
+        raise
 
 
 @api.post("/public/sms-payment/finish")
@@ -21398,6 +21412,9 @@ async def sms_checkout_finish(
         return await finish_sms_checkout(db, client, token=token, item=body.item, attempt_id=body.attempt_id)
     except PaymentAttemptConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc), headers=_SMS_PAYMENT_HEADERS) from exc
+    except HTTPException as exc:
+        exc.headers = {**(exc.headers or {}), **_SMS_PAYMENT_HEADERS}
+        raise
 
 
 async def _send_company_sms(company_id: str, cfg: dict, to: str, body: str, purpose: str):

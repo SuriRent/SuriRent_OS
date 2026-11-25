@@ -11,6 +11,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from sms_payment_attempts import PaymentAttemptConflict, tenant_payment_key
 from sms_payment_checkout import _stripe_amount, finish_sms_checkout, start_sms_checkout
 from sms_payment_links import create_payment_link
+from sms_payment_reconciliation import reconcile_sms_payment_batch
 from tenant_payment_guard import acquire_payment_guard
 
 
@@ -157,4 +158,39 @@ class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.db.payment_plan_installments.find_one({"id": "inst1"}))["status"], "paid")
         self.assertEqual((await self.db.payment_plans.find_one({"id": "p1"}))["status"], "completed")
         self.assertEqual(await self.db.payments.count_documents({}), 1)
+
+    async def test_background_recovers_paid_checkout_after_link_expiry(self):
+        intent = {"id": "pi_1", "client_secret": "secret", "amount": 7500,
+                  "currency": "eur", "livemode": False}
+        with patch("sms_payment_providers.stripe.PaymentIntent.create", return_value=intent):
+            started = await start_sms_checkout(self.db, self.client, token=self.token, item=self.item, method="card")
+        await self.db.sms_payment_links.update_one(
+            {}, {"$set": {"expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)}},
+        )
+        proof = {**intent, "status": "succeeded", "amount_received": 7500, "payment_method_types": ["card"],
+                 "metadata": {"source": "surirent_sms_payment", "attempt_id": started["attempt_id"],
+                              "company_id": "c1", "tenant_id": "t1"}}
+        with patch("sms_payment_providers.stripe.PaymentIntent.retrieve", return_value=proof):
+            result = await reconcile_sms_payment_batch(self.db, self.client)
+        self.assertEqual((result["scanned"], result["completed"]), (1, 1))
+        self.assertEqual(await self.db.payments.count_documents({}), 1)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 100)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_pending_attempts_do_not_starve_later_attempts(self):
+        await self.db.sms_payment_attempts.insert_many([
+            {"_id": "a", "attempt_id": "a1", "state": "open"},
+            {"_id": "b", "attempt_id": "b1", "state": "verified"},
+            {"_id": "c", "attempt_id": "c1", "state": "uncertain"},
+        ])
+        with patch("sms_payment_reconciliation.reconcile_sms_payment", new=AsyncMock(
+            side_effect=[PaymentAttemptConflict("pending"), {"id": "paid"}],
+        )) as reconcile:
+            first = await reconcile_sms_payment_batch(self.db, self.client, limit=1)
+            second = await reconcile_sms_payment_batch(self.db, self.client, after_key=first["next_key"], limit=1)
+            end = await reconcile_sms_payment_batch(self.db, self.client, after_key=second["next_key"], limit=1)
+        self.assertEqual((first["completed"], first["next_key"]), (0, "a"))
+        self.assertEqual((second["completed"], second["next_key"]), (1, "b"))
+        self.assertEqual((end["scanned"], end["next_key"]), (0, None))
+        self.assertEqual(reconcile.await_count, 2)
 
