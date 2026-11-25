@@ -45,7 +45,9 @@ docker compose -p surirent-replica-test -f docker-compose.yml -f docker-compose.
 The initializer must finish successfully and report `Replica set is ready`.
 The app's overlay configuration waits for initialization and uses the replica
 set URI. Preserve the same key and credentials across restarts. Do not copy
-production or sandbox data into this test environment.
+production or sandbox data into this test environment. The isolated CI workflow
+checks authentication, transaction commit and rollback, and a database restart;
+it does not verify the deployment database or activate SMS checkout.
 
 ## WhatsApp and SMS (Messente)
 

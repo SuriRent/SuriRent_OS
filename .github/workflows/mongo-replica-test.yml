@@ -62,11 +62,21 @@ jobs:
               testDb.checks.insertOne({value: 1});
               session.commitTransaction();
               if (testDb.checks.countDocuments({value: 1}) !== 1) throw new Error("Transaction not committed");
+              session.startTransaction();
+              testDb.checks.insertOne({value: 2});
+              session.abortTransaction();
+              if (testDb.checks.countDocuments({value: 2}) !== 0) throw new Error("Transaction not rolled back");
               testDb.checks.deleteMany({});
               session.endSession();
             '
           }
           wait_for_initializer
+          if docker compose exec -T database mongosh --quiet 'mongodb://database:27017/?replicaSet=rs0' \
+            --username "$MONGO_ROOT_USERNAME" --password wrong-password --authenticationDatabase admin \
+            --eval 'db.adminCommand({ping: 1})' >/dev/null 2>&1; then
+            echo "Invalid MongoDB credentials unexpectedly succeeded" >&2
+            exit 1
+          fi
           verify_transaction
           docker compose restart database
           docker compose up -d --force-recreate replica-init
