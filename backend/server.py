@@ -2003,11 +2003,11 @@ async def demo_login(response: Response):
 
 
 # ============================================================
-# FORGOT PASSWORD — verstuur 6-cijferige code via email of WhatsApp
+# FORGOT PASSWORD — verstuur 6-cijferige code via email of SMS
 # ============================================================
 class ForgotPasswordIn(BaseModel):
     email: EmailStr
-    channel: Literal["email", "whatsapp"] = "email"
+    channel: Literal["email", "sms"] = "email"
 
 
 class ResetPasswordIn(BaseModel):
@@ -2018,7 +2018,7 @@ class ResetPasswordIn(BaseModel):
 
 @api.post("/auth/forgot-password")
 async def forgot_password(body: ForgotPasswordIn):
-    """Genereert 6-cijferige reset-code en verstuurt via email of WhatsApp.
+    """Genereert 6-cijferige reset-code en verstuurt via email of SMS.
     Code is 15 minuten geldig. Geeft GENERIC success terug zelfs als email
     niet bestaat (voorkomt email-enumeratie). Code is ook bruikbaar via
     POST /auth/reset-password."""
@@ -2047,19 +2047,20 @@ async def forgot_password(body: ForgotPasswordIn):
             if body.channel == "email":
                 await _send_password_reset_email(email, user.get("name", ""), code)
             else:
-                # WhatsApp via de Messente-instellingen van het bedrijf.
                 phone = user.get("phone") or ""
                 if not phone and user.get("company_id"):
                     c = await db.companies.find_one({"id": user["company_id"]}, {"_id": 0, "contact_phone": 1})
                     if c:
                         phone = c.get("contact_phone") or ""
                 if phone:
-                    await _send_password_reset_whatsapp(phone, user.get("name", ""), code, user.get("company_id"))
+                    await _send_password_reset_sms(phone, user.get("name", ""), code, user.get("company_id"))
+                else:
+                    print("[forgot-password] SMS niet verzonden: account heeft geen telefoonnummer")
         except Exception as e:  # noqa: BLE001
             print(f"[forgot-password] verzending mislukt: {e}")
     return {
         "ok": True,
-        "message": f"Als dit account bestaat, is een herstelcode verzonden via {'e-mail' if body.channel == 'email' else 'WhatsApp'}.",
+        "message": f"Als dit account bestaat, is een herstelcode verzonden via {'e-mail' if body.channel == 'email' else 'SMS'}.",
     }
 
 
@@ -2116,18 +2117,19 @@ async def _send_password_reset_email(email: str, name: str, code: str):
     await send_platform_email(to=email, subject=subject, body_html=body_html, body_text=body_text)
 
 
-async def _send_password_reset_whatsapp(phone: str, name: str, code: str, company_id: Optional[str] = None):
-    """Verstuur de herstelcode via het eigen Messente-account van het bedrijf."""
-    from messente_service import send_whatsapp, MessenteError
-    if not company_id:
-        raise MessenteError("Geen bedrijf beschikbaar voor WhatsApp-wachtwoordherstel.")
-    cfg = await get_company_section(company_id, "messente")
+async def _send_password_reset_sms(phone: str, name: str, code: str, company_id: Optional[str] = None):
+    """Gebruik bedrijfsinstellingen, anders het expliciete platformaccount."""
+    from messente_service import send_sms
+    cfg = await get_company_section(company_id, "messente") if company_id else {}
+    if not cfg.get("enabled"):
+        doc = await db.saas_settings.find_one({"id": SAAS_SETTINGS_ID}, {"_id": 0, "messente": 1}) or {}
+        cfg = _reveal_section("messente", doc.get("messente") or {})
     msg = (
         f"Hallo {name or 'gebruiker'},\n\n"
-        f"Je SuriRent herstelcode: *{code}*\n\n"
+        f"Je SuriRent herstelcode: {code}\n\n"
         f"15 minuten geldig. Heb je dit niet aangevraagd? Negeer dit bericht."
     )
-    await send_whatsapp(cfg, phone, msg, template_kind="authentication", variables={"1": code})
+    await send_sms(cfg, phone, msg)
 
 
 @api.get("/auth/me")
@@ -6706,6 +6708,8 @@ async def get_saas_settings(user=Depends(require_role("superadmin"))):
     # Mask SMTP secrets in response — only return whether they're set
     smtp = doc.get("smtp", {}) or {}
     return {
+        "messente": _mask_section("messente", doc.get("messente") or {}),
+        "whatsapp_receipt_media_url": _public_url("/api/public/whatsapp-receipts/sample.jpg"),
         "banking": doc.get("banking", {
             "bank_name": "", "account_name": "", "account_number": "", "swift": "",
             "support_email": "", "whatsapp": "",
@@ -20059,17 +20063,7 @@ async def update_settings_section(section: str, body: dict, user=Depends(get_cur
     existing_section = doc.get(section) or {}
     merged = _merge_section(section, existing_section, body or {})
     if section == "messente":
-        for key in ("receipt_template", "receipt_media_template", "reminder_template", "authentication_template",
-                    "template_language", "whatsapp_from", "sms_from"):
-            value = merged.get(key)
-            if not isinstance(value, str):
-                raise HTTPException(status_code=422, detail=f"{key} moet tekst zijn.")
-            value = value.strip()
-            if key.endswith("_template") and value and not re.fullmatch(r"[a-z0-9_]{1,512}", value):
-                raise HTTPException(status_code=422, detail="Templatenamen mogen alleen kleine letters, cijfers en underscores bevatten.")
-            if key == "template_language" and not re.fullmatch(r"[a-z]{2,3}(?:_[A-Z]{2})?", value):
-                raise HTTPException(status_code=422, detail="Ongeldige WhatsApp-taalcode; gebruik bijvoorbeeld nl of en_US.")
-            merged[key] = value
+        _validate_messente_settings(merged)
     if section == "domain":
         if merged.get("enabled") and merged.get("custom_domain"):
             await _require_plan_feature(cid, "allow_custom_domain", "Eigen domein")
@@ -20202,6 +20196,80 @@ class SettingsTestIn(BaseModel):
     channel: Optional[Literal["whatsapp", "sms"]] = None
 
 
+def _validate_messente_settings(merged: dict) -> None:
+    for key in ("receipt_template", "receipt_media_template", "reminder_template", "authentication_template",
+                "template_language", "whatsapp_from", "sms_from"):
+        value = merged.get(key)
+        if not isinstance(value, str):
+            raise HTTPException(status_code=422, detail=f"{key} moet tekst zijn.")
+        value = value.strip()
+        if key.endswith("_template") and value and not re.fullmatch(r"[a-z0-9_]{1,512}", value):
+            raise HTTPException(status_code=422, detail="Templatenamen mogen alleen kleine letters, cijfers en underscores bevatten.")
+        if key == "template_language" and not re.fullmatch(r"[a-z]{2,3}(?:_[A-Z]{2})?", value):
+            raise HTTPException(status_code=422, detail="Ongeldige WhatsApp-taalcode; gebruik bijvoorbeeld nl of en_US.")
+        merged[key] = value
+
+
+async def _test_messente_settings(cfg: dict, body: Optional[SettingsTestIn], brand_name: str):
+    from messente_service import send_whatsapp, send_sms, MessenteError, _validate_number
+    if not cfg.get("enabled"):
+        raise HTTPException(status_code=400, detail="Schakel Messente in en bewaar eerst de instellingen.")
+    if not cfg.get("whatsapp_from") and not cfg.get("sms_from"):
+        raise HTTPException(status_code=400, detail="Vul minimaal WhatsApp- of SMS-afzender in")
+    try:
+        target = _validate_number((body.to or "").strip() if body else "", "ontvanger")
+    except MessenteError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    test_msg = f"{brand_name} test bericht — als je dit ontvangt is je Messente configuratie correct."
+    try:
+        channel = (body.channel if body else None) or ("whatsapp" if cfg.get("whatsapp_from") else "sms")
+        if body and body.template_kind and channel != "whatsapp":
+            raise HTTPException(status_code=400, detail="Kies WhatsApp om een template te testen.")
+        if channel == "whatsapp":
+            if not cfg.get("whatsapp_from"):
+                raise HTTPException(status_code=400, detail="Vul eerst de WhatsApp-afzender in.")
+            template_kind = body.template_kind if body else None
+            if template_kind and not cfg.get(f"{template_kind}_template"):
+                raise HTTPException(status_code=400, detail="Bewaar eerst de Messente-templatenaam voor deze template.")
+            if template_kind == "receipt_media":
+                _receipt_media_token("test")
+            variables = whatsapp_variables(
+                "Testhuurder", brand_name, "SRD 100.00", "TEST-001",
+                _public_url("/api/public/whatsapp-receipts/sample.jpg") if template_kind == "receipt_media" else _public_url("/kiosk/huurder"),
+            )
+            if template_kind == "authentication":
+                variables = {"1": "123456"}
+            await send_whatsapp(cfg, target, test_msg, template_kind=template_kind, variables=variables)
+        else:
+            await send_sms(cfg, target, test_msg)
+        label = "WhatsApp" if channel == "whatsapp" else "SMS"
+        return {"section": "messente", "ok": True, "detail": f"Messente heeft het {label}-testbericht geaccepteerd voor {target}. Controleer de afleverstatus in Messente."}
+    except MessenteError as e:
+        return {"section": "messente", "ok": False, "detail": str(e)}
+
+
+@api.put("/superadmin/settings/messente")
+async def update_saas_messente(body: dict, user=Depends(require_role("superadmin"))):
+    existing = await db.saas_settings.find_one({"id": SAAS_SETTINGS_ID}, {"_id": 0, "messente": 1}) or {}
+    merged = _merge_section("messente", existing.get("messente") or {}, body)
+    _validate_messente_settings(merged)
+    await db.saas_settings.update_one(
+        {"id": SAAS_SETTINGS_ID},
+        {"$set": {"messente": merged, "updated_at": iso(now_utc()), "updated_by": user.get("email")}},
+        upsert=True,
+    )
+    return {"ok": True, "data": _mask_section("messente", merged)}
+
+
+@api.post("/superadmin/settings/messente/test")
+async def test_saas_messente(body: SettingsTestIn, user=Depends(require_role("superadmin"))):
+    doc = await db.saas_settings.find_one({"id": SAAS_SETTINGS_ID}, {"_id": 0, "messente": 1, "branding": 1}) or {}
+    return await _test_messente_settings(
+        _reveal_section("messente", doc.get("messente") or {}), body,
+        (doc.get("branding") or {}).get("platform_name") or "SuriRent",
+    )
+
+
 @api.post("/settings/{section}/test")
 async def test_settings_section(section: str, body: Optional[SettingsTestIn] = None, user=Depends(get_current_user)):
     if section not in VALID_SETTINGS_SECTIONS:
@@ -20234,45 +20302,8 @@ async def test_settings_section(section: str, body: Optional[SettingsTestIn] = N
         return {"section": section, "ok": True, "detail": f"Test e-mail verzonden naar {to}"}
 
     if section == "messente":
-        from messente_service import send_whatsapp, send_sms, MessenteError
         co = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
-        brand_name_messente = co.get("name") or "Vastgoed"
-        test_msg = f"{brand_name_messente} test bericht — als je dit ontvangt is je Messente configuratie correct."
-        if not cfg.get("whatsapp_from") and not cfg.get("sms_from"):
-            raise HTTPException(status_code=400, detail="Vul minimaal WhatsApp- of SMS-afzender in")
-        target = (body.to or "").strip() if body else ""
-        from messente_service import _validate_number
-        try:
-            target = _validate_number(target, "sms")
-        except MessenteError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
-        try:
-            channel = (body.channel if body else None) or ("whatsapp" if cfg.get("whatsapp_from") else "sms")
-            if body and body.template_kind and channel != "whatsapp":
-                raise HTTPException(status_code=400, detail="Kies WhatsApp om een template te testen.")
-            if channel == "whatsapp":
-                if not cfg.get("whatsapp_from"):
-                    raise HTTPException(status_code=400, detail="Vul eerst de WhatsApp-afzender in.")
-                template_kind = body.template_kind if body else None
-                if template_kind and not cfg.get(f"{template_kind}_template"):
-                    raise HTTPException(status_code=400, detail="Bewaar eerst de Messente-templatenaam voor deze template.")
-                if template_kind == "receipt_media":
-                    _receipt_media_token("test")
-                variables = whatsapp_variables(
-                    "Testhuurder", brand_name_messente, "SRD 100.00", "TEST-001",
-                    _public_url("/api/public/whatsapp-receipts/sample.jpg") if template_kind == "receipt_media" else _public_url("/kiosk/huurder"),
-                )
-                if template_kind == "authentication":
-                    variables = {"1": "123456"}
-                await send_whatsapp(
-                    cfg, target, test_msg, template_kind=template_kind,
-                    variables=variables,
-                )
-                return {"section": section, "ok": True, "detail": f"Messente heeft het WhatsApp-testbericht geaccepteerd voor {target}. Controleer de afleverstatus in Messente."}
-            await send_sms(cfg, target, test_msg)
-            return {"section": section, "ok": True, "detail": f"Messente heeft het SMS-testbericht geaccepteerd voor {target}. Controleer de afleverstatus in Messente."}
-        except MessenteError as e:
-            return {"section": section, "ok": False, "detail": str(e)}
+        return await _test_messente_settings(cfg, body, co.get("name") or "Vastgoed")
 
     if section == "shelly":
         from shelly_service import list_devices, ShellyError

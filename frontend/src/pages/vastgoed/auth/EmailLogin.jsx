@@ -660,7 +660,7 @@ function PasswordView({ initialMode = 'login', onBack, onRegistered, onLoginStar
 }
 
 // =====================================================================
-// Forgot Password Modal — wachtwoord herstel via email + WhatsApp
+// Forgot Password Modal — wachtwoord herstel via email + SMS
 // =====================================================================
 
 export default PasswordView;

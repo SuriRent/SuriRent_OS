@@ -76,7 +76,7 @@ function ActionRow({ onSave, onTest, saving, testing, canTest }) {
   );
 }
 
-function useSection(section, initial, onSaved, onDirty) {
+function useSection(section, initial, onSaved, onDirty, basePath = '/settings') {
   const [data, setData] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -105,7 +105,7 @@ function useSection(section, initial, onSaved, onDirty) {
   const save = async () => {
     setErr(''); setMsg(''); setSaving(true);
     try {
-      const { data: res } = await api.put(`/settings/${section}`, data);
+      const { data: res } = await api.put(`${basePath}/${section}`, data);
       setData(res.data);
       dirtyRef.current = false;
       setMsg('Instellingen opgeslagen.');
@@ -116,7 +116,7 @@ function useSection(section, initial, onSaved, onDirty) {
   const test = async (payload) => {
     setErr(''); setMsg(''); setTesting(true);
     try {
-      const { data: res } = await api.post(`/settings/${section}/test`, payload);
+      const { data: res } = await api.post(`${basePath}/${section}/test`, payload);
       if (res.ok) setMsg(res.detail || 'Test geslaagd.');
       else setErr(res.detail || 'Test mislukt.');
     } catch (e) { setErr(formatError(e)); }
@@ -181,14 +181,20 @@ export function DepositForm({ initial }) {
   );
 }
 
-export function MessenteForm({ initial, receiptMediaUrl }) {
-  const s = useSection('messente', initial || {});
+export function MessenteForm({ initial, receiptMediaUrl, platform = false }) {
+  const s = useSection('messente', initial || {}, undefined, undefined, platform ? '/superadmin/settings' : '/settings');
   const [testNumber, setTestNumber] = useState('');
   const [testTemplate, setTestTemplate] = useState('');
-  const [testChannel, setTestChannel] = useState('whatsapp');
+  const [testChannel, setTestChannel] = useState(platform ? 'sms' : 'whatsapp');
   const d = s.data;
   return (
     <SectionShell msg={s.msg} err={s.err}>
+      {platform && <p className="text-sm text-slate-600">
+        Dit platformaccount wordt gebruikt voor SMS-wachtwoordherstel wanneer het bedrijf geen eigen
+        Messente-koppeling heeft ingeschakeld, of als het account niet aan een bedrijf is gekoppeld.
+        Bonnen en huurdersberichten blijven de eigen bedrijfsinstellingen gebruiken.
+        Bewaar deze koppeling met de eigen Bewaar-knop hieronder.
+      </p>}
       <SwitchField label="Ingeschakeld" testid="messente-enabled"
         value={d.enabled} onChange={(v) => s.onField('enabled', v)}
         desc="Verstuur WhatsApp en SMS via je eigen Messente-account. Vul nieuwe Messente-gegevens in; gegevens van de vorige provider worden niet overgenomen." />
@@ -225,7 +231,7 @@ export function MessenteForm({ initial, receiptMediaUrl }) {
           helper="Voor facturen, openstaande saldi en betalingsherinneringen." />
         <TextField label="Herstelcode templatenaam" testid="messente-authentication-template" value={d.authentication_template}
           onChange={(v) => s.onField('authentication_template', v)} placeholder="herstelcode"
-          helper="Authentication-template met een code in {{1}} en een code-kopieren-knop (index 0), voor PIN- en wachtwoordherstel." />
+          helper="Authentication-template met een code in {{1}} en een code-kopieren-knop (index 0), voor WhatsApp PIN-herstel. Wachtwoordherstel gaat via SMS." />
         <p className="text-xs text-slate-600">
           Gebruik precies deze invulvelden: {'{{1}}'} naam huurder, {'{{2}}'} bedrijfsnaam,
           {' {{3}}'} bedrag met valuta, {'{{4}}'} bonnummer/factuur/periode, {'{{5}}'} link.

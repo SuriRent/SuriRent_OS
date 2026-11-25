@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { api, formatError } from '../../../lib/api';
 import ApkReleases from './ApkReleases';
+import { MessenteForm } from './Settings';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -412,6 +413,10 @@ export default function SaasSettings() {
         </Section>
 
         <StripeSection />
+
+        <Section title="WhatsApp & SMS (Messente)" icon={Smartphone} accent="bg-emerald-100 text-emerald-600">
+          <MessenteForm initial={data.messente} receiptMediaUrl={data.whatsapp_receipt_media_url} platform />
+        </Section>
 
         <Section title="Superadmin pushmeldingen" icon={Bell} accent="bg-emerald-100 text-emerald-600">
           <p className="text-xs text-slate-500">
