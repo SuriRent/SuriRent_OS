@@ -11879,8 +11879,10 @@ async def _recompute_tenant_invoices_locked(tenant_id: str, cid: str):
         for inv_id, inv in by_id.items():
             if totals[inv_id] > _cents(inv["amount"]):
                 raise PaymentAttemptConflict("Factuur is te veel betaald")
-            if not totals[inv_id] and inv.get("paid_amount") and _cents(inv["paid_amount"]) > 0:
+            if inv.get("paid_amount") is not None and totals[inv_id] < _cents(inv["paid_amount"]):
                 raise PaymentAttemptConflict("Factuursaldo heeft geen aantoonbare betaling")
+            if inv.get("status") == "paid" and _cents(inv["amount"]) > 0 and not totals[inv_id]:
+                raise PaymentAttemptConflict("Betaalde factuur heeft geen aantoonbare betaling")
     except PaymentAttemptConflict:
         return HTTPException(status_code=409, detail="Factuursaldi zijn niet eenduidig. Controleer de betalingen handmatig.")
 

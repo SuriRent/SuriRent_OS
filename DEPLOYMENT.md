@@ -224,7 +224,8 @@ invoice archival and tenant archival. Interrupted processing retains the guard;
 reconcile the deposit, payment, invoice allocations and tenant before repair.
 Invoice balance recomputation also holds an `invoice_change` guard. It uses
 recorded allocations instead of counting an entire payment per invoice, and
-rejects ambiguous legacy allocations and active payment plans for review.
+rejects ambiguous legacy allocations, unexplained balance reductions and
+active payment plans for review.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

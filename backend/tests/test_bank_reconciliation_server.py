@@ -738,6 +738,19 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 409)
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
 
+    async def test_recomputation_does_not_reduce_balance_without_complete_evidence(self):
+        await self.db.invoices.update_one({"id": "i1"}, {"$set": {"paid_amount": 80, "status": "partial"}})
+        await self.db.payments.insert_one({
+            "id": "p1", "company_id": "c1", "tenant_id": "t1", "status": "approved",
+            "amount": 50, "currency": "SRD", "invoice_id": "i1",
+            "allocations": [{"invoice_id": "i1", "amount": 50}],
+        })
+        with self.assertRaises(HTTPException) as error:
+            await server.recompute_tenant_invoices("t1", {})
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 80)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
     async def test_recomputation_holds_guard_until_finished(self):
         entered, resume = asyncio.Event(), asyncio.Event()
         original = server._recompute_tenant_invoices_locked
