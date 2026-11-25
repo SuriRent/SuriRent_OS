@@ -10,7 +10,9 @@ from pymongo.errors import DuplicateKeyError
 from sms_payment_attempts import (
     PaymentAttemptConflict, _tenant_key, begin_provider_request, reserve_attempt, tenant_payment_key,
 )
-from sms_payment_booking import book_verified_payment, preflight_reserved_payment, release_booked_attempt
+from sms_payment_booking import (
+    _previous_request_fully_booked, book_verified_payment, preflight_reserved_payment, release_booked_attempt,
+)
 from sms_payment_providers import create_sms_stripe_intent
 from sms_payment_reconciliation import reconcile_sms_payment
 from tenant_payment_guard import acquire_payment_guard, cancel_reserved_sms_attempt, guard_reserved_sms_attempt
@@ -18,7 +20,10 @@ from tenant_payment_guard import acquire_payment_guard, cancel_reserved_sms_atte
 
 def matches(doc, query):
     for key, value in query.items():
-        actual = doc.get(key)
+        if key == "allocations.invoice_id":
+            actual = [entry.get("invoice_id") for entry in doc.get("allocations") or [] if isinstance(entry, dict)]
+        else:
+            actual = doc.get(key)
         if isinstance(value, dict) and "$ne" in value:
             if actual == value["$ne"]:
                 return False
@@ -148,6 +153,24 @@ class BookingUnitTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.invoices.docs[0]["paid_amount"], 100)
         self.assertEqual(self.db.sms_payment_attempts.docs[0]["state"], "booked")
 
+    async def test_new_unpaid_invoice_without_paid_amount_can_be_booked(self):
+        invoice = self.db.invoices.docs[0]
+        invoice.pop("paid_amount")
+        invoice["status"] = "open"
+        self.db.sms_payment_attempts.docs[0]["amount_cents"] = 10000
+        await self.book()
+        self.assertEqual((invoice["paid_amount"], invoice["status"]), (100, "paid"))
+
+    async def test_missing_invoice_balance_with_previous_payment_stays_blocked(self):
+        invoice = self.db.invoices.docs[0]
+        invoice.pop("paid_amount")
+        invoice["status"] = "open"
+        self.db.sms_payment_attempts.docs[0]["amount_cents"] = 10000
+        self.db.payments.docs.append({"_id": "prior", "status": "approved", "invoice_ids": ["i1"]})
+        with self.assertRaises(PaymentAttemptConflict):
+            await self.book()
+        self.assertNotIn("paid_amount", self.db.invoices.docs[0])
+
     async def test_pending_payment_keeps_verified_attempt_and_guard(self):
         self.db.payments.docs.append({
             "_id": "p1", "company_id": "c1", "tenant_id": "t1", "status": "approving",
@@ -190,6 +213,61 @@ class BookingUnitTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.book()
         self.assertEqual(self.db.invoices.docs[0]["paid_amount"], 100)
+
+    def add_previous_request(self, provider):
+        tx = {"_id": "previous", "company_id": "c1", "tenant_id": "t1",
+              "status": "paid", "currency": "SRD"}
+        payment = {"_id": "old-payment", "id": "old-payment", "company_id": "c1", "tenant_id": "t1",
+                   "status": "approved", "amount": 50.0, "currency": "SRD",
+                   "allocations": [{"invoice_id": "old-invoice", "amount": 50.0}]}
+        if provider == "stripe":
+            tx.update({"payment_intent_id": "pi-old", "amount": 50.0, "method": "card", "consumed": True})
+            payment.update({"method": "creditcard", "stripe_payment_intent_id": "pi-old"})
+            self.db.kiosk_stripe_payments.docs.append(tx)
+        else:
+            tx.update({"payment_request_id": "mp-old", "amount_cents": 5000, "booked_amount_cents": 5000})
+            payment.update({"method": "mope", "mope_payment_request_id": "mp-old"})
+            self.db.kiosk_mope_payments.docs.append(tx)
+        self.db.payments.docs.append(payment)
+        self.db.invoices.docs.append({"id": "old-invoice", "company_id": "c1", "tenant_id": "t1",
+                                      "status": "paid", "amount": 50.0, "paid_amount": 50.0, "currency": "SRD"})
+        return tx, payment
+
+    async def test_fully_allocated_previous_stripe_does_not_block_booking(self):
+        self.add_previous_request("stripe")
+        await self.book()
+        self.assertEqual(self.db.invoices.docs[0]["paid_amount"], 100)
+
+    async def test_fully_allocated_previous_mope_does_not_block_booking(self):
+        self.add_previous_request("mope")
+        await self.book()
+        self.assertEqual(self.db.invoices.docs[0]["paid_amount"], 100)
+
+    async def test_previous_request_requires_consistent_complete_evidence(self):
+        tx, payment = self.add_previous_request("stripe")
+        scope = {"company_id": "c1", "tenant_id": "t1"}
+        self.assertTrue(await _previous_request_fully_booked(self.db, tx, "stripe", scope, None))
+        for field, value in (("status", "pending_approval"), ("currency", "EUR"),
+                             ("amount", 40), ("allocations", [])):
+            original = payment[field]
+            payment[field] = value
+            with self.subTest(field=field):
+                self.assertFalse(await _previous_request_fully_booked(self.db, tx, "stripe", scope, None))
+            payment[field] = original
+        self.db.payments.docs.append({**payment, "_id": "duplicate", "id": "duplicate"})
+        self.assertFalse(await _previous_request_fully_booked(self.db, tx, "stripe", scope, None))
+        self.db.payments.docs.pop()
+        self.db.payment_plans.docs.append({"id": "plan", **scope, "status": "active", "invoice_ids": ["old-invoice"]})
+        self.assertFalse(await _previous_request_fully_booked(self.db, tx, "stripe", scope, None))
+
+    async def test_two_recorded_allocations_cannot_exceed_invoice_paid_amount(self):
+        tx, payment = self.add_previous_request("stripe")
+        self.db.payments.docs.append({**payment, "_id": "other", "id": "other",
+                                      "stripe_payment_intent_id": "other-intent"})
+        scope = {"company_id": "c1", "tenant_id": "t1"}
+        self.assertFalse(await _previous_request_fully_booked(self.db, tx, "stripe", scope, None))
+        with self.assertRaises(PaymentAttemptConflict):
+            await self.book()
 
     async def test_verified_payment_without_guard_is_not_booked(self):
         self.db.tenant_payment_guards.docs.clear()

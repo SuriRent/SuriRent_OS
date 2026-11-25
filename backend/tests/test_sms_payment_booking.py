@@ -54,6 +54,15 @@ class SmsPaymentBookingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.db.sms_payment_attempts.find_one({"_id": "key"}))["state"], "booked")
         self.assertEqual((await self.book())["id"], first["id"])
 
+    async def test_new_unpaid_invoice_without_paid_amount_can_be_booked(self):
+        await self.db.invoices.update_one(
+            {"id": "invoice1"}, {"$unset": {"paid_amount": ""}, "$set": {"status": "open"}},
+        )
+        await self.db.sms_payment_attempts.update_one({"_id": "key"}, {"$set": {"amount_cents": 10000}})
+        await self.book()
+        invoice = await self.db.invoices.find_one({"id": "invoice1"})
+        self.assertEqual((invoice["paid_amount"], invoice["status"]), (100, "paid"))
+
     async def test_failed_payment_insert_rolls_back_invoice_and_attempt(self):
         await self.db.payments.insert_one({"_id": "sms-attempt1", "receipt_number": "other"})
         with self.assertRaises(DuplicateKeyError):
@@ -159,6 +168,50 @@ class SmsPaymentBookingTests(unittest.IsolatedAsyncioTestCase):
             await preflight_reserved_payment(self.db, self.client, key=key, attempt_id="attempt1")
         self.assertEqual(await self.db.payments.count_documents({}), 0)
         self.assertEqual((await self.db.sms_payment_attempts.find_one({"_id": key}))["state"], "reserved")
+
+    async def test_old_fully_booked_stripe_and_mope_requests_do_not_block(self):
+        for provider in ("stripe", "mope"):
+            invoice_id, payment_id = f"{provider}-invoice", f"{provider}-payment"
+            await self.db.invoices.insert_one({
+                "id": invoice_id, "company_id": "company1", "tenant_id": "tenant1",
+                "status": "paid", "amount": 50, "paid_amount": 50, "currency": "SRD",
+            })
+            payment = {
+                "id": payment_id, "company_id": "company1", "tenant_id": "tenant1",
+                "status": "approved", "amount": 50, "currency": "SRD", "receipt_number": payment_id,
+                "allocations": [{"invoice_id": invoice_id, "amount": 50}],
+            }
+            if provider == "stripe":
+                await self.db.kiosk_stripe_payments.insert_one({
+                    "company_id": "company1", "tenant_id": "tenant1", "status": "paid", "currency": "SRD",
+                    "amount": 50, "method": "card", "consumed": True, "payment_intent_id": "pi-old",
+                })
+                payment.update({"method": "creditcard", "stripe_payment_intent_id": "pi-old"})
+            else:
+                await self.db.kiosk_mope_payments.insert_one({
+                    "company_id": "company1", "tenant_id": "tenant1", "status": "paid", "currency": "SRD",
+                    "amount_cents": 5000, "booked_amount_cents": 5000, "payment_request_id": "mp-old",
+                })
+                payment.update({"method": "mope", "mope_payment_request_id": "mp-old"})
+            await self.db.payments.insert_one(payment)
+        await self.book()
+        self.assertEqual((await self.db.invoices.find_one({"id": "invoice1"}))["paid_amount"], 100)
+
+    async def test_old_provider_allocations_must_not_exceed_invoice_balance(self):
+        await self.db.kiosk_stripe_payments.insert_one({
+            "company_id": "company1", "tenant_id": "tenant1", "status": "paid", "currency": "SRD",
+            "amount": 25, "method": "card", "consumed": True, "payment_intent_id": "pi-old",
+        })
+        for number in (1, 2):
+            await self.db.payments.insert_one({
+                "id": f"old-{number}", "company_id": "company1", "tenant_id": "tenant1",
+                "status": "approved", "amount": 25, "currency": "SRD", "receipt_number": f"old-{number}",
+                "method": "creditcard", "stripe_payment_intent_id": "pi-old" if number == 1 else "pi-other",
+                "allocations": [{"invoice_id": "invoice1", "amount": 25}],
+            })
+        with self.assertRaises(PaymentAttemptConflict):
+            await self.book()
+        self.assertEqual((await self.db.invoices.find_one({"id": "invoice1"}))["paid_amount"], 25)
 
     async def test_pending_existing_payment_blocks_booking(self):
         await self.db.payments.insert_one({

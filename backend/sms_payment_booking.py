@@ -28,6 +28,17 @@ def _cents(value) -> int:
         raise PaymentAttemptConflict("Factuurbedrag is ongeldig") from exc
 
 
+async def _invoice_paid_cents(db, invoice, session) -> int:
+    if invoice.get("paid_amount") is not None:
+        return _cents(invoice["paid_amount"])
+    if invoice.get("status") != "open":
+        raise PaymentAttemptConflict("Factuursaldo moet eerst worden gecontroleerd")
+    for field in ("invoice_id", "invoice_ids", "allocations.invoice_id"):
+        if await db.payments.find_one({"status": "approved", field: invoice["id"]}, session=session):
+            raise PaymentAttemptConflict("Factuursaldo moet eerst worden gecontroleerd")
+    return 0
+
+
 async def _installment_context(db, attempt: dict, session) -> dict:
     item = attempt["item"]
     plan_scope = {
@@ -75,7 +86,7 @@ async def _installment_context(db, attempt: dict, session) -> dict:
         if (invoice.get("archived") is True or invoice.get("status") in ("cancelled", "archived")
                 or (invoice.get("currency") or "SRD") != attempt["currency"]):
             raise PaymentAttemptConflict("Gekoppelde factuur is gewijzigd")
-        total, invoice_paid = _cents(invoice.get("amount")), _cents(invoice.get("paid_amount"))
+        total, invoice_paid = _cents(invoice.get("amount")), await _invoice_paid_cents(db, invoice, session)
         if invoice_paid > total or (invoice.get("status") == "paid" and invoice_paid != total):
             raise PaymentAttemptConflict("Ongeldig factuursaldo")
         if await db.payment_plans.find_one({
@@ -146,6 +157,104 @@ async def _booked_payment(db, attempt: dict, attempt_id: str, session) -> dict:
     return payment
 
 
+async def _previous_request_fully_booked(db, request, provider, scope, session) -> bool:
+    if request.get("status") != "paid" or request.get("currency") not in ("SRD", "USD", "EUR"):
+        return False
+    reference_field = "stripe_payment_intent_id" if provider == "stripe" else "mope_payment_request_id"
+    reference = request.get("payment_intent_id" if provider == "stripe" else "payment_request_id")
+    if not isinstance(reference, str) or not reference:
+        return False
+    try:
+        if provider == "stripe":
+            total = _cents(request.get("amount"))
+            if request.get("consumed") is True:
+                if request.get("booked_amount") not in (None, 0):
+                    return False
+            elif _cents(request.get("booked_amount")) != total:
+                return False
+            method = {"card": "creditcard", "ideal": "ideal"}.get(request.get("method"))
+        else:
+            total = request.get("amount_cents")
+            if (type(total) is not int or type(request.get("booked_amount_cents")) is not int
+                    or request["booked_amount_cents"] != total):
+                return False
+            method = "mope"
+        if not total or not method:
+            return False
+        payments = await db.payments.find({reference_field: reference}, session=session).to_list(None)
+        if len(payments) != 1:
+            return False
+        payment = payments[0]
+        if (payment.get("company_id") != scope["company_id"] or payment.get("tenant_id") != scope["tenant_id"]
+                or payment.get("status") != "approved" or payment.get("method") != method
+                or payment.get("currency") != request["currency"]
+                or _cents(payment.get("amount")) != total
+                or _cents(payment.get("credit_remaining", 0)) != 0
+                or not isinstance(payment.get("id"), str) or not payment["id"]):
+            return False
+        allocations = payment.get("allocations")
+        if not isinstance(allocations, list) or not allocations:
+            return False
+        allocated, seen = 0, set()
+        for allocation in allocations:
+            if not isinstance(allocation, dict):
+                return False
+            invoice_id = allocation.get("invoice_id")
+            if not isinstance(invoice_id, str) or not invoice_id or invoice_id in seen:
+                return False
+            seen.add(invoice_id)
+            amount = _cents(allocation.get("amount"))
+            if amount <= 0:
+                return False
+            invoice = await db.invoices.find_one({**scope, "id": invoice_id}, session=session)
+            if (not invoice or invoice.get("archived") is True
+                    or invoice.get("status") not in ("open", "partial", "paid")
+                    or (invoice.get("currency") or "SRD") != request["currency"]
+                    or _cents(invoice.get("paid_amount")) < amount
+                    or _cents(invoice.get("paid_amount")) > _cents(invoice.get("amount"))
+                    or (invoice.get("status") == "paid"
+                        and _cents(invoice.get("paid_amount")) != _cents(invoice.get("amount")))):
+                return False
+            invoice_paid, invoice_total = _cents(invoice.get("paid_amount")), _cents(invoice.get("amount"))
+            if ((invoice.get("status") == "open" and invoice_paid != 0)
+                    or (invoice.get("status") == "partial" and not 0 < invoice_paid < invoice_total)):
+                return False
+            other_payments = await db.payments.find({
+                "company_id": scope["company_id"], "status": "approved", "allocations.invoice_id": invoice_id,
+            }, session=session).to_list(None)
+            recorded = 0
+            for other in other_payments:
+                if other.get("tenant_id") != scope["tenant_id"]:
+                    return False
+                for entry in other.get("allocations") or []:
+                    if isinstance(entry, dict) and entry.get("invoice_id") == invoice_id:
+                        recorded += _cents(entry.get("amount"))
+            if recorded < amount or recorded > _cents(invoice.get("paid_amount")):
+                return False
+            if await db.payment_plans.find_one({
+                "company_id": scope["company_id"], "invoice_ids": invoice_id, "status": "active",
+            }, session=session):
+                return False
+            allocated += amount
+        if payment.get("category") == "betalingsregeling":
+            metadata = payment.get("metadata") or {}
+            if (not isinstance(metadata, dict) or not isinstance(metadata.get("plan_id"), str)
+                    or not metadata["plan_id"] or type(metadata.get("installment_seq")) is not int
+                    or metadata["installment_seq"] < 1):
+                return False
+            if not await db.payment_plans.find_one({**scope, "id": metadata["plan_id"]}, session=session):
+                return False
+            installment = await db.payment_plan_installments.find_one({
+                "company_id": scope["company_id"], "plan_id": metadata["plan_id"],
+                "sequence": metadata.get("installment_seq"), "payment_id": payment["id"], "status": "paid",
+            }, session=session)
+            if not installment or _cents(installment.get("amount")) != total:
+                return False
+        return allocated == total
+    except PaymentAttemptConflict:
+        return False
+
+
 async def _booking_context(db, attempt: dict, session) -> dict:
     item = attempt.get("item") or {}
     if not isinstance(item, dict) or item.get("kind") not in ("invoice", "installment"):
@@ -161,13 +270,16 @@ async def _booking_context(db, attempt: dict, session) -> dict:
     if pending:
         raise PaymentAttemptConflict("Een andere betaling voor deze huurder wacht op verwerking")
     scope = {"company_id": attempt["company_id"], "tenant_id": attempt["tenant_id"]}
-    stripe_payment = await db.kiosk_stripe_payments.find_one(
+    stripe_requests = await db.kiosk_stripe_payments.find(
         {**scope, "status": {"$ne": "canceled"}}, session=session,
-    )
-    if stripe_payment:
-        raise PaymentAttemptConflict("Een eerder Stripe-betaalverzoek moet eerst worden gecontroleerd")
-    if await db.kiosk_mope_payments.find_one(scope, session=session):
-        raise PaymentAttemptConflict("Een eerder Mopé-betaalverzoek moet eerst worden gecontroleerd")
+    ).to_list(None)
+    for request in stripe_requests:
+        if not await _previous_request_fully_booked(db, request, "stripe", scope, session):
+            raise PaymentAttemptConflict("Een eerder Stripe-betaalverzoek moet eerst worden gecontroleerd")
+    mope_requests = await db.kiosk_mope_payments.find(scope, session=session).to_list(None)
+    for request in mope_requests:
+        if not await _previous_request_fully_booked(db, request, "mope", scope, session):
+            raise PaymentAttemptConflict("Een eerder Mopé-betaalverzoek moet eerst worden gecontroleerd")
     context, tenant = None, None
     if item["kind"] == "invoice":
         if not isinstance(item.get("id"), str) or not item["id"]:
@@ -178,7 +290,7 @@ async def _booking_context(db, attempt: dict, session) -> dict:
                 or invoice.get("status") in ("paid", "cancelled", "archived")
                 or (invoice.get("currency") or "SRD") != attempt["currency"]):
             raise PaymentAttemptConflict("Factuur is gewijzigd; controleer de betaling handmatig")
-        total, paid = _cents(invoice.get("amount")), _cents(invoice.get("paid_amount"))
+        total, paid = _cents(invoice.get("amount")), await _invoice_paid_cents(db, invoice, session)
         if total - paid != attempt["amount_cents"]:
             raise PaymentAttemptConflict("Openstaand factuurbedrag is gewijzigd; controleer de betaling handmatig")
         if await db.payment_plans.find_one(
@@ -309,7 +421,7 @@ async def book_verified_payment(db, client, *, key: str, attempt_id: str) -> dic
                 fields["paid_at"] = paid_at
             updated = await db.invoices.update_one(
                 {"id": inv["id"], "company_id": attempt["company_id"], "tenant_id": attempt["tenant_id"],
-                 "amount": inv["amount"], "paid_amount": inv["paid_amount"],
+                 "amount": inv["amount"], "paid_amount": inv.get("paid_amount"),
                  "status": inv.get("status"), "archived": {"$ne": True}},
                 {"$set": fields}, session=session,
             )

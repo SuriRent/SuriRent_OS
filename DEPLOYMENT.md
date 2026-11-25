@@ -107,11 +107,12 @@ creating a provider request, they check that the reserved invoice or installment
 is currently bookable using the same rules as booking. This check is a snapshot,
 not a lock, and cannot prevent subsequent changes by other payment flows.
 Pending payments and payments currently being approved or rejected for that tenant cause the SMS attempt
-to fail closed until they are resolved. Every existing Stripe request except
-one recorded as cancelled, and every existing Mopé request, also blocks it.
-This intentionally includes paid requests because their status does not prove
-the payment was fully booked; a reliable reconciliation mechanism is still
-needed before those customers can use SMS checkout.
+to fail closed until they are resolved. An earlier Stripe or Mopé request is
+allowed only when a single matching approved payment and its full invoice
+allocations can be verified against the request and current invoice balances.
+Ambiguous, partially booked, unallocated, or still-open requests remain
+blocked for review. Cancelled Stripe requests are excluded as before. This
+conservative check does not repair or unlock older inconsistent records.
 Existing provider checkouts and other payment flows still require coordination.
 The adapters are
 not connected to the existing kiosk or tenant-portal payment flows and do not
