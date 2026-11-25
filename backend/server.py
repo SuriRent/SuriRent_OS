@@ -8587,16 +8587,8 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     else:
         period_month = body.period_month
         period_year = body.period_year
-    if body.method == "creditcard":
-        await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount, body.currency)
-    if body.method == "mope":
-        if not body.mope_payment_request_id:
-            raise HTTPException(status_code=400, detail="Mopé vereist een voltooide betaling")
-        from routes.company_mope import consume_mope_payment
-        await consume_mope_payment(
-            body.mope_payment_request_id, company_id=tenant["company_id"], tenant_id=tenant["id"],
-            amount=body.amount, currency=body.currency,
-        )
+    if body.method == "mope" and not body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Mopé vereist een voltooide betaling")
     pin = PaymentIn(
         tenant_id=tenant["id"],
         apartment_id=tenant.get("apartment_id"),
@@ -8612,27 +8604,44 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
         mope_payment_request_id=body.mope_payment_request_id,
     )
     payment_status = "pending_approval" if (needs_proof or body.method == "pin") else "approved"
-    doc = await _create_payment_doc(
-        pin, company_id=tenant.get("company_id"),
-        approved_by=tenant.get("name") or "Huurder Kiosk",
-        status=payment_status,
-    )
-    # Voeg bewijs-metadata toe (bank)
-    if needs_proof:
-        await db.payments.update_one(
-            {"id": doc["id"]},
-            {"$set": {
+    async def create(payment_id):
+        if body.method == "creditcard":
+            await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount, body.currency)
+        if body.method == "mope":
+            from routes.company_mope import consume_mope_payment
+            await consume_mope_payment(
+                body.mope_payment_request_id, company_id=tenant["company_id"], tenant_id=tenant["id"],
+                amount=body.amount, currency=body.currency,
+            )
+        doc = await _create_payment_doc(
+            pin, company_id=tenant.get("company_id"), approved_by=tenant.get("name") or "Huurder Kiosk",
+            status=payment_status, strict_financial=True, payment_id=payment_id,
+        )
+        if needs_proof:
+            metadata = {
                 "bank_country": body.bank_country if is_bank else None,
                 "bank_statement_id": body.bank_statement_id,
                 "bank_statement_filename": stmt.get("filename"),
                 "bank_statement_size": stmt.get("size"),
                 "bank_statement_content_type": stmt.get("content_type"),
                 "submitted_at": iso(now_utc()),
-            }},
-        )
-        doc["bank_country"] = body.bank_country if is_bank else None
-        doc["bank_statement_id"] = body.bank_statement_id
-        doc["bank_statement_filename"] = stmt.get("filename")
+            }
+            updated = await db.payments.update_one(
+                {"id": payment_id, "company_id": tenant["company_id"], "tenant_id": tenant["id"]},
+                {"$set": metadata},
+            )
+            if updated.matched_count != 1:
+                raise RuntimeError("Bankbewijs kon niet aan de betaling worden gekoppeld")
+            doc.update(metadata)
+        return doc
+
+    provider = "stripe" if body.method == "creditcard" else ("mope" if body.method == "mope" else None)
+    doc = await _guarded_new_payment(
+        tenant.get("company_id"), tenant["id"], provider=provider,
+        provider_reference=body.stripe_payment_intent_id or body.mope_payment_request_id,
+        create=create,
+    )
+    if needs_proof:
         # Vuur-en-vergeet OCR + auto-approve in achtergrond zodat de huurder
         # direct een snelle "Verstuurd ter goedkeuring" bevestiging krijgt.
         try:
@@ -10638,6 +10647,43 @@ async def _allocate_payment_to_invoices(
 
 
 
+async def _guarded_new_payment(company_id: str, tenant_id: str, *, provider: str | None,
+                               provider_reference: str | None, create):
+    from sms_payment_attempts import PaymentAttemptConflict
+    from tenant_payment_guard import acquire_payment_guard, release_payment_guard
+
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    tenant = await db.tenants.find_one({"id": tenant_id, "company_id": company_id}, {"_id": 0, "id": 1})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    payment_id, owner = new_id(), secrets.token_urlsafe(24)
+    try:
+        await acquire_payment_guard(
+            db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner,
+            operation="payment_creation", operation_id=payment_id,
+            provider=provider, provider_reference=provider_reference,
+        )
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.") from exc
+    try:
+        doc = await create(payment_id)
+        if doc.get("id") != payment_id:
+            raise RuntimeError("Betaalreferentie komt niet overeen")
+        await release_payment_guard(
+            db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner,
+        )
+    except Exception as exc:
+        _logging.getLogger(__name__).exception("Payment creation requires review: %s", payment_id)
+        raise HTTPException(
+            status_code=500,
+            detail="De betaling is mogelijk gedeeltelijk verwerkt. Controleer deze voordat u opnieuw boekt.",
+        ) from exc
+    if doc.get("status") == "approved":
+        asyncio.create_task(_notify_tenant_payment(dict(doc)))
+    return doc
+
+
 async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                               approved_by: Optional[str] = None,
                               status: str = "approved",
@@ -10647,7 +10693,8 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                               approved_by_user_id: Optional[str] = None,
                               paid_at_override: Optional[str] = None,
                               bank_statement_metadata: Optional[dict] = None,
-                              *, strict_financial: bool = False) -> dict:
+                              *, strict_financial: bool = False,
+                              payment_id: Optional[str] = None) -> dict:
     q = {"id": body.tenant_id}
     if company_id:
         q["company_id"] = company_id
@@ -10753,7 +10800,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                         # Best-effort — betaling gaat sowieso door. Log alleen.
                         print(f"[auto-invoice on payment] create failed: {_e}")
     doc = {
-        "id": new_id(),
+        "id": payment_id or new_id(),
         "company_id": company_id or tenant.get("company_id"),
         "tenant_id": body.tenant_id,
         "apartment_id": apt_id,
@@ -11109,7 +11156,7 @@ async def payment_processing_guards(user=Depends(get_current_user)):
     docs = await db.tenant_payment_guards.find(
         {"company_id": cid, "kind": "legacy",
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
-                                "payment_reassignment"]}},
+                                "payment_reassignment", "payment_creation"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
@@ -11435,17 +11482,29 @@ async def _kiosk_overview_invalidate(cid: str, tenant_id: Optional[str]) -> None
 @api.post("/payments", response_model=PaymentOut)
 async def create_payment(body: PaymentIn, user=Depends(get_current_user)):
     cid = company_id_of(user)
-    if body.method == "mope":
-        if not body.mope_payment_request_id:
-            raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
-        from routes.company_mope import consume_mope_payment
-        await consume_mope_payment(
-            body.mope_payment_request_id, company_id=cid, tenant_id=body.tenant_id,
-            amount=body.amount, currency=body.currency,
-        )
+    if body.method == "mope" and not body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
     elif body.mope_payment_request_id:
-        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
-    doc = await _create_payment_doc(body, cid, approved_by=user.get("name") or user.get("email"))
+        if body.method != "mope":
+            raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
+
+    async def create(payment_id):
+        if body.method == "mope":
+            from routes.company_mope import consume_mope_payment
+            await consume_mope_payment(
+                body.mope_payment_request_id, company_id=cid, tenant_id=body.tenant_id,
+                amount=body.amount, currency=body.currency,
+            )
+        return await _create_payment_doc(
+            body, cid, approved_by=user.get("name") or user.get("email"),
+            strict_financial=True, payment_id=payment_id,
+        )
+
+    doc = await _guarded_new_payment(
+        cid, body.tenant_id, provider="mope" if body.method == "mope" else None,
+        provider_reference=body.mope_payment_request_id if body.method == "mope" else None,
+        create=create,
+    )
     enriched = await _enrich_payment(doc)
     await _kiosk_overview_invalidate(cid, doc.get("tenant_id"))
     # Push-notificatie naar andere admins van deze company. FIRE-AND-FORGET:
@@ -13182,25 +13241,14 @@ async def kiosk_create_payment(
     if body.method != "mope" and body.mope_payment_request_id:
         raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     if body.stripe_payment_intent_id:
-        # Online (Stripe) betaald → geverifieerd, dus direct goedgekeurd.
-        from routes.company_stripe import consume_kiosk_stripe_payment
         if body.method not in ("creditcard", "ideal"):
             raise HTTPException(status_code=400, detail="Bedrag/methode komt niet overeen met de Stripe-betaling")
-        await consume_kiosk_stripe_payment(
-            cid, body.stripe_payment_intent_id, tenant_id=body.tenant_id, amount=body.amount,
-            currency=body.currency, method="card" if body.method == "creditcard" else "ideal",
-        )
         employee_id = None
     elif body.method in ("creditcard", "ideal"):
         raise HTTPException(status_code=400, detail="Creditcard/iDEAL vereist een Stripe-betaling")
     if body.method == "mope":
         if not body.mope_payment_request_id:
             raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
-        from routes.company_mope import consume_mope_payment
-        await consume_mope_payment(
-            body.mope_payment_request_id, company_id=cid, tenant_id=body.tenant_id,
-            amount=body.amount, currency=body.currency,
-        )
         employee_id = None
     # Als een kiosk-medewerker is opgegeven → betaling gaat in pending_approval.
     # Beheerder ziet het en moet handtekening zetten om te bevestigen.
@@ -13218,12 +13266,30 @@ async def kiosk_create_payment(
         # Geen goedkeuringsstap meer: betaling van een medewerker telt direct mee.
         kiosk_emp_id, kiosk_emp_name = emp["id"], emp.get("name", "")
 
-    doc = await _create_payment_doc(
-        body, cid,
-        status=status,
-        kiosk_employee_id=kiosk_emp_id,
-        kiosk_employee_name=kiosk_emp_name,
-        **({"approved_by": kiosk_emp_name} if kiosk_emp_name else {}),
+    async def create(payment_id):
+        if body.stripe_payment_intent_id:
+            from routes.company_stripe import consume_kiosk_stripe_payment
+            await consume_kiosk_stripe_payment(
+                cid, body.stripe_payment_intent_id, tenant_id=body.tenant_id, amount=body.amount,
+                currency=body.currency, method="card" if body.method == "creditcard" else "ideal",
+            )
+        if body.method == "mope":
+            from routes.company_mope import consume_mope_payment
+            await consume_mope_payment(
+                body.mope_payment_request_id, company_id=cid, tenant_id=body.tenant_id,
+                amount=body.amount, currency=body.currency,
+            )
+        return await _create_payment_doc(
+            body, cid, status=status, kiosk_employee_id=kiosk_emp_id, kiosk_employee_name=kiosk_emp_name,
+            strict_financial=True, payment_id=payment_id,
+            **({"approved_by": kiosk_emp_name} if kiosk_emp_name else {}),
+        )
+
+    provider = "stripe" if body.stripe_payment_intent_id else ("mope" if body.method == "mope" else None)
+    doc = await _guarded_new_payment(
+        cid, body.tenant_id, provider=provider,
+        provider_reference=body.stripe_payment_intent_id or body.mope_payment_request_id,
+        create=create,
     )
     enriched = await _enrich_payment(doc)
 

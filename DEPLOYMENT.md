@@ -170,6 +170,11 @@ unlock action. The real MongoDB guard-race test has not yet been run here.
 Payment reassignment also holds the guard while updating the payment and both
 invoices. A partial failure retains a `payment_reassignment` guard with the
 payment ID for investigation; do not retry before reconciling all three.
+Admin, kiosk and tenant-portal payment creation also acquire the guard before
+consuming Stripe or Mopé and retain a `payment_creation` guard on failure.
+The guard stores the planned payment ID and, when applicable, the provider
+reference for reconciliation. Provider validation failures after acquiring
+the guard also require review; there is no automatic unlock.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

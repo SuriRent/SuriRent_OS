@@ -49,6 +49,15 @@ test('toont een achtergebleven factuurverplaatsing', () => {
   expect(html).not.toContain('<button');
 });
 
+test('toont een achtergebleven betaalregistratie', () => {
+  const html = renderToStaticMarkup(<ProcessingPayments
+    payments={[]}
+    guards={[{ tenant_id: 't1', operation: 'payment_creation', operation_id: 'p1' }]}
+  />);
+  expect(html).toContain('Betaling registreren');
+  expect(html).toContain('p1');
+});
+
 test('meldt wanneer de verwerkingsstatus niet kan worden opgehaald', () => {
   const html = renderToStaticMarkup(<ProcessingPayments payments={[]} unavailable />);
   expect(html).toContain('Verwerkingsstatus kon niet worden opgehaald');

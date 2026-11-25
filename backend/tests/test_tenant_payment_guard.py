@@ -87,6 +87,23 @@ class TenantPaymentGuardTests(unittest.IsolatedAsyncioTestCase):
                 await acquire_payment_guard(self.db, **self.scope, kind="sms", owner="attempt1")
         await acquire_payment_guard(self.db, **self.scope, kind="sms", owner="attempt1")
 
+    async def test_provider_reference_is_scoped_to_legacy_operation(self):
+        guard = await acquire_payment_guard(
+            self.db, **self.scope, kind="legacy", owner="owner",
+            operation="payment_creation", operation_id="p1", provider="stripe", provider_reference="pi1",
+        )
+        self.assertEqual((guard["provider"], guard["provider_reference"]), ("stripe", "pi1"))
+        with self.assertRaises(ValueError):
+            await acquire_payment_guard(
+                self.db, company_id="c2", tenant_id="t1", kind="sms", owner="sms1",
+                provider="stripe", provider_reference="pi1",
+            )
+        with self.assertRaises(ValueError):
+            await acquire_payment_guard(
+                self.db, company_id="c2", tenant_id="t1", kind="legacy", owner="owner",
+                operation="payment_creation", operation_id="p1", provider="stripe",
+            )
+
 
 @unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
 class TenantPaymentGuardMongoTests(unittest.IsolatedAsyncioTestCase):

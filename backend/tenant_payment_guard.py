@@ -27,7 +27,8 @@ def _collection(db, session):
 
 async def acquire_payment_guard(db, *, company_id: str, tenant_id: str,
                                 kind: str, owner: str, session=None,
-                                operation: str | None = None, operation_id: str | None = None) -> dict:
+                                operation: str | None = None, operation_id: str | None = None,
+                                provider: str | None = None, provider_reference: str | None = None) -> dict:
     if kind not in ("legacy", "sms") or not isinstance(owner, str) or not owner:
         raise ValueError("Ongeldige betaalvergrendeling")
     if (operation is None) != (operation_id is None) or (
@@ -37,12 +38,21 @@ async def acquire_payment_guard(db, *, company_id: str, tenant_id: str,
         )
     ):
         raise ValueError("Ongeldige betaaloperatie")
+    if (provider is None) != (provider_reference is None) or (
+        provider is not None and (
+            kind != "legacy" or operation is None or provider not in ("stripe", "mope")
+            or not isinstance(provider_reference, str) or not provider_reference
+        )
+    ):
+        raise ValueError("Ongeldige providerreferentie")
     key = tenant_payment_key(company_id, tenant_id)
     collection = _collection(db, session)
     guard = {"_id": key, "company_id": company_id, "tenant_id": tenant_id,
              "kind": kind, "owner": owner, "created_at": datetime.now(timezone.utc)}
     if operation is not None:
         guard.update({"operation": operation, "operation_id": operation_id})
+    if provider is not None:
+        guard.update({"provider": provider, "provider_reference": provider_reference})
     try:
         await collection.insert_one(guard, session=session)
     except DuplicateKeyError as exc:

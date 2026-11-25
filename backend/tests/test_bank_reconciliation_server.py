@@ -114,6 +114,148 @@ class BankReconciliationServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.db.payments.docs, [])
         self.assertEqual((await self.db.bank_statements.find_one({"id": "s1"}))["reconciliation_status"], "uploaded")
 
+    async def test_kiosk_cash_creates_and_allocates_payment_before_unlocking(self):
+        body = server.PaymentIn(tenant_id="t1", amount=50, method="contant", currency="SRD")
+        doc = await server.kiosk_create_payment(body, {"company_id": "c1"}, None, None)
+        await asyncio.sleep(0)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 50)
+        stored = await self.db.payments.find_one({"id": doc["id"]})
+        self.assertEqual(stored["allocations"][0]["invoice_id"], "i1")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_kiosk_cash_allocation_failure_keeps_guard(self):
+        server._sync_plan_installments_with_invoice.side_effect = RuntimeError("sync failed")
+        body = server.PaymentIn(tenant_id="t1", amount=50, method="contant", currency="SRD")
+        with self.assertRaises(HTTPException) as error:
+            await server.kiosk_create_payment(body, {"company_id": "c1"}, None, None)
+        self.assertEqual(error.exception.status_code, 500)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual(guard["operation"], "payment_creation")
+        self.assertIsNotNone(await self.db.payments.find_one({"id": guard["operation_id"]}))
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 50)
+
+
+class PaymentCreationServerTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = SimpleNamespace(tenants=Records(), payments=Records(), tenant_payment_guards=Guards())
+        await self.db.tenants.insert_one({"id": "t1", "company_id": "c1", "name": "Tenant"})
+        self.user = {"active_company_id": "c1", "name": "Admin"}
+        self.tenant = {"id": "t1", "company_id": "c1", "name": "Tenant"}
+
+        async def make_doc(body, *args, **kwargs):
+            guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+            self.assertIsNotNone(guard)
+            self.assertTrue(kwargs["strict_financial"])
+            self.assertEqual(guard["operation_id"], kwargs["payment_id"])
+            doc = {
+                "id": kwargs["payment_id"], "tenant_id": body.tenant_id, "company_id": "c1",
+                "amount": body.amount, "currency": body.currency, "method": body.method,
+                "status": kwargs.get("status", "approved"),
+            }
+            await self.db.payments.insert_one(doc)
+            return doc
+
+        self.creator = AsyncMock(side_effect=make_doc)
+        self.stripe = AsyncMock()
+        self.mope = AsyncMock()
+        self.tenant_stripe = AsyncMock()
+        stripe_module = types.ModuleType("routes.company_stripe")
+        stripe_module.consume_kiosk_stripe_payment = self.stripe
+        mope_module = types.ModuleType("routes.company_mope")
+        mope_module.consume_mope_payment = self.mope
+        patches = (
+            patch.object(server, "db", self.db),
+            patch.object(server, "_create_payment_doc", self.creator),
+            patch.object(server, "_enrich_payment", AsyncMock(side_effect=lambda payment: payment)),
+            patch.object(server, "_kiosk_overview_invalidate", AsyncMock()),
+            patch.object(server, "_notify_tenant_payment", AsyncMock()),
+            patch.object(server, "_notify_company_admins", AsyncMock()),
+            patch.object(server, "_notify_kiosk_employees", AsyncMock()),
+            patch.object(server, "_tenant_consume_stripe", self.tenant_stripe),
+            patch.dict(sys.modules, {
+                "routes.company_stripe": stripe_module, "routes.company_mope": mope_module,
+            }),
+        )
+        for item in patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    async def kiosk(self):
+        body = server.PaymentIn(tenant_id="t1", amount=50, method="creditcard", stripe_payment_intent_id="pi1")
+        return await server.kiosk_create_payment(body, {"company_id": "c1"}, None, None)
+
+    async def portal(self):
+        body = server.TenantPaymentIn(amount=50, method="creditcard", stripe_payment_intent_id="pi1")
+        return await server.tenant_portal_create_payment(body, self.tenant)
+
+    async def admin(self):
+        body = server.PaymentIn(tenant_id="t1", amount=50, method="mope", mope_payment_request_id="mp1")
+        return await server.create_payment(body, self.user)
+
+    async def test_sms_guard_blocks_all_three_routes_before_provider_consumption(self):
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        for route in (self.kiosk, self.portal, self.admin):
+            with self.assertRaises(HTTPException) as error:
+                await route()
+            self.assertEqual(error.exception.status_code, 409)
+        self.stripe.assert_not_awaited()
+        self.tenant_stripe.assert_not_awaited()
+        self.mope.assert_not_awaited()
+        self.creator.assert_not_awaited()
+
+    async def test_all_three_routes_book_with_guard_then_release(self):
+        for route in (self.kiosk, self.portal, self.admin):
+            result = await route()
+            self.assertEqual(result["status"], "approved")
+            self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+        await asyncio.sleep(0)
+        self.assertEqual(self.creator.await_count, 3)
+        self.stripe.assert_awaited_once()
+        self.tenant_stripe.assert_awaited_once()
+        self.mope.assert_awaited_once()
+
+    async def test_provider_claim_followed_by_failed_booking_stays_locked(self):
+        self.creator.side_effect = RuntimeError("payment write failed")
+        with self.assertRaises(HTTPException) as error:
+            await self.kiosk()
+        self.assertEqual(error.exception.status_code, 500)
+        self.stripe.assert_awaited_once()
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["provider"], guard["provider_reference"]),
+                         ("payment_creation", "stripe", "pi1"))
+        with self.assertRaises(HTTPException) as retry:
+            await self.kiosk()
+        self.assertEqual(retry.exception.status_code, 409)
+
+    async def test_invalid_method_does_not_acquire_guard(self):
+        body = server.PaymentIn(tenant_id="t1", amount=50, method="mope")
+        with self.assertRaises(HTTPException) as error:
+            await server.create_payment(body, self.user)
+        self.assertEqual(error.exception.status_code, 400)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_portal_bank_proof_is_stored_before_unlocking(self):
+        self.db.bank_statements = Records()
+        await self.db.bank_statements.insert_one({
+            "id": "s1", "tenant_id": "t1", "filename": "bewijs.pdf", "size": 20,
+            "content_type": "application/pdf",
+        })
+        update = self.db.payments.update_one
+
+        async def hold_update(query, changes):
+            guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+            self.assertEqual(guard["operation"], "payment_creation")
+            return await update(query, changes)
+
+        self.db.payments.update_one = hold_update
+        body = server.TenantPaymentIn(amount=50, method="bank", bank_statement_id="s1", bank_country="SR")
+        with patch.object(server, "_ocr_and_auto_approve_payment", AsyncMock()):
+            result = await server.tenant_portal_create_payment(body, self.tenant)
+            await asyncio.sleep(0)
+        self.assertEqual(result["status"], "pending_approval")
+        self.assertEqual((await self.db.payments.find_one({"id": result["id"]}))["bank_statement_id"], "s1")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
 
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -496,4 +638,39 @@ class PaymentApprovalMongoTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 resume.set()
             self.assertEqual((await task)["payment"]["invoice_id"], "i2")
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+
+    async def test_kiosk_creation_excludes_sms_guard_until_complete(self):
+        await self.db.tenants.insert_one({"id": "t1", "company_id": "c1", "name": "Tenant"})
+        entered, resume = asyncio.Event(), asyncio.Event()
+
+        async def hold_provider(*_args, **_kwargs):
+            entered.set()
+            await resume.wait()
+
+        async def create_doc(body, _cid, **kwargs):
+            doc = {
+                "id": kwargs["payment_id"], "tenant_id": body.tenant_id, "company_id": "c1",
+                "amount": body.amount, "currency": body.currency, "method": body.method,
+                "status": kwargs["status"],
+            }
+            await self.db.payments.insert_one(doc)
+            return doc
+
+        stripe_module = types.ModuleType("routes.company_stripe")
+        stripe_module.consume_kiosk_stripe_payment = AsyncMock(side_effect=hold_provider)
+        body = server.PaymentIn(tenant_id="t1", amount=50, method="creditcard", stripe_payment_intent_id="pi1")
+        with patch.dict(sys.modules, {"routes.company_stripe": stripe_module}), \
+                patch.object(server, "_create_payment_doc", AsyncMock(side_effect=create_doc)), \
+                patch.object(server, "_notify_company_admins", AsyncMock()):
+            task = asyncio.create_task(server.kiosk_create_payment(body, {"company_id": "c1"}, None, None))
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1",
+                                                kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            self.assertEqual((await task)["status"], "approved")
+            await asyncio.sleep(0)
         await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
