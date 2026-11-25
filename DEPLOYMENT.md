@@ -203,6 +203,11 @@ clear it or retry the booking without reconciling the payment, invoice,
 installments and statement first; there is no automated recovery UI yet.
 Several other payment paths still do not acquire the guard; this is not yet safe
 interoperation and checkout must remain disabled.
+Archived-tenant debt settlement, permanent deletion and reactivation now
+also acquire the tenant guard and recheck the archived tenant while holding it.
+If a change fails after it starts, its `archived_debt`, `tenant_deletion` or
+`tenant_reactivation` guard remains for manual review. These legacy operations
+are not transactional: reconcile any partial changes before retrying.
 
 Manual, notification and OCR approvals and rejections now acquire the tenant
 guard before claiming the payment. If an operation fails, its guard and the
