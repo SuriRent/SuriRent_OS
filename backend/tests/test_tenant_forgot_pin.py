@@ -3,7 +3,7 @@
 Endpoint under test: POST /api/tenant-portal/forgot-pin
 
 Coverage:
-- known tenant email returns ok+via:['email'] (Twilio dummy → no whatsapp/sms)
+- known tenant email returns ok+via:['email'] when messaging is disabled
 - non-existent identifier returns 200 {ok:true, via:[]} (anti-enumeratie)
 - missing identifier → 400 'Vul uw email of telefoonnummer in'
 - missing company context → 400 'Bedrijfscontext ontbreekt'
@@ -174,7 +174,7 @@ def test_forgot_pin_by_email_success_and_pin_changed(session, admin_headers, see
     data = r.json()
     assert data["ok"] is True
     assert isinstance(data.get("via"), list)
-    # Twilio is dummy SID → no whatsapp/sms. Email may or may not be enabled
+    # Messaging is disabled in this fixture. Email may or may not be enabled
     # depending on company SMTP config. We tolerate both.
     print(f"[forgot-pin email] via={data.get('via')}")
 

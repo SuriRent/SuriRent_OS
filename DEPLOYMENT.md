@@ -25,14 +25,33 @@ Use the Coolify resource to redeploy, inspect logs, and restart services. Back u
 
 The public health endpoint is `https://<your-domain>/api/health`.
 
-## WhatsApp templates (Twilio)
+## WhatsApp and SMS (Messente)
 
-In Kiosk Beheer, open **Instellingen > WhatsApp (Twilio)**. Each company uses its
-own Twilio account and WhatsApp sender. Configure `APP_PUBLIC_URL` as the public
-HTTPS app origin so receipt and invoice links work outside the kiosk.
+In Kiosk Beheer, open **Instellingen > WhatsApp & SMS (Messente)**. Each company
+has its own Messente configuration under `company_settings.messente`.
+Enter the API username and API password from Messente (not the dashboard
+login), the registered WhatsApp sender and/or the approved SMS sender name
+or number. Both API credentials are encrypted at rest and masked in settings
+responses. Blank or masked credentials on save retain the stored values.
 
-Create two text templates in Twilio Content Template Builder and obtain WhatsApp
-approval. Use exactly these five variables in both templates:
+The previous Twilio integration is no longer used. Existing Twilio settings
+are left untouched in the database, but are not exposed or read for messaging
+and are never treated as Messente credentials. Companies must configure and
+enable Messente explicitly. Coordinate any existing WhatsApp number migration
+with Messente before removing it from the previous provider.
+
+Configure `APP_PUBLIC_URL` as the public HTTPS app origin so images and links
+work outside the kiosk. Sending uses `POST https://api.messente.com/v1/omnimessage`
+with HTTP Basic authentication and JSON. SMS uses `autoconvert: off` to preserve
+the original text; Unicode and long messages can cost multiple SMS segments.
+
+### Text templates
+
+Connect a WhatsApp Business Account to Messente and create approved templates
+through Messente or Meta WhatsApp Manager. Save the **template names**, not
+Twilio Content SIDs. Set the exact language code (for example `nl` or `en_US`);
+all configured templates must use that language. Use exactly these five
+positional body variables for receipt and reminder text templates:
 
 | Variable | Value |
 |----------|-------|
@@ -46,17 +65,56 @@ Example receipt: `Hallo {{1}}, {{2}} heeft uw betaling van {{3}} ontvangen. Refe
 
 Example reminder: `Hallo {{1}}, een betalingsherinnering van {{2}} voor {{3}}. Referentie: {{4}}. Bekijk de gegevens: {{5}}. Neem contact op bij vragen.`
 
-Save the approved `HX...` Content SIDs in the receipt and reminder fields.
+Save the approved names in the receipt and reminder fields.
 Configured templates are used for kiosk receipts, manually sent receipts and
 invoices, paid installment notifications, and manual/automatic payment reminders.
 The fixed template replaces free text (including any custom message); the link
-replaces the separate media attachment. SMS and unrelated WhatsApp messages
-(such as PIN recovery or contract signing) retain their existing behavior.
-An empty SID retains free-text sending, which requires an open 24-hour WhatsApp
-customer-service window.
+replaces the separate media attachment. An empty template name retains
+service-message sending, which requires an open 24-hour WhatsApp customer-service
+window. Contracts, signature links and power notifications use service messages;
+send these within the window or use SMS. Signature requests and tenant PIN
+recovery retain their SMS fallback when WhatsApp is rejected synchronously.
 
 Obtain the recipient's WhatsApp opt-in before enabling automatic messages.
-Save settings, enter a receiving number with country code, choose a template
-under **Testbericht**, then test. Twilio acceptance is not proof of delivery;
-check the message status in Twilio Console. SuriRent cannot grant template
-approval or bypass WhatsApp's messaging window.
+Save settings, enter a receiving number with country code, select SMS or
+WhatsApp and optionally a template under **Testbericht**, then test.
+Messente acceptance is not proof of delivery; check the message status in the
+Messente dashboard. Delivery webhooks are not configured by this integration.
+No automatic request retries are performed: after a network timeout, check
+Messente before resending to avoid duplicates. Switching provider does not
+remove Meta restrictions or the 24-hour window.
+
+### Receipt image template
+
+For a JPG directly in WhatsApp, create a utility template with an **image header**
+and exactly four body variables `{{1}}` to `{{4}}` with the meaning above.
+Do not put `{{5}}` in the body and do not add a dynamic URL button.
+The settings screen shows the public fictional JPG at
+`https://<APP_PUBLIC_URL host>/api/public/whatsapp-receipts/sample.jpg`
+for approval/testing; upload it as the header sample if required by Meta.
+
+Example body: `Hallo {{1}}, uw betaling aan {{2}} van {{3}} is ontvangen.
+Uw betaalbewijs met referentie {{4}} vindt u als afbeelding bij dit bericht.
+Bedankt.`
+
+Save the approved media template's name in **Betaalbewijs als afbeelding**.
+It takes priority over the receipt text template. SuriRent supplies the full
+signed JPG URL as the header image parameter, not as a body variable.
+The token expires after 24 hours and responses are not cached. Test using
+**Betaalbewijs-afbeeldingstemplate** to send the fictional sample. Payment
+plan notifications without a linked payment fall back to the receipt text
+template if configured; otherwise they cannot use the image template.
+The existing public receipt-image endpoint is unchanged; the signed URL does
+not revoke previously shared URLs.
+The signed URL is a bearer link: anyone holding it can access the image while
+it is valid, including anyone with access to proxy or server access logs.
+
+### PIN and password recovery
+
+Optionally configure an approved **authentication** template with the code as
+the single body variable `{{1}}` and a **copy-code** button at index 0. SuriRent
+sends the code both in the body and the button's URL parameter as required by
+WhatsApp authentication templates. This template is used for tenant PIN and
+company user password recovery. Without it, WhatsApp recovery requires an open
+service window. Password recovery uses only the user's company configuration;
+there is no cross-company or mock sending fallback.

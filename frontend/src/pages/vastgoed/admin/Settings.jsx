@@ -181,39 +181,70 @@ export function DepositForm({ initial }) {
   );
 }
 
-export function TwilioForm({ initial }) {
-  const s = useSection('twilio', initial);
+export function MessenteForm({ initial, receiptMediaUrl }) {
+  const s = useSection('messente', initial || {});
   const [testNumber, setTestNumber] = useState('');
   const [testTemplate, setTestTemplate] = useState('');
+  const [testChannel, setTestChannel] = useState('whatsapp');
   const d = s.data;
   return (
     <SectionShell msg={s.msg} err={s.err}>
-      <SwitchField label="Ingeschakeld" testid="twilio-enabled"
+      <SwitchField label="Ingeschakeld" testid="messente-enabled"
         value={d.enabled} onChange={(v) => s.onField('enabled', v)}
-        desc="Wanneer aan kun je WhatsApp- en SMS-berichten naar huurders sturen." />
+        desc="Verstuur WhatsApp en SMS via je eigen Messente-account. Vul nieuwe Messente-gegevens in; gegevens van de vorige provider worden niet overgenomen." />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <TextField label="Account SID" testid="twilio-sid" value={d.account_sid} onChange={(v) => s.onField('account_sid', v)} placeholder="ACxxxxxxxx..." />
-        <TextField label="Auth Token" testid="twilio-token" type="password" value={d.auth_token ?? ''} onChange={(v) => s.onField('auth_token', v)} placeholder="••••• (laat leeg om huidige te behouden)" />
-        <TextField label="WhatsApp afzender" testid="twilio-wa-from" value={d.whatsapp_from} onChange={(v) => s.onField('whatsapp_from', v)} placeholder="whatsapp:+14155238886" helper="Inclusief 'whatsapp:' prefix" />
-        <TextField label="SMS afzender" testid="twilio-sms-from" value={d.sms_from} onChange={(v) => s.onField('sms_from', v)} placeholder="+597 xxx xxxx" />
+        <TextField label="API-gebruikersnaam" testid="messente-username" type="password" value={d.api_username ?? ''}
+          onChange={(v) => s.onField('api_username', v)} placeholder="Laat leeg om huidige te behouden"
+          helper="API-gebruikersnaam uit Messente, niet je dashboard-login. Wordt versleuteld opgeslagen." />
+        <TextField label="API-wachtwoord" testid="messente-password" type="password" value={d.api_password ?? ''}
+          onChange={(v) => s.onField('api_password', v)} placeholder="Laat leeg om huidige te behouden" />
+        <TextField label="WhatsApp afzender" testid="messente-wa-from" value={d.whatsapp_from} onChange={(v) => s.onField('whatsapp_from', v)}
+          placeholder="Afzender uit Messente" helper="Neem de geregistreerde WhatsApp-afzender exact over uit Messente, zonder whatsapp:-prefix." />
+        <TextField label="SMS afzender" testid="messente-sms-from" value={d.sms_from} onChange={(v) => s.onField('sms_from', v)}
+          placeholder="SuriRent" helper="Een door Messente toegestane afzendernaam of telefoonnummer." />
       </div>
       <div className="space-y-3 rounded-xl border border-slate-200 p-4">
         <p className="text-sm font-bold text-slate-900">Goedgekeurde WhatsApp-templates</p>
         <p className="text-xs text-slate-600">
-          Maak in Twilio Content Template Builder twee teksttemplates aan en laat ze goedkeuren voor WhatsApp.
-          Met een ingevulde Content SID gebruikt de app altijd die template voor dat berichttype, ook buiten het 24-uursvenster.
-          Zonder SID blijft vrije tekst actief. SMS blijft ongewijzigd.
+          Koppel je WhatsApp Business-account aan Messente en laat de templates goedkeuren door Meta.
+          Vul de templatenaam en exacte taalcode in, geen Content SID.
+          Zonder template kun je alleen binnen het 24-uursvenster antwoorden.
+          Een beperking van je Meta-account wordt niet opgeheven door deze overstap.
         </p>
-        <TextField label="Betaalbewijs Content SID" testid="twilio-receipt-sid" value={d.receipt_content_sid}
-          onChange={(v) => s.onField('receipt_content_sid', v)} placeholder="HX..."
-          helper="Voor betaalbewijzen en betaalde termijnen." />
-        <TextField label="Herinnering Content SID" testid="twilio-reminder-sid" value={d.reminder_content_sid}
-          onChange={(v) => s.onField('reminder_content_sid', v)} placeholder="HX..."
+        <TextField label="Template taalcode" testid="messente-language" value={d.template_language ?? 'nl'}
+          onChange={(v) => s.onField('template_language', v)} placeholder="nl"
+          helper="Dezelfde taal voor alle ingestelde templates, bijvoorbeeld nl of en_US." />
+        <TextField label="Betaalbewijs templatenaam" testid="messente-receipt-template" value={d.receipt_template}
+          onChange={(v) => s.onField('receipt_template', v)} placeholder="betaalbewijs"
+          helper="Teksttemplate voor betaalbewijzen en betaalde termijnen." />
+        <TextField label="Betaalbewijs als afbeelding templatenaam" testid="messente-receipt-media-template" value={d.receipt_media_template}
+          onChange={(v) => s.onField('receipt_media_template', v)} placeholder="betaalbewijs_jpg"
+          helper="Template met een afbeeldingsheader en vier tekstvariabelen. Deze heeft voorrang op de teksttemplate." />
+        <TextField label="Herinnering templatenaam" testid="messente-reminder-template" value={d.reminder_template}
+          onChange={(v) => s.onField('reminder_template', v)} placeholder="betalingsherinnering"
           helper="Voor facturen, openstaande saldi en betalingsherinneringen." />
+        <TextField label="Herstelcode templatenaam" testid="messente-authentication-template" value={d.authentication_template}
+          onChange={(v) => s.onField('authentication_template', v)} placeholder="herstelcode"
+          helper="Authentication-template met een code in {{1}} en een code-kopieren-knop (index 0), voor PIN- en wachtwoordherstel." />
         <p className="text-xs text-slate-600">
           Gebruik precies deze invulvelden: {'{{1}}'} naam huurder, {'{{2}}'} bedrijfsnaam,
           {' {{3}}'} bedrag met valuta, {'{{4}}'} bonnummer/factuur/periode, {'{{5}}'} link.
-          De vaste templatetekst vervangt het vrije bericht en eventuele extra tekst. De link vervangt de losse bonbijlage.
+          Dit geldt voor teksttemplates; de vaste tekst vervangt het vrije bericht en eventuele extra tekst.
+        </p>
+        <p className="text-xs text-slate-600">
+          Voor de afbeeldingstemplate: kies een afbeeldingsheader en gebruik {'{{1}}'} t/m {'{{4}}'} in de tekst.
+          De echte bon wordt automatisch als header meegestuurd, met een link die 24 uur geldig is.
+          Gebruik deze fictieve JPG als voorbeeld voor de goedkeuring:
+        </p>
+        <p className="text-xs text-slate-600">
+          Voorbeeldtekst: Hallo {'{{1}}'}, uw betaling aan {'{{2}}'} van {'{{3}}'} is ontvangen.
+          Uw betaalbewijs met referentie {'{{4}}'} vindt u als afbeelding bij dit bericht. Bedankt.
+        </p>
+        <code data-testid="messente-receipt-media-url" className="block break-all rounded bg-slate-50 p-2 text-xs">
+          {receiptMediaUrl?.startsWith('https://') ? receiptMediaUrl : 'Configureer eerst een publieke HTTPS APP_PUBLIC_URL voor deze omgeving.'}
+        </code>
+        <p className="text-xs text-slate-600">
+          De apporigin moet publiek bereikbaar zijn via HTTPS. De afbeeldingstemplate heeft geen {'{{5}}'} in de tekst.
         </p>
         <p className="text-xs text-slate-600">
           Betaalbewijs: {'Hallo {{1}}, {{2}} heeft uw betaling van {{3}} ontvangen. Referentie: {{4}}. Bekijk uw betaalbewijs: {{5}}. Bedankt.'}
@@ -225,18 +256,30 @@ export function TwilioForm({ initial }) {
           Verstuur alleen naar huurders die toestemming hebben gegeven voor WhatsApp-berichten.
         </p>
       </div>
-      <TextField label="Testnummer" testid="twilio-test-number" type="tel" value={testNumber} onChange={setTestNumber}
+      <TextField label="Testnummer" testid="messente-test-number" type="tel" value={testNumber} onChange={setTestNumber}
         placeholder="+597..." helper="Vul een ontvangend nummer met landcode in. Bewaar eerst de instellingen." />
       <div>
+        <FieldLabel>Testkanaal</FieldLabel>
+        <select value={testChannel} onChange={(event) => { setTestChannel(event.target.value); setTestTemplate(''); }}
+          data-testid="messente-test-channel" className="mt-1 h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3">
+          <option value="whatsapp">WhatsApp</option>
+          <option value="sms">SMS</option>
+        </select>
+      </div>
+      {testChannel === 'whatsapp' && (
+      <div>
         <FieldLabel>Testbericht</FieldLabel>
-        <select value={testTemplate} onChange={(event) => setTestTemplate(event.target.value)} data-testid="twilio-test-template"
+        <select value={testTemplate} onChange={(event) => setTestTemplate(event.target.value)} data-testid="messente-test-template"
           className="mt-1 h-11 w-full rounded-xl border-2 border-slate-200 bg-white px-3">
           <option value="">Vrije tekst (alleen binnen 24 uur)</option>
           <option value="receipt">Betaalbewijs-template</option>
+          <option value="receipt_media">Betaalbewijs-afbeeldingstemplate</option>
           <option value="reminder">Herinnering-template</option>
+          <option value="authentication">Herstelcode-template (testcode)</option>
         </select>
       </div>
-      <ActionRow onSave={s.save} onTest={() => s.test({ to: testNumber.trim(), ...(testTemplate ? { template_kind: testTemplate } : {}) })}
+      )}
+      <ActionRow onSave={s.save} onTest={() => s.test({ to: testNumber.trim(), channel: testChannel, ...(testTemplate ? { template_kind: testTemplate } : {}) })}
         saving={s.saving} testing={s.testing} canTest={d.enabled && !!testNumber.trim()} />
     </SectionShell>
   );
@@ -1127,7 +1170,7 @@ export default function SettingsPage({ initialSection, hideSubNav = false, kiosk
         </div>
       )}
       {section === 'smtp' && <SmtpForm initial={settings.smtp} />}
-      {section === 'twilio' && <TwilioForm initial={settings.twilio} />}
+      {section === 'messente' && <MessenteForm initial={settings.messente} receiptMediaUrl={settings.whatsapp_receipt_media_url} />}
       {section === 'shelly' && <ShellyForm initial={settings.shelly} />}
       {section === 'invoicing' && <InvoicingForm initial={settings.invoicing} />}
       {section === 'deposit' && <DepositForm initial={settings.deposit} />}

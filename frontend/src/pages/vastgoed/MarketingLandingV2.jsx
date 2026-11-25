@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { EditableProvider, EditableText, EditableImage, EditableLink, getPath, useEditable, useLandingContent } from '../../lib/landing-editable';
 import StatusPill from '../../components/StatusPill';
+import MarketingWhatsAppButton from '../../components/MarketingWhatsAppButton';
 import RegisterModal from '../../components/RegisterModal';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { translateMarketingText } from '../../lib/marketing-language';
@@ -1745,6 +1746,7 @@ export default function MarketingLandingV2() {
           </>
         )}
       </div>
+      {!editMode && !registerOpen && <MarketingWhatsAppButton />}
       <RegisterModal open={registerOpen} onClose={() => setRegisterOpen(false)} initialPlan={registerPlan} />
     </EditableProvider>
   );

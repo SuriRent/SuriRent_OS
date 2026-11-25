@@ -7,7 +7,7 @@ export const INSTELLINGEN_SECTIONS = [
   { id: 'bedrijf', label: 'Bedrijfsgegevens', desc: 'Naam, adres, KvK en contactgegevens van je bedrijf.', icon: Briefcase },
   { id: 'branding', label: 'Branding', desc: 'Logo, kleuren en visuele identiteit.', icon: Palette },
   { id: 'smtp', label: 'E-mail (SMTP)', desc: 'Verstuur kwitanties en facturen via je eigen SMTP server.', icon: Mail },
-  { id: 'twilio', label: 'WhatsApp (Twilio)', desc: 'Stel WhatsApp-berichten voor huurders in via Twilio.', icon: MessageCircle },
+  { id: 'messente', label: 'WhatsApp & SMS (Messente)', desc: 'Stel WhatsApp- en SMS-berichten voor huurders in via Messente.', icon: MessageCircle },
   { id: 'invoicing', label: 'Facturen automatisering', desc: 'Automatische maand-facturen na grace periode.', icon: FileText },
   { id: 'deposit', label: 'Borg', desc: 'Stel de standaardborg in als veelvoud van de maandhuur.', icon: ShieldCheck },
   { id: 'betaalmethoden', label: 'Betaalmethoden', desc: 'Beheer Stripe- en Mopé-betalingen voor uw kiosks.', icon: CreditCard, anyFeatures: ['allow_stripe', 'allow_mope'] },

@@ -45,7 +45,7 @@ def decrypt(token: str | None) -> str | None:
 # Map of section -> secret field names (everything else is plain).
 SECTION_SECRETS = {
     "smtp": ["password"],
-    "twilio": ["auth_token"],
+    "messente": ["api_username", "api_password"],
     "shelly": ["cloud_token"],
     "domain": [],
     "invoicing": [],
@@ -58,9 +58,10 @@ def empty_section(section: str) -> dict:
     return {
         "smtp": {"host": "", "port": 587, "username": "", "password": None,
                  "from_email": "", "from_name": "", "use_tls": True, "enabled": False},
-        "twilio": {"account_sid": "", "auth_token": None,
+        "messente": {"api_username": None, "api_password": None,
                    "whatsapp_from": "", "sms_from": "", "enabled": False,
-                   "receipt_content_sid": "", "reminder_content_sid": ""},
+                   "receipt_template": "", "receipt_media_template": "", "reminder_template": "",
+                   "authentication_template": "", "template_language": "nl"},
         "shelly": {"cloud_token": None, "server": "shelly-cloud.shelly.cloud", "enabled": False},
         "domain": {"custom_domain": "", "dns_verified": False, "enabled": False,
                    "marketing_domain": "", "marketing_enabled": False},
@@ -94,7 +95,7 @@ def empty_section(section: str) -> dict:
             # Alleen gebruikt voor fixed_day en grace_workdays modi.
             "payment_term_days": 14,
             # Aantal dagen VÓÓR de vervaldatum waarop een huurder een
-            # herinnering ontvangt (WhatsApp/SMS via Twilio + Email via SMTP,
+            # herinnering ontvangt (WhatsApp/SMS via Messente + Email via SMTP,
             # indien geconfigureerd). 0 = uit. Idempotent: max 1 herinnering
             # per factuur per drempel-passage.
             "reminder_days_before": 3,
@@ -187,7 +188,7 @@ def merge_section(section: str, existing: dict, incoming: dict) -> dict:
 
 def reveal_section(section: str, data: dict) -> dict:
     """Return section with secret fields DECRYPTED — for internal use only
-    when actually calling SMTP/Twilio/etc."""
+    when actually calling SMTP/Messente/etc."""
     if not data:
         return empty_section(section)
     out = dict(data)

@@ -407,7 +407,8 @@ export default function SaasSettings() {
           <Field label="Support e-mail" value={data.banking?.support_email} placeholder="billing@uwbedrijf.sr"
             onChange={(v) => upd('banking', { support_email: v })} testid="bank-support-email" />
           <Field label="WhatsApp" value={data.banking?.whatsapp} placeholder="+597 ..."
-            onChange={(v) => upd('banking', { whatsapp: v })} testid="bank-whatsapp" />
+            type="tel" onChange={(v) => upd('banking', { whatsapp: v })} testid="bank-whatsapp"
+            hint="Ook gebruikt voor de zwevende WhatsApp-knop op de marketingwebsite. Vul het nummer met landcode in. Laat leeg om de knop te verbergen." />
         </Section>
 
         <StripeSection />
