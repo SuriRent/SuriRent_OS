@@ -2122,7 +2122,7 @@ function PaymentHistoryModal({ tenant, apartment, onClose }) {
   // Toast-achtige feedback per betaling voor de WhatsApp-knop. Key = payment.id,
   // value = { kind: 'sending'|'ok'|'err', msg: string }. We tonen dit inline
   // onder de rij zodat de operator direct ziet dat het bericht verstuurd is
-  // (of waarom niet: "geen telefoonnummer", "Twilio niet ingericht", etc.).
+  // (of waarom niet: "geen telefoonnummer", "Messente niet ingericht", etc.).
   const [waState, setWaState] = useState({});
   // Voorkomt dubbele afdruk/whatsapp-taps op dezelfde payment.
   const [busy, setBusy] = useState({});

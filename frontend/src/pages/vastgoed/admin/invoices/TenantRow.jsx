@@ -89,7 +89,7 @@ export function MobileTenantCard({ group, credits, onClick, onCreditClick, onRem
           data-testid={`mi-amount-${group.tenant_id}`}>
           {group.currency} {fmtAmountWhole(group.totalDue || group.totalOpen)}
         </p>
-        {/* Actie-knoppen (E-mail / Twilio WhatsApp / Direct WhatsApp)
+        {/* Actie-knoppen (E-mail / Messente WhatsApp / Direct WhatsApp)
             verwijderd op verzoek gebruiker (2026-02): de reminder-knoppen
             staan al op de facturen-detail pagina, dubbel is niet nodig. */}
         {!hasOpen && (

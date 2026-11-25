@@ -16,7 +16,7 @@ SuriRent is een webapplicatie voor vastgoed- en huurbeheer. De repository bevat 
 De zwevende WhatsApp-knop op de marketingwebsite gebruikt het nummer onder
 **Superadmin > Instellingen > Bankoverschrijving > WhatsApp**. Vul een nummer
 met landcode in en sla de instellingen op. Een leeg nummer verbergt de knop.
-Deze contactknop opent WhatsApp rechtstreeks en gebruikt geen Twilio.
+Deze contactknop opent WhatsApp rechtstreeks en gebruikt geen berichtenprovider.
 
 ## Architectuur
 

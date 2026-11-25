@@ -620,7 +620,7 @@ def _build_pay_core(db, helpers):
                     {"$set": {"status": "completed", "completed_at": now_iso}},
                 )
             # WhatsApp/SMS bevestiging naar huurder (alleen approved).
-            # FIRE-AND-FORGET — Twilio + SMTP + PDF render kunnen meerdere
+            # FIRE-AND-FORGET — Messente + SMTP + PDF render kunnen meerdere
             # seconden duren; de operator/huurder UI mag daar niet op wachten.
             if notify_tenant_paid:
                 import asyncio

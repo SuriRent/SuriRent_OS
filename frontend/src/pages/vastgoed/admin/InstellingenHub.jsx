@@ -60,7 +60,7 @@ export const RENDER = {
   bedrijf: () => <BusinessInfo />,
   branding: () => <Branding />,
   smtp: () => <SettingsPage initialSection="smtp" hideSubNav />,
-  twilio: () => <SettingsPage initialSection="twilio" hideSubNav />,
+  messente: () => <SettingsPage initialSection="messente" hideSubNav />,
   invoicing: () => <SettingsPage initialSection="invoicing" hideSubNav />,
   deposit: () => <SettingsPage initialSection="deposit" hideSubNav />,
   betaalmethoden: () => <PaymentMethodsSettings />,
