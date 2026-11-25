@@ -58,6 +58,18 @@ test('toont een achtergebleven betaalregistratie', () => {
   expect(html).toContain('p1');
 });
 
+test.each([
+  ['stripe_request', 'Stripe-betaalverzoek'],
+  ['mope_request', 'Mopé-betaalverzoek'],
+])('toont een achtergebleven providerverzoek: %s', (operation, label) => {
+  const html = renderToStaticMarkup(<ProcessingPayments
+    payments={[]}
+    guards={[{ tenant_id: 't1', operation, operation_id: 'request1' }]}
+  />);
+  expect(html).toContain(label);
+  expect(html).toContain('request1');
+});
+
 test('meldt wanneer de verwerkingsstatus niet kan worden opgehaald', () => {
   const html = renderToStaticMarkup(<ProcessingPayments payments={[]} unavailable />);
   expect(html).toContain('Verwerkingsstatus kon niet worden opgehaald');

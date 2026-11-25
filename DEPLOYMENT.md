@@ -166,7 +166,8 @@ retried automatically. The guard records `operation=payment_approval` or
 installments before any manual repair; there is no automatic recovery
 interface. The payments screen shows these legacy guards (including a bank
 guard without a payment) for the active company, without providing an unsafe
-unlock action. The real MongoDB guard-race test has not yet been run here.
+unlock action. Replica-set tests run in the isolated CI workflow; a successful
+test run does not establish that the deployed database supports transactions.
 Payment reassignment also holds the guard while updating the payment and both
 invoices. A partial failure retains a `payment_reassignment` guard with the
 payment ID for investigation; do not retry before reconciling all three.
@@ -175,6 +176,11 @@ consuming Stripe or Mopé and retain a `payment_creation` guard on failure.
 The guard stores the planned payment ID and, when applicable, the provider
 reference for reconciliation. Provider validation failures after acquiring
 the guard also require review; there is no automatic unlock.
+Stripe and Mopé request creation also hold the tenant guard until the local
+request is recorded. An uncertain request retains a `stripe_request` or
+`mope_request` guard with the local request ID. Stripe uses that ID as an
+idempotency key and metadata; Mopé includes it as its order ID. Check the
+provider and local records before manual recovery.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

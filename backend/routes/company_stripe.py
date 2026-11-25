@@ -13,6 +13,8 @@ import stripe
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from tenant_payment_guard import guarded_provider_request
+
 from . import _deps
 from .saas_stripe import _mask, _to_eur_cents
 
@@ -131,38 +133,43 @@ async def kiosk_stripe_intent(body: KioskIntentIn, session: dict = Depends(_deps
         raise HTTPException(400, "Deze betaalmethode is niet ingeschakeld")
     if body.amount <= 0:
         raise HTTPException(400, "Ongeldig bedrag")
-    tenant = await _deps.db.tenants.find_one({"id": body.tenant_id, "company_id": cid}, {"_id": 0, "name": 1}) or {}
+    tenant = await _deps.db.tenants.find_one({"id": body.tenant_id, "company_id": cid}, {"_id": 0, "name": 1})
+    if not tenant:
+        raise HTTPException(404, "Huurder niet gevonden")
     cents, rate = await _to_eur_cents(body.amount, body.currency)
     token = secrets.token_urlsafe(16)
+    request_id = _deps.new_id()
     extra = {}
     if body.method == "ideal" and body.origin:
         extra = {"confirm": True, "payment_method_data": {"type": "ideal"},
                  "return_url": f"{body.origin.rstrip('/')}/betalen/{token}"}
-    try:
+    async def create():
         pi = stripe.PaymentIntent.create(
             api_key=a["secret_key"], amount=cents, currency="eur", payment_method_types=[body.method],
             metadata={"company_id": cid, "tenant_id": body.tenant_id, "source": "surirent_kiosk",
-                      "original": f"{body.currency} {body.amount}"},
+                      "legacy_request_id": request_id, "original": f"{body.currency} {body.amount}"},
+            idempotency_key=f"surirent-kiosk-{request_id}",
             description=f"Huur {tenant.get('name') or ''}".strip(), **extra,
         )
-    except stripe.error.StripeError as e:
-        msg = e.user_message or str(e)
-        if body.method == "ideal" and "ideal" in msg.lower():
-            msg = "iDEAL is niet geactiveerd in uw Stripe-account."
-        raise HTTPException(400, f"Stripe: {msg[:200]}")
-    na = getattr(pi, "next_action", None)
-    rtu = getattr(na, "redirect_to_url", None) if na else None
-    redirect_url = getattr(rtu, "url", None) if rtu else None
-    now = _deps.iso(_deps.now_utc())
-    await _deps.db.kiosk_stripe_payments.insert_one({
-        "id": _deps.new_id(), "token": token, "company_id": cid, "tenant_id": body.tenant_id,
-        "tenant_name": tenant.get("name"), "payment_intent_id": pi.id, "client_secret": pi.client_secret,
-        "mode": a["mode"], "method": body.method, "amount": body.amount, "currency": body.currency,
-        "amount_eur_cents": cents, "eur_rate": rate, "status": "pending", "consumed": False,
-        "created_at": now, "updated_at": now,
-    })
-    return {"token": token, "payment_intent_id": pi.id, "client_secret": pi.client_secret,
-            "publishable_key": a["publishable_key"], "amount_eur_cents": cents, "method": body.method, "mode": a["mode"], "redirect_url": redirect_url}
+        na = getattr(pi, "next_action", None)
+        rtu = getattr(na, "redirect_to_url", None) if na else None
+        redirect_url = getattr(rtu, "url", None) if rtu else None
+        now = _deps.iso(_deps.now_utc())
+        await _deps.db.kiosk_stripe_payments.insert_one({
+            "id": request_id, "token": token, "company_id": cid, "tenant_id": body.tenant_id,
+            "tenant_name": tenant.get("name"), "payment_intent_id": pi.id, "client_secret": pi.client_secret,
+            "mode": a["mode"], "method": body.method, "amount": body.amount, "currency": body.currency,
+            "amount_eur_cents": cents, "eur_rate": rate, "status": "pending", "consumed": False,
+            "created_at": now, "updated_at": now,
+        })
+        return {"token": token, "payment_intent_id": pi.id, "client_secret": pi.client_secret,
+                "publishable_key": a["publishable_key"], "amount_eur_cents": cents, "method": body.method,
+                "mode": a["mode"], "redirect_url": redirect_url}
+
+    return await guarded_provider_request(
+        _deps.db, company_id=cid, tenant_id=body.tenant_id,
+        operation_id=request_id, provider="stripe", create=create,
+    )
 
 
 async def _refresh(tx: dict) -> dict:

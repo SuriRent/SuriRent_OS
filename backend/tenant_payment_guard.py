@@ -6,12 +6,14 @@ transaction that establishes a booked or definitively cancelled attempt.
 """
 
 import secrets
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from pymongo.errors import DuplicateKeyError
 from pymongo.read_concern import ReadConcern
 from pymongo.write_concern import WriteConcern
+from fastapi import HTTPException
 
 from sms_payment_attempts import PaymentAttemptConflict, _tenant_key, tenant_payment_key
 
@@ -73,6 +75,30 @@ async def release_payment_guard(db, *, company_id: str, tenant_id: str,
     )
     if result.deleted_count != 1:
         raise PaymentAttemptConflict("Betaalvergrendeling ontbreekt of is gewijzigd")
+
+
+async def guarded_provider_request(db, *, company_id: str, tenant_id: str,
+                                   operation_id: str, provider: str, create):
+    if provider not in ("stripe", "mope"):
+        raise ValueError("Ongeldige betaalprovider")
+    owner = secrets.token_urlsafe(24)
+    try:
+        await acquire_payment_guard(
+            db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner,
+            operation=f"{provider}_request", operation_id=operation_id,
+        )
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.") from exc
+    try:
+        result = await create()
+        await release_payment_guard(db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner)
+        return result
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Provider request requires review: %s", operation_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Het betaalverzoek is mogelijk aangemaakt. Controleer dit voordat u opnieuw probeert.",
+        ) from exc
 
 
 async def guard_reserved_sms_attempt(db, client, *, key: str, attempt_id: str) -> None:

@@ -11,6 +11,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from tenant_payment_guard import guarded_provider_request
+
 from . import _deps
 from settings_service import merge_section, reveal_section
 
@@ -184,6 +186,16 @@ async def _create_request(
         "currency": currency,
         "redirect_url": redirect_url,
     }
+    return await guarded_provider_request(
+        _deps.db, company_id=company_id, tenant_id=tenant_id,
+        operation_id=local_id, provider="mope",
+        create=lambda: _submit_request(company_id, tenant_id, amount, currency, source,
+                                       config, tenant, local_id, amount_cents, payload),
+    )
+
+
+async def _submit_request(company_id, tenant_id, amount, currency, source,
+                          config, tenant, local_id, amount_cents, payload):
     response = await _request_api("POST", "shop/payment_request", config["api_token"], payload)
     if not response.is_success:
         raise _provider_error(response)

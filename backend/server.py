@@ -11156,7 +11156,7 @@ async def payment_processing_guards(user=Depends(get_current_user)):
     docs = await db.tenant_payment_guards.find(
         {"company_id": cid, "kind": "legacy",
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
-                                "payment_reassignment", "payment_creation"]}},
+                                "payment_reassignment", "payment_creation", "stripe_request", "mope_request"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
