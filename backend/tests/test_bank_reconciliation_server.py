@@ -690,6 +690,56 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual((await self.db.tenants.find_one({"id": "t1"})).get("status"), "archiving")
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
 
+    async def test_sms_guard_blocks_tenant_deletion(self):
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with self.assertRaises(HTTPException) as error:
+            await server.delete_tenant("t1", {})
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertIsNotNone(await self.db.tenants.find_one({"id": "t1"}))
+        self.assertEqual((await self.db.apartments.find_one({"id": "a1"}))["tenant_id"], "t1")
+
+    async def test_tenant_deletion_holds_guard_and_releases_after_completion(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+        original = server._delete_tenant_locked
+
+        async def hold(*args):
+            entered.set()
+            await resume.wait()
+            return await original(*args)
+
+        with patch.object(server, "_delete_tenant_locked", side_effect=hold):
+            task = asyncio.create_task(server.delete_tenant("t1", {}))
+            await asyncio.wait_for(entered.wait(), 5)
+            try:
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            self.assertTrue((await task)["ok"])
+        self.assertIsNone(await self.db.tenants.find_one({"id": "t1"}))
+        apartment = await self.db.apartments.find_one({"id": "a1"})
+        self.assertEqual((apartment["tenant_id"], apartment["status"]), (None, "vacant"))
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_tenant_deletion_rejects_mismatched_apartment(self):
+        await self.db.apartments.update_one({"id": "a1"}, {"$set": {"tenant_id": "other"}})
+        with self.assertRaises(HTTPException) as error:
+            await server.delete_tenant("t1", {})
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertIsNotNone(await self.db.tenants.find_one({"id": "t1"}))
+        self.assertEqual((await self.db.apartments.find_one({"id": "a1"}))["tenant_id"], "other")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_tenant_deletion_failure_retains_guard(self):
+        with patch.object(self.db.tenants, "delete_one", AsyncMock(side_effect=RuntimeError("failed"))):
+            with self.assertRaises(HTTPException) as error:
+                await server.delete_tenant("t1", {})
+        self.assertEqual(error.exception.status_code, 500)
+        self.assertIsNotNone(await self.db.tenants.find_one({"id": "t1"}))
+        self.assertIsNone((await self.db.apartments.find_one({"id": "a1"}))["tenant_id"])
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("tenant_deletion", "t1"))
+
     async def test_sms_guard_blocks_invoice_recomputation(self):
         await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
         with self.assertRaises(HTTPException) as error:

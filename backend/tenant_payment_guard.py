@@ -167,6 +167,28 @@ async def guarded_tenant_move_out(db, *, company_id: str, tenant_id: str, change
     return result
 
 
+async def guarded_tenant_deletion(db, *, company_id: str, tenant_id: str, change):
+    owner = secrets.token_urlsafe(24)
+    try:
+        await acquire_payment_guard(
+            db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner,
+            operation="tenant_deletion", operation_id=tenant_id,
+        )
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.") from exc
+    try:
+        result = await change()
+        await release_payment_guard(db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner)
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Tenant deletion requires review: %s", tenant_id)
+        raise HTTPException(
+            status_code=500, detail="De huurder is mogelijk gedeeltelijk verwijderd. Controleer dit voordat u opnieuw probeert.",
+        ) from exc
+    if isinstance(result, HTTPException):
+        raise result
+    return result
+
+
 async def guard_reserved_sms_attempt(db, client, *, key: str, attempt_id: str) -> None:
     """Atomically guard a reserved attempt before a provider can be contacted."""
     async def transaction(session):

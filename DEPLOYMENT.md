@@ -252,6 +252,9 @@ invoice. Other invoice and tenant mutations are not yet all coordinated.
 Tenant move-out now holds a `tenant_move_out` guard through deposit allocation,
 invoice archival and tenant archival. Interrupted processing retains the guard;
 reconcile the deposit, payment, invoice allocations and tenant before repair.
+Ordinary tenant deletion also holds a `tenant_deletion` guard and verifies that
+the apartment still belongs to that tenant before clearing it. A failure keeps
+the guard; inspect both the tenant and apartment before manual recovery.
 Invoice balance recomputation also holds an `invoice_change` guard. It uses
 recorded allocations instead of counting an entire payment per invoice, and
 rejects ambiguous legacy allocations, unexplained balance reductions and

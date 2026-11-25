@@ -67,6 +67,7 @@ test.each([
   ['credit_reconciliation', 'Tegoed verrekenen'],
   ['invoice_change', 'Factuur wijzigen'],
   ['tenant_move_out', 'Vertrek verwerken'],
+  ['tenant_deletion', 'Huurder verwijderen'],
 ])('toont een achtergebleven providerverzoek: %s', (operation, label) => {
   const html = renderToStaticMarkup(<ProcessingPayments
     payments={[]}

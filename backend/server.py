@@ -9384,11 +9384,35 @@ async def delete_tenant(tenant_id: str, user=Depends(get_current_user)):
     t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    cid = t.get("company_id")
+    if not isinstance(cid, str) or not cid:
+        raise HTTPException(status_code=409, detail="Huurder heeft geen geldige bedrijfscontext")
+    from tenant_payment_guard import guarded_tenant_deletion
+    return await guarded_tenant_deletion(
+        db, company_id=cid, tenant_id=tenant_id,
+        change=lambda: _delete_tenant_locked(tenant_id, cid),
+    )
+
+
+async def _delete_tenant_locked(tenant_id: str, cid: str):
+    t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0})
+    if not t:
+        return HTTPException(status_code=404, detail="Huurder niet gevonden")
     if t.get("apartment_id"):
-        await db.apartments.update_one(
-            {"id": t["apartment_id"]}, {"$set": {"tenant_id": None, "status": "vacant"}}
+        apartment = await db.apartments.find_one(
+            {"id": t["apartment_id"], "company_id": cid, "tenant_id": tenant_id}, {"_id": 0, "id": 1},
         )
-    await db.tenants.delete_one({"id": tenant_id})
+        if not apartment:
+            return HTTPException(status_code=409, detail="Appartementkoppeling moet eerst worden gecontroleerd.")
+        changed = await db.apartments.update_one(
+            {"id": t["apartment_id"], "company_id": cid, "tenant_id": tenant_id},
+            {"$set": {"tenant_id": None, "status": "vacant"}},
+        )
+        if changed.matched_count != 1:
+            raise RuntimeError("Appartementkoppeling is gewijzigd")
+    deleted = await db.tenants.delete_one({"id": tenant_id, "company_id": cid})
+    if deleted.deleted_count != 1:
+        raise RuntimeError("Huurder kon niet worden verwijderd")
     return {"ok": True}
 
 
@@ -11225,7 +11249,7 @@ async def payment_processing_guards(user=Depends(get_current_user)):
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
                                 "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
                                 "installment_payment", "payment_plan_change", "payment_deletion",
-                                "credit_reconciliation", "invoice_change", "tenant_move_out"]}},
+                                "credit_reconciliation", "invoice_change", "tenant_move_out", "tenant_deletion"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
