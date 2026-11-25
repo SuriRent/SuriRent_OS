@@ -11784,51 +11784,131 @@ async def tenant_balance(tenant_id: str, user=Depends(get_current_user)):
 
 @api.post("/tenants/{tenant_id}/recompute-invoices")
 async def recompute_tenant_invoices(tenant_id: str, user=Depends(require_role("admin", "superadmin"))):
-    """Herbereken `paid_amount` op ALLE facturen van deze huurder vanaf
-    de werkelijke approved payments. Fixt legacy dubbel-allocatie bugs
-    waar één payment per ongeluk op meerdere facturen werd geboekt.
-
-    Voor elke factuur:
-      • paid_amount = sum(payments.amount where invoice_id=inv.id AND status=approved)
-      • Status → paid als paid_amount ≥ 100% van amount, anders partial/open
-
-    Retourneert een report per factuur zodat admin ziet wat er is veranderd.
-    """
+    """Herbereken factuursaldi uit eenduidige goedgekeurde betaalallocaties."""
     t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0, "id": 1, "company_id": 1, "name": 1})
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-    report = []
-    async for inv in db.invoices.find(
-        {"tenant_id": tenant_id, **scope(user)},
-        {"_id": 0, "id": 1, "invoice_number": 1, "amount": 1, "paid_amount": 1,
-         "period_month": 1, "period_year": 1, "status": 1},
-    ).sort([("period_year", 1), ("period_month", 1)]):
-        inv_id = inv["id"]
-        inv_amt = float(inv.get("amount") or 0)
-        old_paid = float(inv.get("paid_amount") or 0)
-        old_status = inv.get("status") or "open"
-        # Herbereken paid_amount vanuit approved payments met deze invoice_id
-        real_paid = 0.0
-        async for p in db.payments.find(
-            {"invoice_id": inv_id, "status": "approved", "tenant_id": tenant_id},
-            {"_id": 0, "amount": 1},
+    cid = t.get("company_id")
+    if not cid:
+        raise HTTPException(status_code=409, detail="Huurder heeft geen geldige bedrijfscontext")
+    from tenant_payment_guard import guarded_invoice_change
+    return await guarded_invoice_change(
+        db, company_id=cid, tenant_id=tenant_id, operation_id=tenant_id,
+        change=lambda: _recompute_tenant_invoices_locked(tenant_id, cid),
+    )
+
+
+async def _recompute_tenant_invoices_locked(tenant_id: str, cid: str):
+    from sms_payment_attempts import PaymentAttemptConflict
+    from sms_payment_booking import _cents
+
+    tenant = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0, "name": 1})
+    if not tenant:
+        return HTTPException(status_code=404, detail="Huurder niet gevonden")
+    if await db.payment_plans.find_one({"company_id": cid, "tenant_id": tenant_id, "status": "active"}):
+        return HTTPException(status_code=409, detail="Controleer eerst de actieve betalingsregeling.")
+
+    invoices = await db.invoices.find(
+        {"tenant_id": tenant_id, "company_id": cid}, {"_id": 0},
+    ).sort([("period_year", 1), ("period_month", 1)]).to_list(None)
+    by_id = {}
+    totals = {}
+    try:
+        for inv in invoices:
+            inv_id = inv.get("id")
+            if not isinstance(inv_id, str) or not inv_id or inv_id in by_id:
+                raise PaymentAttemptConflict("Ongeldige factuur")
+            _cents(inv.get("amount"))
+            if inv.get("paid_amount") is not None:
+                _cents(inv["paid_amount"])
+            by_id[inv_id] = inv
+            totals[inv_id] = 0
+
+        async for payment in db.payments.find(
+            {"company_id": cid, "tenant_id": tenant_id, "status": "approved"}, {"_id": 0},
         ):
-            real_paid += float(p.get("amount") or 0)
-        real_paid = round(real_paid, 2)
-        # Bepaal nieuwe status
+            linked = payment.get("invoice_ids")
+            if linked is None:
+                linked = []
+            if not isinstance(linked, list) or any(not isinstance(i, str) or not i for i in linked):
+                raise PaymentAttemptConflict("Ongeldige factuurverwijzing")
+            linked = set(linked)
+            direct = payment.get("invoice_id")
+            if direct is not None:
+                if not isinstance(direct, str):
+                    raise PaymentAttemptConflict("Ongeldige factuurverwijzing")
+                if direct:
+                    linked.add(direct)
+            allocations = payment.get("allocations")
+            if allocations is None:
+                allocations = []
+            if not isinstance(allocations, list):
+                raise PaymentAttemptConflict("Ongeldige betaalallocatie")
+            if not linked and not allocations:
+                continue
+            amount = _cents(payment.get("amount"))
+            credit_value = payment.get("credit_remaining")
+            credit = _cents(0 if credit_value is None else credit_value)
+            if amount <= 0 or credit > amount:
+                raise PaymentAttemptConflict("Ongeldig betaalbedrag")
+            if allocations:
+                entries = {}
+                for allocation in allocations:
+                    if not isinstance(allocation, dict):
+                        raise PaymentAttemptConflict("Ongeldige betaalallocatie")
+                    inv_id = allocation.get("invoice_id")
+                    if not isinstance(inv_id, str) or not inv_id or inv_id in entries:
+                        raise PaymentAttemptConflict("Ongeldige betaalallocatie")
+                    allocated = _cents(allocation.get("amount"))
+                    if allocated <= 0:
+                        raise PaymentAttemptConflict("Ongeldige betaalallocatie")
+                    entries[inv_id] = allocated
+                if (direct and direct not in entries) or sum(entries.values()) + credit > amount:
+                    raise PaymentAttemptConflict("Onduidelijke betaalallocatie")
+            else:
+                if len(linked) != 1 or credit:
+                    raise PaymentAttemptConflict("Onduidelijke oude betaling")
+                entries = {next(iter(linked)): amount}
+            if any(inv_id not in by_id for inv_id in linked | set(entries)):
+                raise PaymentAttemptConflict("Gekoppelde factuur ontbreekt")
+            for inv_id, allocated in entries.items():
+                if (payment.get("currency") or "SRD") != (by_id[inv_id].get("currency") or "SRD"):
+                    raise PaymentAttemptConflict("Valuta van betaling en factuur verschillen")
+                totals[inv_id] += allocated
+
+        for inv_id, inv in by_id.items():
+            if totals[inv_id] > _cents(inv["amount"]):
+                raise PaymentAttemptConflict("Factuur is te veel betaald")
+            if not totals[inv_id] and inv.get("paid_amount") and _cents(inv["paid_amount"]) > 0:
+                raise PaymentAttemptConflict("Factuursaldo heeft geen aantoonbare betaling")
+    except PaymentAttemptConflict:
+        return HTTPException(status_code=409, detail="Factuursaldi zijn niet eenduidig. Controleer de betalingen handmatig.")
+
+    report = []
+    for inv in invoices:
+        inv_id = inv["id"]
+        inv_amt = _cents(inv["amount"]) / 100
+        old_paid = _cents(inv.get("paid_amount") or 0) / 100
+        old_status = inv.get("status") or "open"
+        real_paid = totals[inv_id] / 100
         if inv_amt <= 0 or real_paid >= inv_amt - 0.005:
             new_status = "paid"
         elif real_paid > 0:
             new_status = "partial"
         else:
             new_status = "open"
-        # Update alleen als iets veranderd is
-        if abs(real_paid - old_paid) > 0.01 or new_status != old_status:
+        if inv.get("archived") is True or old_status in ("archived", "cancelled"):
+            new_status, real_paid = old_status, old_paid
+        changed = real_paid != old_paid or new_status != old_status
+        if changed:
             update_doc = {"paid_amount": real_paid, "status": new_status}
-            # Voor status open resetten we `paid_at`
             if new_status == "open":
                 update_doc["paid_at"] = None
-            await db.invoices.update_one({"id": inv_id}, {"$set": update_doc})
+            result = await db.invoices.update_one(
+                {"id": inv_id, "company_id": cid, "tenant_id": tenant_id}, {"$set": update_doc},
+            )
+            if result.matched_count != 1:
+                raise RuntimeError("Factuur kon niet worden herberekend")
         report.append({
             "invoice_id": inv_id,
             "invoice_number": inv.get("invoice_number") or "",
@@ -11838,11 +11918,11 @@ async def recompute_tenant_invoices(tenant_id: str, user=Depends(require_role("a
             "new_paid": real_paid,
             "old_status": old_status,
             "new_status": new_status,
-            "changed": abs(real_paid - old_paid) > 0.01 or new_status != old_status,
+            "changed": changed,
         })
     return {
         "tenant_id": tenant_id,
-        "tenant_name": t.get("name"),
+        "tenant_name": tenant.get("name"),
         "invoices_processed": len(report),
         "invoices_changed": sum(1 for r in report if r["changed"]),
         "report": report,

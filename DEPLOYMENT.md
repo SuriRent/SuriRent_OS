@@ -222,6 +222,9 @@ invoice. Other invoice and tenant mutations are not yet all coordinated.
 Tenant move-out now holds a `tenant_move_out` guard through deposit allocation,
 invoice archival and tenant archival. Interrupted processing retains the guard;
 reconcile the deposit, payment, invoice allocations and tenant before repair.
+Invoice balance recomputation also holds an `invoice_change` guard. It uses
+recorded allocations instead of counting an entire payment per invoice, and
+rejects ambiguous legacy allocations and active payment plans for review.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that
