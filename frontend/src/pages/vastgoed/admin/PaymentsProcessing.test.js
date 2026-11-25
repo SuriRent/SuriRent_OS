@@ -39,6 +39,16 @@ test('toont een betaling niet dubbel als ook de vergrendeling zichtbaar is', () 
   expect(html.match(/Huurder/g)).toHaveLength(1);
 });
 
+test('toont een achtergebleven factuurverplaatsing', () => {
+  const html = renderToStaticMarkup(<ProcessingPayments
+    payments={[]}
+    guards={[{ tenant_id: 't1', operation: 'payment_reassignment', operation_id: 'p1' }]}
+  />);
+  expect(html).toContain('Betaling verplaatsen');
+  expect(html).toContain('p1');
+  expect(html).not.toContain('<button');
+});
+
 test('meldt wanneer de verwerkingsstatus niet kan worden opgehaald', () => {
   const html = renderToStaticMarkup(<ProcessingPayments payments={[]} unavailable />);
   expect(html).toContain('Verwerkingsstatus kon niet worden opgehaald');

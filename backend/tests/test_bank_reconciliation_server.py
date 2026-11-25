@@ -115,6 +115,108 @@ class BankReconciliationServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.db.bank_statements.find_one({"id": "s1"}))["reconciliation_status"], "uploaded")
 
 
+class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = SimpleNamespace(payments=Records(), invoices=Records(), tenant_payment_guards=Guards())
+        await self.db.payments.insert_one({
+            "id": "p1", "company_id": "c1", "tenant_id": "t1", "amount": 50,
+            "status": "approved", "invoice_id": "i1", "invoice_ids": ["i1"],
+            "allocations": [{"invoice_id": "i1", "amount": 50}],
+        })
+        await self.db.invoices.insert_one({
+            "id": "i1", "company_id": "c1", "tenant_id": "t1",
+            "amount": 100, "paid_amount": 50, "status": "partial",
+        })
+        await self.db.invoices.insert_one({
+            "id": "i2", "company_id": "c1", "tenant_id": "t1",
+            "amount": 100, "paid_amount": 0, "status": "open",
+        })
+        for item in (
+            patch.object(server, "db", self.db),
+            patch.object(server, "_enrich_payment", AsyncMock(side_effect=lambda payment: payment)),
+            patch.object(server, "_kiosk_overview_invalidate", AsyncMock()),
+        ):
+            item.start()
+            self.addCleanup(item.stop)
+        self.user = {"active_company_id": "c1"}
+
+    async def reassign(self, invoice_id="i2"):
+        return await server.reassign_payment_invoice("p1", {"invoice_id": invoice_id}, self.user)
+
+    async def test_sms_guard_prevents_reassignment_before_any_write(self):
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with self.assertRaises(HTTPException) as error:
+            await self.reassign()
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 50)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i2"}))["paid_amount"], 0)
+        self.assertEqual((await self.db.payments.find_one({"id": "p1"}))["invoice_id"], "i1")
+
+    async def test_successful_reassignment_holds_guard_and_releases_it(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+        update = self.db.invoices.update_one
+
+        async def hold_update(query, changes):
+            result = await update(query, changes)
+            if query["id"] == "i1":
+                entered.set()
+                await resume.wait()
+            return result
+
+        self.db.invoices.update_one = hold_update
+        task = asyncio.create_task(self.reassign())
+        await asyncio.wait_for(entered.wait(), 5)
+        with self.assertRaises(PaymentAttemptConflict):
+            await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        resume.set()
+        result = await task
+        self.assertEqual(result["payment"]["invoice_id"], "i2")
+        self.assertEqual(result["payment"]["invoice_ids"], ["i2"])
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 0)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i2"}))["paid_amount"], 50)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_failed_partial_reassignment_retains_guard(self):
+        self.db.payments.update_one = AsyncMock(side_effect=RuntimeError("database unavailable"))
+        with self.assertRaises(HTTPException) as error:
+            await self.reassign()
+        self.assertEqual(error.exception.status_code, 500)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 0)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("payment_reassignment", "p1"))
+        with self.assertRaises(HTTPException) as retry:
+            await self.reassign()
+        self.assertEqual(retry.exception.status_code, 409)
+
+    async def test_same_or_invalid_invoice_does_not_change_balance_or_leave_guard(self):
+        for invoice_id, status in (("i1", 400), ("missing", 404)):
+            with self.assertRaises(HTTPException) as error:
+                await self.reassign(invoice_id)
+            self.assertEqual(error.exception.status_code, status)
+            self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 50)
+
+    async def test_multiple_allocations_are_not_reassigned_as_a_single_payment(self):
+        await self.db.payments.update_one({"id": "p1"}, {"$set": {
+            "allocations": [{"invoice_id": "i1", "amount": 25}, {"invoice_id": "i3", "amount": 25}],
+        }})
+        with self.assertRaises(HTTPException) as error:
+            await self.reassign()
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 50)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i2"}))["paid_amount"], 0)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_missing_original_invoice_requires_review_without_writes(self):
+        self.db.invoices.docs = [doc for doc in self.db.invoices.docs if doc["id"] != "i1"]
+        with self.assertRaises(HTTPException) as error:
+            await self.reassign()
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i2"}))["paid_amount"], 0)
+        self.assertEqual((await self.db.payments.find_one({"id": "p1"}))["invoice_id"], "i1")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+
 class PaymentApprovalServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = SimpleNamespace(payments=Records(), invoices=Records(), tenant_payment_guards=Guards())
@@ -367,4 +469,31 @@ class PaymentApprovalMongoTests(unittest.IsolatedAsyncioTestCase):
         finally:
             resume.set()
         self.assertEqual((await task)["status"], "approved")
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+
+    async def test_reassignment_excludes_sms_guard_until_complete(self):
+        await self.db.payments.update_one({"id": "p1"}, {"$set": {"status": "approved", "invoice_id": "i1"}})
+        await self.db.invoices.update_one({"id": "i1"}, {"$set": {"paid_amount": 50, "status": "partial"}})
+        await self.db.invoices.insert_one({
+            "id": "i2", "company_id": "c1", "tenant_id": "t1", "status": "open",
+            "amount": 100.0, "paid_amount": 0.0, "currency": "SRD",
+        })
+        entered, resume = asyncio.Event(), asyncio.Event()
+
+        async def hold_invalidation(_cid, _tenant_id):
+            entered.set()
+            await resume.wait()
+
+        with patch.object(server, "_kiosk_overview_invalidate", AsyncMock(side_effect=hold_invalidation)):
+            task = asyncio.create_task(server.reassign_payment_invoice(
+                "p1", {"invoice_id": "i2"}, {"active_company_id": "c1"},
+            ))
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1",
+                                                kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            self.assertEqual((await task)["payment"]["invoice_id"], "i2")
         await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")

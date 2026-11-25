@@ -155,7 +155,7 @@ uncertain bank registration retains the guard and statement for manual review.
 The guard records `operation=bank_reconciliation` and the statement ID. Do not
 clear it or retry the booking without reconciling the payment, invoice,
 installments and statement first; there is no automated recovery UI yet.
-Other payment paths still do not acquire the guard; this is not yet safe
+Several other payment paths still do not acquire the guard; this is not yet safe
 interoperation and checkout must remain disabled.
 
 Manual, notification and OCR approvals and rejections now acquire the tenant
@@ -167,6 +167,9 @@ installments before any manual repair; there is no automatic recovery
 interface. The payments screen shows these legacy guards (including a bank
 guard without a payment) for the active company, without providing an unsafe
 unlock action. The real MongoDB guard-race test has not yet been run here.
+Payment reassignment also holds the guard while updating the payment and both
+invoices. A partial failure retains a `payment_reassignment` guard with the
+payment ID for investigation; do not retry before reconciling all three.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

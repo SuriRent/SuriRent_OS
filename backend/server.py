@@ -11108,7 +11108,8 @@ async def payment_processing_guards(user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
     docs = await db.tenant_payment_guards.find(
         {"company_id": cid, "kind": "legacy",
-         "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection"]}},
+         "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
+                                "payment_reassignment"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
@@ -11490,27 +11491,73 @@ async def reassign_payment_invoice(
 
     Retourneert het bijgewerkte payment doc + report per factuur.
     """
+    from sms_payment_attempts import PaymentAttemptConflict
+    from tenant_payment_guard import acquire_payment_guard, release_payment_guard
+
+    snapshot = await db.payments.find_one({"id": pid, **scope(user)}, {"_id": 0})
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Betaling niet gevonden")
+    cid, tenant_id = snapshot.get("company_id"), snapshot.get("tenant_id")
+    if not all(isinstance(value, str) and value for value in (cid, tenant_id)):
+        raise HTTPException(status_code=409, detail="Betaalgegevens zijn onvolledig; controleer de betaling.")
+    owner = secrets.token_urlsafe(24)
+    try:
+        await acquire_payment_guard(
+            db, company_id=cid, tenant_id=tenant_id, kind="legacy", owner=owner,
+            operation="payment_reassignment", operation_id=pid,
+        )
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.") from exc
+    try:
+        result = await _reassign_payment_invoice(pid, body, user, cid, tenant_id)
+        await release_payment_guard(db, company_id=cid, tenant_id=tenant_id, kind="legacy", owner=owner)
+    except Exception as exc:
+        _logging.getLogger(__name__).exception("Payment reassignment requires review: %s", pid)
+        raise HTTPException(
+            status_code=500,
+            detail="De betaling is mogelijk gedeeltelijk verplaatst. Controleer deze voordat u opnieuw boekt.",
+        ) from exc
+    if isinstance(result, HTTPException):
+        raise result
+    return result
+
+
+async def _reassign_payment_invoice(pid: str, body: dict, user: dict, cid: str, tenant_id: str):
     new_inv_id = (body or {}).get("invoice_id") or ""
     if not new_inv_id:
-        raise HTTPException(status_code=400, detail="invoice_id ontbreekt")
-    q = {"id": pid, **scope(user)}
+        return HTTPException(status_code=400, detail="invoice_id ontbreekt")
+    q = {"id": pid, **scope(user), "company_id": cid, "tenant_id": tenant_id}
     p = await db.payments.find_one(q, {"_id": 0})
     if not p:
-        raise HTTPException(status_code=404, detail="Betaling niet gevonden")
+        return HTTPException(status_code=404, detail="Betaling niet gevonden")
     if p.get("status") != "approved":
-        raise HTTPException(status_code=400, detail="Alleen approved betalingen kunnen verplaatst worden")
-    new_inv = await db.invoices.find_one(
-        {"id": new_inv_id, "tenant_id": p.get("tenant_id"), **scope(user)}, {"_id": 0},
-    )
-    if not new_inv:
-        raise HTTPException(status_code=404, detail="Nieuwe factuur niet gevonden of niet van deze huurder")
+        return HTTPException(status_code=400, detail="Alleen approved betalingen kunnen verplaatst worden")
+    if p.get("invoice_id") == new_inv_id:
+        return HTTPException(status_code=400, detail="Betaling is al aan deze factuur gekoppeld")
     old_inv_id = p.get("invoice_id")
     pay_amt = float(p.get("amount") or 0)
+    allocations = p.get("allocations") or []
+    invoice_ids = p.get("invoice_ids") or []
+    if (any(invoice_id != old_inv_id for invoice_id in invoice_ids)
+            or any(a.get("invoice_id") != old_inv_id for a in allocations)
+            or (allocations and abs(sum(float(a.get("amount") or 0) for a in allocations) - pay_amt) > 0.005)):
+        return HTTPException(
+            status_code=409, detail="Deze betaling heeft meerdere of onvolledige factuurallocaties; controleer deze eerst.",
+        )
+    new_inv = await db.invoices.find_one(
+        {"id": new_inv_id, "tenant_id": tenant_id, "company_id": cid}, {"_id": 0},
+    )
+    if not new_inv:
+        return HTTPException(status_code=404, detail="Nieuwe factuur niet gevonden of niet van deze huurder")
     report = {"old_invoice": None, "new_invoice": None}
 
     # 1) Trek van OUDE factuur af
     if old_inv_id and old_inv_id != new_inv_id:
-        old_inv = await db.invoices.find_one({"id": old_inv_id}, {"_id": 0})
+        old_inv = await db.invoices.find_one(
+            {"id": old_inv_id, "company_id": cid, "tenant_id": tenant_id}, {"_id": 0},
+        )
+        if not old_inv:
+            return HTTPException(status_code=409, detail="Oude factuur niet gevonden; controleer de betaling eerst.")
         if old_inv:
             old_amt = float(old_inv.get("amount") or 0)
             old_paid = float(old_inv.get("paid_amount") or 0)
@@ -11521,11 +11568,13 @@ async def reassign_payment_invoice(
                 new_old_status = "partial"
             else:
                 new_old_status = "open"
-            await db.invoices.update_one(
-                {"id": old_inv_id},
+            updated_old = await db.invoices.update_one(
+                {"id": old_inv_id, "company_id": cid, "tenant_id": tenant_id},
                 {"$set": {"paid_amount": new_old_paid, "status": new_old_status,
                           "paid_at": None if new_old_status != "paid" else old_inv.get("paid_at")}},
             )
+            if updated_old.matched_count != 1:
+                raise RuntimeError("Oude factuur is tijdens verplaatsing gewijzigd")
             report["old_invoice"] = {
                 "id": old_inv_id,
                 "invoice_number": old_inv.get("invoice_number"),
@@ -11538,16 +11587,19 @@ async def reassign_payment_invoice(
     #    de idempotency-guard bij de nieuwe apply niet blokkeert.
     new_allocations = [a for a in (p.get("allocations") or [])
                        if a.get("invoice_id") != new_inv_id and a.get("invoice_id") != old_inv_id]
-    await db.payments.update_one(
-        {"id": pid},
+    updated_payment = await db.payments.update_one(
+        {**q, "status": "approved"},
         {"$set": {
             "invoice_id": new_inv_id,
             "invoice_number": new_inv.get("invoice_number"),
             "period_month": new_inv.get("period_month"),
             "period_year": new_inv.get("period_year"),
             "allocations": new_allocations,
+            **({"invoice_ids": [new_inv_id]} if invoice_ids else {}),
         }},
     )
+    if updated_payment.matched_count != 1:
+        raise RuntimeError("Betaling is tijdens verplaatsing gewijzigd")
 
     # 3) Pas toe op NIEUWE factuur — herbereken paid_amount + status.
     #    We doen dit direct via update i.p.v. _apply_payment_to_invoice
@@ -11567,15 +11619,21 @@ async def reassign_payment_invoice(
     upd = {"paid_amount": new_new_paid, "status": new_new_status}
     if new_paid_at:
         upd["paid_at"] = new_paid_at
-    await db.invoices.update_one({"id": new_inv_id}, {"$set": upd})
+    updated_new = await db.invoices.update_one(
+        {"id": new_inv_id, "company_id": cid, "tenant_id": tenant_id}, {"$set": upd},
+    )
+    if updated_new.matched_count != 1:
+        raise RuntimeError("Nieuwe factuur is tijdens verplaatsing gewijzigd")
     # Log allocatie op payment.allocations
-    await db.payments.update_one(
-        {"id": pid},
+    updated_allocation = await db.payments.update_one(
+        {**q, "status": "approved"},
         {"$push": {"allocations": {
             "invoice_id": new_inv_id, "amount": pay_amt,
             "applied_at": iso(now_utc()),
         }}},
     )
+    if updated_allocation.matched_count != 1:
+        raise RuntimeError("Allocatie kon niet worden vastgelegd")
     report["new_invoice"] = {
         "id": new_inv_id,
         "invoice_number": new_inv.get("invoice_number"),
@@ -11583,7 +11641,7 @@ async def reassign_payment_invoice(
         "old_status": new_inv.get("status"), "new_status": new_new_status,
     }
     # Return updated payment
-    updated = await db.payments.find_one({"id": pid}, {"_id": 0})
+    updated = await db.payments.find_one(q, {"_id": 0})
     await _kiosk_overview_invalidate(company_id_of(user), (updated or {}).get("tenant_id"))
     return {"payment": await _enrich_payment(updated), "report": report}
 

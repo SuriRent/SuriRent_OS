@@ -154,7 +154,9 @@ export function ProcessingPayments({ payments, guards = [], tenants = [], unavai
           <div key={`${guard.operation}-${guard.operation_id}`}
             className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700">
             {tenants.find((tenant) => tenant.id === guard.tenant_id)?.name || 'Huurder'}
-            {' · '}{guard.operation === 'bank_reconciliation' ? 'Bankregistratie' : 'Betaalverwerking'}
+            {' · '}{guard.operation === 'bank_reconciliation' ? 'Bankregistratie'
+              : guard.operation === 'payment_reassignment' ? 'Betaling verplaatsen'
+              : 'Betaalverwerking'}
             {' · '}{guard.operation_id}
           </div>
         ))}
