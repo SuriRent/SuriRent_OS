@@ -159,6 +159,7 @@ export function ProcessingPayments({ payments, guards = [], tenants = [], unavai
               : guard.operation === 'payment_creation' ? 'Betaling registreren'
               : guard.operation === 'installment_payment' ? 'Termijnbetaling'
               : guard.operation === 'payment_plan_change' ? 'Wijziging betalingsregeling'
+              : guard.operation === 'payment_deletion' ? 'Betaling verwijderen'
               : guard.operation === 'stripe_request' ? 'Stripe-betaalverzoek'
               : guard.operation === 'mope_request' ? 'Mopé-betaalverzoek'
               : 'Betaalverwerking'}

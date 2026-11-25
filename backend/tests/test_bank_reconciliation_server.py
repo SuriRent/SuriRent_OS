@@ -333,6 +333,109 @@ class InstallmentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.db.payment_plan_installments.docs), 0)
 
 
+class PaymentDeletionTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = SimpleNamespace(payments=Records(), tenant_payment_guards=Guards())
+        await self.db.payments.insert_one({
+            "id": "p1", "company_id": "c1", "tenant_id": "t1", "status": "approved",
+        })
+        for item in (patch.object(server, "db", self.db), patch.object(server, "scope", return_value={"company_id": "c1"})):
+            item.start()
+            self.addCleanup(item.stop)
+
+    async def test_sms_guard_prevents_deletion_before_writes(self):
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with patch.object(server, "_delete_payment_locked", AsyncMock()) as delete:
+            with self.assertRaises(HTTPException) as error:
+                await server.delete_payment("p1", False, {})
+        self.assertEqual(error.exception.status_code, 409)
+        delete.assert_not_awaited()
+
+    async def test_uncertain_deletion_keeps_guard_for_review(self):
+        with patch.object(server, "_delete_payment_locked", AsyncMock(side_effect=RuntimeError("write failed"))):
+            with self.assertRaises(HTTPException) as error:
+                await server.delete_payment("p1", False, {})
+        self.assertEqual(error.exception.status_code, 500)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("payment_deletion", "p1"))
+
+    async def test_deletion_holds_guard_until_writes_complete(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+
+        async def delete(*_args):
+            entered.set()
+            await resume.wait()
+            return {"ok": True}
+
+        with patch.object(server, "_delete_payment_locked", side_effect=delete):
+            task = asyncio.create_task(server.delete_payment("p1", False, {}))
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            self.assertTrue((await task)["ok"])
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_sms_and_current_installment_payments_cannot_be_deleted(self):
+        for extra in ({"sms_attempt_id": "attempt1"}, {"metadata": {"plan_id": "plan1"}}):
+            self.db.payments.docs[0].update(extra)
+            with patch.object(server, "_delete_payment_locked", AsyncMock()) as delete:
+                with self.assertRaises(HTTPException) as error:
+                    await server.delete_payment("p1", False, {})
+            self.assertEqual(error.exception.status_code, 409)
+            delete.assert_not_awaited()
+            self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+            for key in extra:
+                self.db.payments.docs[0].pop(key)
+
+
+@unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
+class PaymentDeletionMongoTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.client = AsyncIOMotorClient(os.environ["SMS_BOOKING_MONGO_URL"], serverSelectionTimeoutMS=5000)
+        self.name = f"test_payment_deletion_{uuid4().hex}"
+        self.db = self.client[self.name]
+        await self.db.payments.insert_one({
+            "id": "p1", "company_id": "c1", "tenant_id": "t1", "status": "approved",
+            "amount": 50, "invoice_id": "i1", "allocations": [{"invoice_id": "i1", "amount": 50}],
+        })
+        await self.db.invoices.insert_one({
+            "id": "i1", "company_id": "c1", "tenant_id": "t1",
+            "amount": 100, "paid_amount": 50, "status": "partial",
+        })
+        for item in (
+            patch.object(server, "db", self.db), patch.object(server, "scope", return_value={"company_id": "c1"}),
+            patch.object(server, "company_id_of", return_value="c1"),
+            patch.object(server, "_kiosk_overview_invalidate", AsyncMock()),
+        ):
+            item.start()
+            self.addCleanup(item.stop)
+
+    async def asyncTearDown(self):
+        await self.client.drop_database(self.name)
+        self.client.close()
+
+    async def test_deletion_reverts_invoice_before_releasing_guard(self):
+        result = await server.delete_payment("p1", False, {})
+        self.assertTrue(result["ok"])
+        self.assertIsNone(await self.db.payments.find_one({"id": "p1"}))
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 0)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_missing_invoice_does_not_delete_payment_and_retains_guard(self):
+        await self.db.invoices.delete_one({"id": "i1"})
+        with self.assertRaises(HTTPException) as error:
+            await server.delete_payment("p1", False, {})
+        self.assertEqual(error.exception.status_code, 500)
+        self.assertIsNotNone(await self.db.payments.find_one({"id": "p1"}))
+        self.assertEqual(
+            (await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))["operation"],
+            "payment_deletion",
+        )
+
+
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = SimpleNamespace(payments=Records(), invoices=Records(), tenant_payment_guards=Guards())

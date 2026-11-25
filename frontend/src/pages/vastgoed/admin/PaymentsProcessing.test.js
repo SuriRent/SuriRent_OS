@@ -63,6 +63,7 @@ test.each([
   ['mope_request', 'Mopé-betaalverzoek'],
   ['installment_payment', 'Termijnbetaling'],
   ['payment_plan_change', 'Wijziging betalingsregeling'],
+  ['payment_deletion', 'Betaling verwijderen'],
 ])('toont een achtergebleven providerverzoek: %s', (operation, label) => {
   const html = renderToStaticMarkup(<ProcessingPayments
     payments={[]}

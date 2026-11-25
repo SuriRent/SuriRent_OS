@@ -194,6 +194,11 @@ items; each installment must be paid separately until combined booking is safe.
 Admin and kiosk plan creation and admin plan cancellation also use the tenant
 guard. A failed change retains a `payment_plan_change` guard and plan ID;
 inspect the plan and all its installments before manual recovery.
+Deleting a payment also holds the tenant guard while linked invoices and
+installments are changed. Failures retain a `payment_deletion` guard for
+review. SMS payments and current plan-installment payments cannot be deleted
+through this endpoint because their linked booking state cannot be safely
+reversed there.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

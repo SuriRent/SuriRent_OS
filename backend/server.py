@@ -11005,7 +11005,46 @@ async def delete_payment(
         raise HTTPException(status_code=404, detail="Betaling niet gevonden")
     if pay.get("status") in ("approving", "rejecting"):
         raise HTTPException(status_code=409, detail="Betaling is in verwerking of moet eerst worden gecontroleerd.")
+    cid, tenant_id = pay.get("company_id"), pay.get("tenant_id")
+    if not isinstance(cid, str) or not cid or not isinstance(tenant_id, str) or not tenant_id:
+        raise HTTPException(status_code=409, detail="Betaling heeft geen geldige bedrijfs- en huurdersgegevens.")
 
+    from sms_payment_attempts import PaymentAttemptConflict
+    from tenant_payment_guard import acquire_payment_guard, release_payment_guard
+    owner = secrets.token_urlsafe(24)
+    try:
+        await acquire_payment_guard(
+            db, company_id=cid, tenant_id=tenant_id, kind="legacy", owner=owner,
+            operation="payment_deletion", operation_id=payment_id,
+        )
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.") from exc
+    try:
+        current = await db.payments.find_one(
+            {"id": payment_id, "company_id": cid, "tenant_id": tenant_id}, {"_id": 0},
+        )
+        if not current:
+            result = HTTPException(status_code=404, detail="Betaling niet gevonden")
+        elif current.get("status") in ("approving", "rejecting"):
+            result = HTTPException(status_code=409, detail="Betaling is in verwerking of moet eerst worden gecontroleerd.")
+        elif current.get("sms_attempt_id"):
+            result = HTTPException(status_code=409, detail="Een sms-betaling kan niet worden verwijderd; controleer de betaling handmatig.")
+        elif (current.get("metadata") or {}).get("plan_id"):
+            result = HTTPException(status_code=409, detail="Een termijnbetaling kan niet worden verwijderd; controleer de regeling handmatig.")
+        else:
+            result = await _delete_payment_locked(payment_id, also_delete_invoices, user, current)
+        await release_payment_guard(db, company_id=cid, tenant_id=tenant_id, kind="legacy", owner=owner)
+    except Exception as exc:
+        _logging.getLogger(__name__).exception("Payment deletion requires review: %s", payment_id)
+        raise HTTPException(
+            status_code=500, detail="De betaling is mogelijk gedeeltelijk verwijderd. Controleer deze voordat u opnieuw probeert.",
+        ) from exc
+    if isinstance(result, HTTPException):
+        raise result
+    return result
+
+
+async def _delete_payment_locked(payment_id: str, also_delete_invoices: bool, user: dict, pay: dict):
     pay_amount = float(pay.get("amount") or 0)
     deleted_invoices = []
     reverted_invoices = []
@@ -11025,10 +11064,15 @@ async def delete_payment(
             inv_ids.add(a["invoice_id"])
             alloc_map[a["invoice_id"]] = float(a.get("amount") or 0)
 
+    invoice_scope = {"company_id": pay["company_id"], "tenant_id": pay["tenant_id"]}
+    invoices = {}
     for inv_id in inv_ids:
-        inv = await db.invoices.find_one({"id": inv_id}, {"_id": 0})
+        inv = await db.invoices.find_one({"id": inv_id, **invoice_scope}, {"_id": 0})
         if not inv:
-            continue
+            raise RuntimeError("Gekoppelde factuur ontbreekt of hoort niet bij deze huurder")
+        invoices[inv_id] = inv
+    for inv_id in inv_ids:
+        inv = invoices[inv_id]
         # Hoeveel deze betaling naar deze factuur stuurde
         share = alloc_map.get(inv_id, pay_amount if len(inv_ids) == 1 else 0)
         # Andere approved payments die naar deze factuur verwijzen?
@@ -11043,7 +11087,9 @@ async def delete_payment(
         })
         if other_count == 0 and also_delete_invoices:
             # Geen andere betalingen → verwijder factuur volledig
-            await db.invoices.delete_one({"id": inv_id})
+            deleted = await db.invoices.delete_one({"id": inv_id, **invoice_scope})
+            if deleted.deleted_count != 1:
+                raise RuntimeError("Factuur kon niet worden verwijderd")
             deleted_invoices.append({"id": inv_id, "invoice_number": inv.get("invoice_number")})
         else:
             # Andere betalingen bestaan of admin wil factuur behouden:
@@ -11056,14 +11102,16 @@ async def delete_payment(
                 new_status = "paid"
             else:
                 new_status = "partial"
-            await db.invoices.update_one(
-                {"id": inv_id},
+            updated = await db.invoices.update_one(
+                {"id": inv_id, **invoice_scope},
                 {"$set": {
                     "paid_amount": round(new_paid, 2),
                     "status": new_status,
                     "remaining_amount": round(max(amount - new_paid, 0), 2),
                 }},
             )
+            if updated.matched_count != 1:
+                raise RuntimeError("Factuur kon niet worden teruggedraaid")
             reverted_invoices.append({"id": inv_id, "invoice_number": inv.get("invoice_number"), "new_status": new_status})
 
     # Plan-installments terugzetten (als betaling daaraan gekoppeld was)
@@ -11072,18 +11120,26 @@ async def delete_payment(
         pid = item.get("plan_id")
         seq = item.get("sequence") or item.get("seq")
         if pid and seq is not None:
-            await db.payment_plan_installments.update_one(
-                {"plan_id": pid, "sequence": int(seq)},
+            installment = await db.payment_plan_installments.update_one(
+                {"plan_id": pid, "company_id": pay["company_id"], "sequence": int(seq), "payment_id": payment_id},
                 {"$set": {"status": "pending", "paid_at": None, "payment_id": None}},
             )
+            if installment.matched_count != 1:
+                raise RuntimeError("Gekoppelde regelingstermijn kon niet worden teruggedraaid")
             # Decrement plan.paid_installments
-            await db.payment_plans.update_one(
-                {"id": pid},
+            plan = await db.payment_plans.update_one(
+                {"id": pid, **invoice_scope},
                 {"$inc": {"paid_installments": -1}, "$set": {"status": "active"}},
             )
+            if plan.matched_count != 1:
+                raise RuntimeError("Gekoppelde regeling kon niet worden teruggedraaid")
 
     # Verwijder de betaling zelf
-    await db.payments.delete_one({"id": payment_id})
+    deleted = await db.payments.delete_one({
+        "id": payment_id, "company_id": pay["company_id"], "tenant_id": pay["tenant_id"],
+    })
+    if deleted.deleted_count != 1:
+        raise RuntimeError("Betaling kon niet worden verwijderd")
     await _kiosk_overview_invalidate(company_id_of(user), None)
 
     return {
@@ -11157,7 +11213,7 @@ async def payment_processing_guards(user=Depends(get_current_user)):
         {"company_id": cid, "kind": "legacy",
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
                                 "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
-                                "installment_payment", "payment_plan_change"]}},
+                                "installment_payment", "payment_plan_change", "payment_deletion"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
