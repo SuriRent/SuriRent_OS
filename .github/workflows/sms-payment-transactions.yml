@@ -2,6 +2,11 @@ name: SMS payment transaction tests
 
 on:
   workflow_dispatch:
+    inputs:
+      run_stripe_test:
+        description: Run the real Stripe test-mode payment on this trusted branch
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'backend/sms_payment_booking.py'
@@ -85,3 +90,7 @@ jobs:
       - name: Stop isolated MongoDB
         if: always()
         run: docker stop sms-payment-test-mongo || true
+
+  stripe-test-payment:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_stripe_test
+    uses: ./.github/workflows/sms-stripe-testmode.yml

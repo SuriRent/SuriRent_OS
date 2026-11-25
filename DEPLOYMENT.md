@@ -174,11 +174,13 @@ above is a standalone MongoDB instance, so it cannot run this booking code.
 The `SMS payment transaction tests` GitHub Actions workflow starts a separate,
 disposable replica set for the booking tests; it does not migrate or access the
 deployment database. Run it after pushing the branch and inspect its result.
-The manually triggered `SMS Stripe test-mode payment` workflow exercises the
-backend checkout with Stripe's test API and an isolated MongoDB replica set.
-Configure its GitHub Actions secret `SMS_STRIPE_TEST_SECRET_KEY` with a Stripe
-**test** secret key (`sk_test_...`); the workflow rejects live keys. Trigger it
-only on a trusted branch. It creates a EUR 1.00 test-mode PaymentIntent using
+The opt-in Stripe test exercises the backend checkout with Stripe's test API and
+an isolated MongoDB replica set. Configure the GitHub Actions environment
+`SMS_STRIPE_TEST_SECRET_KEY` with an environment secret of the same name holding
+a Stripe **test** secret key (`sk_test_...`); the workflow rejects live keys.
+Only on a trusted branch, manually run `SMS payment transaction tests` with
+`run_stripe_test` enabled. This also runs the regular transaction tests.
+The test creates a EUR 1.00 test-mode PaymentIntent using
 Stripe's test payment method; no real charge is made. The test does not send an
 SMS, exercise the browser or use the deployment database, and passing it does
 not make the checkout ready for customers. Never put keys in the repository,

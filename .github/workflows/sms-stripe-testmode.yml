@@ -2,6 +2,7 @@ name: SMS Stripe test-mode payment
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -9,6 +10,7 @@ permissions:
 jobs:
   stripe-test-payment:
     runs-on: ubuntu-latest
+    environment: SMS_STRIPE_TEST_SECRET_KEY
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
