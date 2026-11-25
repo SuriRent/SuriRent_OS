@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
+import stripe
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from sms_payment_attempts import PaymentAttemptConflict, tenant_payment_key
@@ -67,7 +68,8 @@ class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
     async def test_complete_stripe_checkout_books_only_after_provider_verification(self):
         intent = {"id": "pi_1", "client_secret": "secret", "amount": 7500,
                   "currency": "eur", "livemode": False}
-        with patch("sms_payment_providers.stripe.PaymentIntent.create", return_value=intent) as create:
+        with patch("sms_payment_providers.stripe.PaymentIntent.create",
+                   return_value=stripe.PaymentIntent.construct_from(intent, key=None)) as create:
             result = await start_sms_checkout(
                 self.db, self.client, token=self.token, item=self.item, method="card",
             )
@@ -80,13 +82,15 @@ class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
         proof = {**intent, "status": "processing", "amount_received": 0, "payment_method_types": ["card"],
                  "metadata": {"source": "surirent_sms_payment", "attempt_id": attempt_id,
                               "company_id": "c1", "tenant_id": "t1"}}
-        with patch("sms_payment_providers.stripe.PaymentIntent.retrieve", return_value=proof) as retrieve:
+        with patch("sms_payment_providers.stripe.PaymentIntent.retrieve",
+                   return_value=stripe.PaymentIntent.construct_from(proof, key=None)) as retrieve:
             with self.assertRaises(PaymentAttemptConflict):
                 await finish_sms_checkout(
                     self.db, self.client, token=self.token, item=self.item, attempt_id=attempt_id,
                 )
             self.assertEqual(await self.db.payments.count_documents({}), 0)
             proof.update({"status": "succeeded", "amount_received": 7500})
+            retrieve.return_value = stripe.PaymentIntent.construct_from(proof, key=None)
             result = await finish_sms_checkout(
                 self.db, self.client, token=self.token, item=self.item, attempt_id=attempt_id,
             )
@@ -164,7 +168,8 @@ class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
     async def test_background_recovers_paid_checkout_after_link_expiry(self):
         intent = {"id": "pi_1", "client_secret": "secret", "amount": 7500,
                   "currency": "eur", "livemode": False}
-        with patch("sms_payment_providers.stripe.PaymentIntent.create", return_value=intent):
+        with patch("sms_payment_providers.stripe.PaymentIntent.create",
+                   return_value=stripe.PaymentIntent.construct_from(intent, key=None)):
             started = await start_sms_checkout(self.db, self.client, token=self.token, item=self.item, method="card")
         await self.db.sms_payment_links.update_one(
             {}, {"$set": {"expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)}},
@@ -172,7 +177,8 @@ class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
         proof = {**intent, "status": "succeeded", "amount_received": 7500, "payment_method_types": ["card"],
                  "metadata": {"source": "surirent_sms_payment", "attempt_id": started["attempt_id"],
                               "company_id": "c1", "tenant_id": "t1"}}
-        with patch("sms_payment_providers.stripe.PaymentIntent.retrieve", return_value=proof):
+        with patch("sms_payment_providers.stripe.PaymentIntent.retrieve",
+                   return_value=stripe.PaymentIntent.construct_from(proof, key=None)):
             result = await reconcile_sms_payment_batch(self.db, self.client)
         self.assertEqual((result["scanned"], result["completed"]), (1, 1))
         self.assertEqual(await self.db.payments.count_documents({}), 1)

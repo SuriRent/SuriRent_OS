@@ -5,6 +5,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
+import stripe
 from pymongo.errors import DuplicateKeyError
 
 from sms_payment_attempts import (
@@ -625,8 +626,10 @@ class PreflightUnitTests(unittest.IsolatedAsyncioTestCase):
             _active=lambda _: {"enabled": True, "mode": "test", "methods": ["card"],
                                "secret_key": "test-key", "publishable_key": "public-key"},
         )
-        create = Mock(return_value={"id": "pi_1", "client_secret": "secret", "amount": 250,
-                                    "currency": "eur", "livemode": False})
+        create = Mock(return_value=stripe.PaymentIntent.construct_from(
+            {"id": "pi_1", "client_secret": "secret", "amount": 250,
+             "currency": "eur", "livemode": False}, key=None,
+        ))
         with patch.dict(sys.modules, {"routes": SimpleNamespace(_deps=fake_deps),
                                      "routes.company_stripe": fake_route}), \
                 patch("sms_payment_providers.stripe.PaymentIntent.create", create):
