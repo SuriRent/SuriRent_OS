@@ -92,8 +92,8 @@ class StripeTestModeCheckoutTests(unittest.IsolatedAsyncioTestCase):
             stripe.PaymentIntent.confirm, started["payment_intent_id"], payment_method="pm_card_visa",
             api_key=self.key,
         )
-        self.assertIs(confirmed.get("livemode"), False)
-        self.assertEqual(confirmed.get("status"), "succeeded")
+        self.assertIs(confirmed["livemode"], False)
+        self.assertEqual(confirmed["status"], "succeeded")
         result = await finish_sms_checkout(self.db, self.client, token=self.token, item=self.item, attempt_id=attempt)
         replay = await finish_sms_checkout(self.db, self.client, token=self.token, item=self.item, attempt_id=attempt)
         self.assertEqual(replay, result)

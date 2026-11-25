@@ -62,7 +62,7 @@ class PaymentProviderTests(unittest.IsolatedAsyncioTestCase):
         }
         config = AsyncMock(return_value={"stripe_config": {"test": {"secret_key": "test-key"}}})
         fake_route = SimpleNamespace(_cfg_doc=config)
-        retrieve = Mock(return_value=payment)
+        retrieve = Mock(return_value=stripe.PaymentIntent.construct_from(payment, key=None))
         with patch.dict(sys.modules, {"routes.company_stripe": fake_route}), \
                 patch("sms_payment_providers.stripe.PaymentIntent.retrieve", retrieve):
             for changed in (
@@ -71,11 +71,11 @@ class PaymentProviderTests(unittest.IsolatedAsyncioTestCase):
                 {"metadata": {**payment["metadata"], "company_id": "other"}},
                 {"metadata": {**payment["metadata"], "attempt_id": "other"}},
             ):
-                retrieve.return_value = {**payment, **changed}
+                retrieve.return_value = stripe.PaymentIntent.construct_from({**payment, **changed}, key=None)
                 with self.subTest(changed=changed), self.assertRaises(PaymentAttemptConflict):
                     await verify_sms_provider_payment(self.collection, attempt["attempt_id"], attempt["_id"])
                 self.assertEqual(self.collection.docs[attempt["_id"]]["state"], "open")
-            retrieve.return_value = payment
+            retrieve.return_value = stripe.PaymentIntent.construct_from(payment, key=None)
             result = await verify_sms_provider_payment(self.collection, attempt["attempt_id"], attempt["_id"])
             self.assertEqual(result["state"], "verified")
             retrieve.assert_called_with("provider_1", api_key="test-key")
@@ -98,7 +98,7 @@ class PaymentProviderTests(unittest.IsolatedAsyncioTestCase):
         )
         intent = {"id": "pi_123", "client_secret": "secret", "amount": 250,
                   "currency": "eur", "livemode": False}
-        create = Mock(return_value=intent)
+        create = Mock(return_value=stripe.PaymentIntent.construct_from(intent, key=None))
         with patch.dict(sys.modules, {"routes": SimpleNamespace(_deps=fake_deps),
                                      "routes.company_stripe": fake_route}), \
                 patch("sms_payment_providers.stripe.PaymentIntent.create", create):

@@ -56,7 +56,7 @@ async def create_sms_stripe_intent(db, client, attempt: dict) -> dict:
         await cancel_reserved_sms_attempt(db, client, key=stored["_id"], attempt_id=stored["attempt_id"])
         raise
     try:
-        intent = await asyncio.to_thread(
+        stripe_intent = await asyncio.to_thread(
             stripe.PaymentIntent.create,
             api_key=config["secret_key"],
             idempotency_key=stored["attempt_id"],
@@ -70,6 +70,7 @@ async def create_sms_stripe_intent(db, client, attempt: dict) -> dict:
     except stripe.error.StripeError as exc:
         await mark_provider_uncertain(collection, stored)
         raise PaymentAttemptConflict("Stripe-verzoek is niet bevestigd; controleer de status") from exc
+    intent = stripe_intent.to_dict()
     if (not intent.get("id") or not intent.get("client_secret")
             or intent.get("amount") != stored["provider_amount_cents"]
             or intent.get("currency") != "eur"
@@ -150,12 +151,13 @@ async def _stripe_proof(attempt: dict) -> dict:
     if not secret:
         raise PaymentAttemptConflict("Stripe-sleutel voor deze betaling ontbreekt")
     try:
-        intent = await asyncio.to_thread(
+        stripe_intent = await asyncio.to_thread(
             stripe.PaymentIntent.retrieve, attempt["provider_id"], api_key=secret,
         )
     except stripe.error.StripeError as exc:
         raise PaymentAttemptConflict("Stripe-betalingsstatus kon niet worden gecontroleerd") from exc
 
+    intent = stripe_intent.to_dict()
     metadata = intent.get("metadata") or {}
     if (intent.get("id") != attempt["provider_id"]
             or intent.get("livemode") is not (mode == "live")
