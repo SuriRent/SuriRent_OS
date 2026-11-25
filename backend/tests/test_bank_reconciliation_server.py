@@ -629,6 +629,59 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payment["allocations"][0]["amount"], 75)
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
 
+    async def test_sms_checkout_http_endpoints_verify_before_booking(self):
+        import stripe
+        from httpx import ASGITransport, AsyncClient
+        from sms_payment_links import create_payment_link
+
+        await self.db.payments.delete_many({})
+        await self.db.invoices.update_one({"id": "i1"}, {"$set": {"currency": "EUR"}})
+        link = await create_payment_link(
+            self.db.sms_payment_links, "https://example.test", "c1", "t1", ["i1"], [],
+        )
+        token = link.rsplit("/", 1)[1]
+        item = {"kind": "invoice", "id": "i1"}
+        deps = SimpleNamespace(require_plan_feature=AsyncMock())
+        config = {"enabled": True, "mode": "test", "methods": ["card"],
+                  "secret_key": "test-secret", "publishable_key": "test-public"}
+        stripe_route = SimpleNamespace(
+            _active=lambda _: config,
+            _cfg_doc=AsyncMock(return_value={"stripe_config": {"test": {"secret_key": "test-secret"}}}),
+        )
+        intent = {"id": "pi_test", "client_secret": "test-client-secret", "amount": 10000,
+                  "currency": "eur", "livemode": False}
+        with patch.object(server, "client", self.client), \
+                patch.object(server, "_SMS_CHECKOUT_READY", True), \
+                patch.dict(sys.modules, {"routes": SimpleNamespace(_deps=deps),
+                                         "routes.company_stripe": stripe_route}), \
+                patch("sms_payment_providers.stripe.PaymentIntent.create",
+                      return_value=stripe.PaymentIntent.construct_from(intent, key=None)), \
+                patch("sms_payment_providers.stripe.PaymentIntent.retrieve") as retrieve:
+            async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as http:
+                headers = {"X-Sms-Payment-Token": token}
+                start = await http.post("/api/public/sms-payment/start", json={"item": item, "method": "card"},
+                                        headers=headers)
+                self.assertEqual(start.status_code, 200)
+                attempt_id = start.json()["attempt_id"]
+                proof = {**intent, "status": "processing", "amount_received": 0, "payment_method_types": ["card"],
+                         "metadata": {"source": "surirent_sms_payment", "attempt_id": attempt_id,
+                                      "company_id": "c1", "tenant_id": "t1"}}
+                retrieve.return_value = stripe.PaymentIntent.construct_from(proof, key=None)
+                body = {"item": item, "attempt_id": attempt_id}
+                pending = await http.post("/api/public/sms-payment/finish", json=body, headers=headers)
+                self.assertEqual(pending.status_code, 409)
+                self.assertEqual(await self.db.payments.count_documents({}), 0)
+                proof.update({"status": "succeeded", "amount_received": 10000})
+                retrieve.return_value = stripe.PaymentIntent.construct_from(proof, key=None)
+                paid = await http.post("/api/public/sms-payment/finish", json=body, headers=headers)
+                retry = await http.post("/api/public/sms-payment/finish", json=body, headers=headers)
+        self.assertEqual(paid.status_code, 200)
+        self.assertEqual(paid.json(), retry.json())
+        self.assertEqual(paid.json()["status"], "paid")
+        self.assertEqual(await self.db.payments.count_documents({}), 1)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 100)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
     async def test_assistant_payment_allocates_under_guard(self):
         entered, resume = asyncio.Event(), asyncio.Event()
 
