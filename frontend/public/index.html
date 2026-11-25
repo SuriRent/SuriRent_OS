@@ -7,6 +7,9 @@
         meta.name = 'referrer';
         meta.content = 'no-referrer';
         document.head.appendChild(meta);
+        if (/^\/b\/return\/?$/.test(window.location.pathname) && window.location.search) {
+          window.history.replaceState(null, '', '/b/return');
+        }
       }
     </script>
     <script>

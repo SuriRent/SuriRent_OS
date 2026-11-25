@@ -97,14 +97,14 @@ async def create_sms_mope_request(db, client, attempt: dict) -> dict:
         config = await _config(stored["company_id"])
         if not _active(config):
             raise PaymentAttemptConflict("Mopé is niet ingeschakeld")
-        redirect_url = _deps.public_url("/")
+        redirect_url = _deps.public_url("/b/return")
         try:
             redirect = urlsplit(redirect_url)
             _ = redirect.port
         except ValueError as exc:
             raise PaymentAttemptConflict("Publieke app-URL voor Mopé is ongeldig") from exc
         if (redirect.scheme != "https" or not redirect.hostname or redirect.username or redirect.password
-                or redirect.path != "/" or redirect.query or redirect.fragment):
+                or redirect.path != "/b/return" or redirect.query or redirect.fragment):
             raise PaymentAttemptConflict("Publieke HTTPS-app-URL voor Mopé ontbreekt")
         if not await begin_provider_request(collection, stored):
             raise PaymentAttemptConflict("Betaalpoging is al gestart")

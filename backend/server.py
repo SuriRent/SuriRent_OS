@@ -21357,7 +21357,7 @@ async def sms_payment_info(response: Response, token: str = Header(default="", a
     return {
         "company": {"name": company.get("name") or "Bedrijf", "address": company.get("address") or ""},
         "items": payment_items(grant, invoices, plans), "online_methods": methods, "bank_accounts": banks,
-        "online_payment_available": False,
+        "online_payment_available": _SMS_CHECKOUT_READY,
     }
 
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, fmtMoney, formatError } from '../lib/api';
+import SmsCheckout from './SmsCheckout';
 
 export default function SmsPaymentPage() {
   const { token } = useParams();
@@ -12,6 +13,7 @@ export default function SmsPaymentPage() {
     window.__hidePwaSplash?.();
     setData(null);
     setError('');
+    if (token === 'return') return () => { active = false; };
     api.get('/public/sms-payment', { headers: { 'X-Sms-Payment-Token': token } })
       .then(({ data: result }) => { if (active) setData(result); })
       .catch((e) => { if (active) setError(formatError(e, 'De betaallink kon niet worden geopend.')); });
@@ -22,8 +24,9 @@ export default function SmsPaymentPage() {
     <main className="min-h-screen bg-slate-50 p-4 sm:p-8">
       <div className="mx-auto max-w-xl rounded-3xl bg-white p-5 shadow-sm sm:p-8" data-testid="sms-payment-page">
         <h1 className="text-2xl font-black text-slate-900">Betaling</h1>
+        {token === 'return' && <div className="mt-4"><SmsCheckout isReturn /></div>}
         {error && <p role="alert" className="mt-4 text-red-700">{error}</p>}
-        {!error && !data && <p className="mt-4 text-slate-500">Laden…</p>}
+        {token !== 'return' && !error && !data && <p className="mt-4 text-slate-500">Laden…</p>}
         {data && (
           <div className="mt-4 space-y-5">
             <p className="font-bold text-slate-800">{data.company.name}</p>
@@ -46,6 +49,9 @@ export default function SmsPaymentPage() {
                 <p className="mt-1 text-sm text-slate-600">{data.online_methods.map((method) => method.label).join(', ')}</p>
                 {!data.online_payment_available && <p className="mt-1 text-sm text-amber-700">Online betalen via deze pagina is nog niet beschikbaar.</p>}
               </section>
+            )}
+            {data.online_payment_available && (
+              <SmsCheckout token={token} items={data.items} methods={data.online_methods} />
             )}
             {data.bank_accounts.length > 0 && (
               <section>

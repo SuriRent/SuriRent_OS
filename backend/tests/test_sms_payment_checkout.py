@@ -43,7 +43,9 @@ class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
         link = await create_payment_link(self.db.sms_payment_links, "https://app.example.com", "c1", "t1", ["i1"], [])
         self.token = link.rsplit("/", 1)[1]
         self.item = {"kind": "invoice", "id": "i1"}
-        self.deps = SimpleNamespace(require_plan_feature=AsyncMock(), public_url=lambda _: "https://app.example.com/")
+        self.deps = SimpleNamespace(
+            require_plan_feature=AsyncMock(), public_url=lambda path: f"https://app.example.com{path}",
+        )
         self.config = {
             "enabled": True, "mode": "test", "methods": ["card"],
             "secret_key": "test-secret", "publishable_key": "test-publishable",

@@ -176,7 +176,7 @@ class PaymentProviderTests(unittest.IsolatedAsyncioTestCase):
             provider_currency="SRD",
         )
         fake_deps = SimpleNamespace(
-            require_plan_feature=AsyncMock(), public_url=lambda _: "https://app.example.com/",
+            require_plan_feature=AsyncMock(), public_url=lambda path: f"https://app.example.com{path}",
         )
         request = AsyncMock(return_value=SimpleNamespace(is_success=True))
         fake_route = SimpleNamespace(
@@ -191,7 +191,7 @@ class PaymentProviderTests(unittest.IsolatedAsyncioTestCase):
             payload = request.await_args.args[3]
             self.assertEqual(payload["order_id"], attempt["attempt_id"])
             self.assertEqual((payload["amount"], payload["currency"]), (10000, "SRD"))
-            self.assertEqual(payload["redirect_url"], "https://app.example.com/")
+            self.assertEqual(payload["redirect_url"], "https://app.example.com/b/return")
             with self.assertRaises(PaymentAttemptConflict):
                 await create_sms_mope_request(self.db, self.client, attempt)
             request.assert_awaited_once()
@@ -204,7 +204,7 @@ class PaymentProviderTests(unittest.IsolatedAsyncioTestCase):
             provider_currency="SRD",
         )
         fake_deps = SimpleNamespace(
-            require_plan_feature=AsyncMock(), public_url=lambda _: "https://app.example.com/",
+            require_plan_feature=AsyncMock(), public_url=lambda path: f"https://app.example.com{path}",
         )
         request = AsyncMock(side_effect=RuntimeError("timeout"))
         fake_route = SimpleNamespace(

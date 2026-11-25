@@ -93,14 +93,14 @@ remove Meta restrictions or the 24-hour window.
 
 ### SMS payment links (in development)
 
-The payment-link groundwork is not connected to reminder sending or online
-checkout yet. Do not send these links to customers until provider verification
-and reliable payment booking are connected and verified end to end.
+The experimental payment-link checkout is not connected to reminder sending
+and remains disabled. Do not send these links to customers until all payment
+paths, database transactions and real provider flows are verified end to end.
 
 The in-development attempt journal reserves at most one SMS checkout per
 company and tenant and leaves uncertain provider requests blocked for
 investigation. A successfully booked attempt can be archived and released
-atomically, preserving idempotent retries; this is not yet wired to checkout.
+atomically, preserving idempotent retries.
 The in-development Stripe and Mopé adapters create requests
 and check provider status against the reserved amount and identity. Before
 creating a provider request, they check that the reserved invoice or installment
@@ -134,8 +134,11 @@ is enabled. Public callers must authorize the exact attempt.
 
 The experimental checkout orchestrator accepts only an item authorized by an
 unexpired SMS grant, derives its amount from the database, and checks the
-provider before booking. Its public start and finish endpoints are hard-disabled;
-there is no checkout UI yet. Stripe currently accepts EUR
+provider before booking. Its public start and finish endpoints and the checkout
+UI are hard-disabled. The experimental UI stores a pending attempt in the
+browser session, uses a token-free provider return URL, and shows confirmation
+only after server verification. Lost or uncertain attempts may require manual
+review and cannot yet be safely unlocked through the UI. Stripe currently accepts EUR
 or SRD with a current configured rate; USD and amounts below the Stripe minimum
 are rejected, not silently converted or increased.
 
