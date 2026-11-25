@@ -166,6 +166,7 @@ export function ProcessingPayments({ payments, guards = [], tenants = [], unavai
               : guard.operation === 'tenant_deletion' ? 'Huurder verwijderen'
               : guard.operation === 'archived_debt' ? 'Restschuld verwerken'
               : guard.operation === 'tenant_reactivation' ? 'Huurder heractiveren'
+              : guard.operation === 'archive_invoice_backfill' ? 'Oude facturen archiveren'
               : guard.operation === 'stripe_request' ? 'Stripe-betaalverzoek'
               : guard.operation === 'mope_request' ? 'Mopé-betaalverzoek'
               : 'Betaalverwerking'}

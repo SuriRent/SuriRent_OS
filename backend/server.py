@@ -472,6 +472,50 @@ async def _warn_unlinked_rent_payments(database):
         )
 
 
+async def _archive_legacy_tenant_invoices(database, company_id: str, tenant_id: str):
+    from tenant_payment_guard import guarded_archived_tenant_change
+
+    async def archive():
+        if not await database.tenants.find_one({
+            "id": tenant_id, "company_id": company_id, "status": "archived",
+        }, {"_id": 1}):
+            return
+        query = {"company_id": company_id, "tenant_id": tenant_id, "archived": {"$ne": True}}
+        async for invoice in database.invoices.find(query, {"_id": 1, "status": 1}):
+            status = invoice.get("status")
+            fields = {"archived": True, "archived_at": iso(now_utc())}
+            if status in _UNPAID_STATUSES:
+                fields.update({"status": "archived", "status_before_archive": status})
+            updated = await database.invoices.update_one(
+                {**query, "_id": invoice["_id"], "status": status}, {"$set": fields},
+            )
+            if updated.matched_count != 1:
+                raise RuntimeError("Factuur is tijdens archiveren gewijzigd")
+
+    return await guarded_archived_tenant_change(
+        database, company_id=company_id, tenant_id=tenant_id,
+        operation="archive_invoice_backfill", change=archive,
+    )
+
+
+async def _archive_legacy_invoices_on_startup(database):
+    logger = _logging.getLogger("uvicorn.error")
+    async for tenant in database.tenants.find(
+        {"status": "archived"}, {"_id": 0, "id": 1, "company_id": 1},
+    ):
+        company_id, tenant_id = tenant.get("company_id"), tenant.get("id")
+        if not isinstance(company_id, str) or not company_id or not isinstance(tenant_id, str) or not tenant_id:
+            logger.warning("Archived tenant has no valid company or tenant ID; invoice archive requires review")
+            continue
+        try:
+            await _archive_legacy_tenant_invoices(database, company_id, tenant_id)
+        except HTTPException as exc:
+            if exc.status_code == 409:
+                logger.warning("Invoice archive skipped because tenant %s is being processed", tenant_id)
+            else:
+                logger.error("Invoice archive requires review for tenant %s", tenant_id)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     superadmin_pin = _validated_superadmin_pin(os.environ.get("SUPERADMIN_PIN"))
@@ -723,14 +767,9 @@ async def lifespan(app: FastAPI):
 
     # Eenmalig/idempotent: facturen van reeds gearchiveerde huurders archiveren.
     try:
-        _arch_ids = [t["id"] async for t in db.tenants.find({"status": "archived"}, {"_id": 0, "id": 1})]
-        if _arch_ids:
-            _base = {"tenant_id": {"$in": _arch_ids}, "archived": {"$ne": True}}
-            async for _inv in db.invoices.find({**_base, "status": {"$in": ["open", "sent", "pending", "overdue", "partial"]}}, {"_id": 0, "id": 1, "status": 1}):
-                await db.invoices.update_one({"id": _inv["id"]}, {"$set": {"status": "archived", "status_before_archive": _inv["status"]}})
-            await db.invoices.update_many(_base, {"$set": {"archived": True, "archived_at": iso(now_utc())}})
-    except Exception as _e:  # noqa: BLE001
-        print(f"[startup] archive invoices migration failed: {_e}")
+        await _archive_legacy_invoices_on_startup(db)
+    except Exception:  # noqa: BLE001
+        _logging.getLogger("uvicorn.error").exception("Startup invoice archive failed")
 
     # Oudere borgverrekeningen: maanden + 'door' aanvullen.
     try:
@@ -11215,7 +11254,7 @@ async def payment_processing_guards(user=Depends(get_current_user)):
                                 "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
                                 "installment_payment", "payment_plan_change", "payment_deletion",
                                 "credit_reconciliation", "invoice_change", "tenant_move_out", "tenant_deletion",
-                                "archived_debt", "tenant_reactivation"]}},
+                                "archived_debt", "tenant_reactivation", "archive_invoice_backfill"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{

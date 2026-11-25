@@ -190,7 +190,7 @@ async def guarded_tenant_deletion(db, *, company_id: str, tenant_id: str, change
 
 
 async def guarded_archived_tenant_change(db, *, company_id: str, tenant_id: str, operation: str, change):
-    if operation not in ("archived_debt", "tenant_reactivation"):
+    if operation not in ("archived_debt", "tenant_reactivation", "archive_invoice_backfill"):
         raise ValueError("Ongeldige huurdersoperatie")
     owner = secrets.token_urlsafe(24)
     try:

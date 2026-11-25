@@ -571,6 +571,74 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(error.exception.status_code, 404)
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "missing")}))
 
+    async def test_startup_archive_is_scoped_and_preserves_paid_status(self):
+        await self.db.tenants.update_one({"id": "t1"}, {"$set": {"status": "archived"}})
+        await self.db.invoices.insert_many([
+            {"id": "paid", "company_id": "c1", "tenant_id": "t1", "status": "paid"},
+            {"id": "other", "company_id": "c2", "tenant_id": "t1", "status": "open"},
+        ])
+        await server._archive_legacy_invoices_on_startup(self.db)
+        invoice = await self.db.invoices.find_one({"id": "i1"})
+        self.assertEqual((invoice["status"], invoice["status_before_archive"], invoice["archived"]),
+                         ("archived", "open", True))
+        paid = await self.db.invoices.find_one({"id": "paid"})
+        self.assertEqual((paid["status"], paid["archived"]), ("paid", True))
+        self.assertNotIn("archived", await self.db.invoices.find_one({"id": "other"}))
+        await server._archive_legacy_invoices_on_startup(self.db)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["archived_at"], invoice["archived_at"])
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_startup_archive_blocks_reactivation_until_complete(self):
+        await self.db.tenants.update_one({"id": "t1"}, {"$set": {"status": "archived"}})
+        entered, resume = asyncio.Event(), asyncio.Event()
+
+        async def hold_tenant_check(*args):
+            entered.set()
+            await resume.wait()
+            return await self.db.tenants.find_one(*args)
+
+        database = SimpleNamespace(
+            tenants=SimpleNamespace(find_one=hold_tenant_check), invoices=self.db.invoices,
+            tenant_payment_guards=self.db.tenant_payment_guards,
+        )
+        task = asyncio.create_task(server._archive_legacy_tenant_invoices(database, "c1", "t1"))
+        try:
+            await asyncio.wait_for(entered.wait(), 5)
+            with self.assertRaises(HTTPException) as conflict:
+                await server.tenant_reactivate("t1", server.ReactivateIn(), {})
+            self.assertEqual(conflict.exception.status_code, 409)
+        finally:
+            resume.set()
+        await task
+        self.assertTrue((await self.db.invoices.find_one({"id": "i1"}))["archived"])
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_startup_archive_rechecks_tenant_and_respects_guard(self):
+        await server._archive_legacy_tenant_invoices(self.db, "c1", "t1")
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["status"], "open")
+        await self.db.tenants.update_one({"id": "t1"}, {"$set": {"status": "archived"}})
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with self.assertLogs("uvicorn.error", level="WARNING"):
+            await server._archive_legacy_invoices_on_startup(self.db)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["status"], "open")
+        self.assertEqual((await self.db.tenant_payment_guards.find_one(
+            {"_id": tenant_payment_key("c1", "t1")}))["owner"], "sms1")
+
+    async def test_startup_archive_failure_retains_visible_guard(self):
+        await self.db.tenants.update_one({"id": "t1"}, {"$set": {"status": "archived"}})
+        database = SimpleNamespace(
+            tenants=self.db.tenants, tenant_payment_guards=self.db.tenant_payment_guards,
+            invoices=SimpleNamespace(find=self.db.invoices.find,
+                                     update_one=AsyncMock(side_effect=RuntimeError("write interrupted"))),
+        )
+        with self.assertLogs(level="ERROR"):
+            await server._archive_legacy_invoices_on_startup(database)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual(guard["operation"], "archive_invoice_backfill")
+        guards = await server.payment_processing_guards({})
+        self.assertEqual(guards[0]["operation"], "archive_invoice_backfill")
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["status"], "open")
+
     async def test_credit_failure_keeps_guard_and_does_not_debit_credit(self):
         self.sync.side_effect = RuntimeError("plan sync failed")
         with self.assertRaises(HTTPException) as error:
