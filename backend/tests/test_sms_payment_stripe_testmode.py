@@ -19,6 +19,8 @@ from sms_payment_links import create_payment_link
 def _test_configuration():
     key = os.environ.get("SMS_STRIPE_TEST_SECRET_KEY", "")
     mongo_url = os.environ.get("SMS_STRIPE_TEST_MONGO_URL", "")
+    if not key:
+        raise ValueError("The Stripe test-mode secret is empty or unavailable to this workflow")
     if not key.startswith("sk_test_") or len(key) <= len("sk_test_"):
         raise ValueError("A Stripe test-mode secret key is required; live keys are not accepted")
     if mongo_url != "mongodb://127.0.0.1:27019/?replicaSet=rs0&directConnection=true":
