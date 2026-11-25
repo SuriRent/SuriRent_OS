@@ -85,3 +85,86 @@ jobs:
       - name: Remove isolated containers and volume
         if: always()
         run: docker compose down --volumes --remove-orphans
+
+  existing-volume-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMPOSE_PROJECT_NAME: surirent-mongo-migration-ci
+      MONGO_ROOT_USERNAME: testuser
+      MONGO_ROOT_PASSWORD: testpassword
+      MONGO_REPLICA_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      JWT_SECRET: test-only-jwt-secret
+      PDF_AES_PASSWORD: test-only-pdf-password
+      ADMIN_EMAIL: admin@example.test
+      ADMIN_PASSWORD: test-only-admin-password
+      SUPERADMIN_EMAIL: superadmin@example.test
+      SUPERADMIN_PASSWORD: test-only-superadmin-password
+      APP_PUBLIC_URL: https://app.example.test
+      CORS_ORIGINS: https://app.example.test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create isolated standalone database
+        shell: bash
+        run: |
+          set -eu
+          docker compose -f docker-compose.yml up -d --wait database
+          docker compose -f docker-compose.yml exec -T database mongosh --quiet \
+            'mongodb://127.0.0.1:27017/?directConnection=true' --eval '
+              if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+              const testDb = db.getSiblingDB("migration_ci");
+              testDb.invoices.createIndex({id: 1}, {unique: true});
+              testDb.invoices.insertOne({id: "invoice-1", tenant_id: "tenant-1", amount: 100, paid_amount: 25});
+              testDb.payments.insertOne({id: "payment-1", tenant_id: "tenant-1", amount: 25});
+            '
+          docker compose -f docker-compose.yml stop database
+      - name: Rehearse replica conversion on the isolated volume
+        shell: bash
+        run: |
+          set -eu
+          compose=(docker compose -f docker-compose.yml -f docker-compose.replica-test.yml)
+          "${compose[@]}" up -d database replica-init
+          wait_for_initializer() {
+            for i in {1..120}; do
+              container="$("${compose[@]}" ps -aq replica-init)"
+              if [ -n "$container" ] && [ "$(docker inspect -f '{{.State.Status}}' "$container")" = "exited" ]; then
+                "${compose[@]}" logs replica-init
+                [ "$(docker inspect -f '{{.State.ExitCode}}' "$container")" = "0" ]
+                return
+              fi
+              sleep 1
+            done
+            "${compose[@]}" logs database replica-init
+            return 1
+          }
+          verify_data_and_transactions() {
+            "${compose[@]}" exec -T database mongosh --quiet \
+              'mongodb://database:27017/?replicaSet=rs0' --eval '
+                if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+                const testDb = db.getSiblingDB("migration_ci");
+                const invoice = testDb.invoices.findOne({id: "invoice-1"});
+                if (!invoice || invoice.amount !== 100 || invoice.paid_amount !== 25) throw new Error("Invoice changed or missing");
+                if (testDb.payments.countDocuments({id: "payment-1", amount: 25}) !== 1) throw new Error("Payment changed or missing");
+                if (!testDb.invoices.getIndexes().some(index => index.unique && index.key.id === 1)) throw new Error("Unique invoice index missing");
+                const session = db.getMongo().startSession();
+                const checks = session.getDatabase("migration_ci").checks;
+                session.startTransaction();
+                checks.insertOne({id: "committed"});
+                session.commitTransaction();
+                session.startTransaction();
+                checks.insertOne({id: "aborted"});
+                session.abortTransaction();
+                if (checks.countDocuments({id: "committed"}) !== 1 || checks.countDocuments({id: "aborted"}) !== 0) throw new Error("Transaction verification failed");
+                checks.deleteMany({});
+                session.endSession();
+              '
+          }
+          wait_for_initializer
+          verify_data_and_transactions
+          "${compose[@]}" restart database
+          "${compose[@]}" up -d --force-recreate replica-init
+          wait_for_initializer
+          verify_data_and_transactions
+      - name: Remove isolated containers and volume
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.replica-test.yml down --volumes --remove-orphans
