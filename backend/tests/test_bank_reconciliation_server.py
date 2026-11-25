@@ -203,6 +203,7 @@ class PaymentCreationServerTests(unittest.IsolatedAsyncioTestCase):
             patch.object(server, "_notify_kiosk_employees", AsyncMock()),
             patch.object(server, "_tenant_consume_stripe", self.tenant_stripe),
             patch.dict(sys.modules, {
+                "server": server,
                 "routes.company_stripe": stripe_module, "routes.company_mope": mope_module,
             }),
         )
