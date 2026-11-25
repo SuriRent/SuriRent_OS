@@ -603,6 +603,40 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payment["allocations"][0]["amount"], 75)
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
 
+    async def test_assistant_payment_allocates_under_guard(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+
+        async def hold_sync(_invoice_id):
+            entered.set()
+            await resume.wait()
+
+        self.sync.side_effect = hold_sync
+        tenant = {"id": "t1", "company_id": "c1", "name": "Tenant", "apartment_id": "a1"}
+        with patch.dict(sys.modules, {"server": server}), \
+                patch.object(ai_assistant, "_resolve_tenant", AsyncMock(return_value=tenant)), \
+                patch.object(ai_assistant, "_resolve_apartment", AsyncMock(return_value=None)), \
+                patch.object(server, "_next_receipt_number", AsyncMock(return_value="receipt1")), \
+                patch.object(server, "_reconcile_power_after_payment", AsyncMock()), \
+                patch.object(server, "_notify_tenant_payment", AsyncMock()), \
+                patch.object(server, "_enrich_payment", AsyncMock(side_effect=lambda payment: payment)):
+            task = asyncio.create_task(ai_assistant.dispatch_tool(
+                "register_payment", {"tenant_name": "Tenant", "amount": 50},
+                db=self.db, user={"active_company_id": "c1", "name": "Admin"},
+            ))
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            result = await task
+            await asyncio.sleep(0)
+        self.assertTrue(result["success"])
+        payment = await self.db.payments.find_one({"id": result["payment_id"]})
+        self.assertEqual((payment["source"], payment["allocations"][0]["amount"]), ("ai_assistant", 50))
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 50)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
     async def test_credit_from_another_company_is_not_used(self):
         await self.db.payments.update_one({"id": "credit1"}, {"$set": {"company_id": "c2"}})
         result = await server.apply_credit_to_invoice("i1", {})
