@@ -4,7 +4,13 @@ if (!admin.auth(process.env.MONGO_ROOT_USERNAME, process.env.MONGO_ROOT_PASSWORD
 }
 
 const expected = { _id: "rs0", members: [{ _id: 0, host: "database:27017" }] };
-const status = admin.runCommand({ replSetGetStatus: 1 });
+let status;
+try {
+  status = admin.runCommand({ replSetGetStatus: 1 });
+} catch (error) {
+  if (error.code !== 94) throw error;
+  status = { ok: 0, code: error.code };
+}
 if (status.ok !== 1 && status.code === 94) {
   const result = admin.runCommand({ replSetInitiate: expected });
   if (result.ok !== 1) throw new Error(`Replica set initialization failed: ${result.errmsg}`);
