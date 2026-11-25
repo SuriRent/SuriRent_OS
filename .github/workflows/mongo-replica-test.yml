@@ -15,7 +15,7 @@ permissions:
 jobs:
   replica-deployment:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     env:
       COMPOSE_PROJECT_NAME: surirent-replica-ci
       COMPOSE_FILE: docker-compose.yml:docker-compose.replica-test.yml
@@ -82,6 +82,71 @@ jobs:
           docker compose up -d --force-recreate replica-init
           wait_for_initializer
           verify_transaction
+      - name: Verify the application container across restarts
+        shell: bash
+        run: |
+          set -eu
+          cat > replica-ci-app.yml <<'EOF'
+          services:
+            app:
+              environment:
+                DISABLE_TRIAL_REMINDERS: "1"
+                DISABLE_OVERDUE_PUSH: "1"
+                DISABLE_AUTO_INVOICE: "1"
+                DISABLE_BILLING_CRON: "1"
+                DISABLE_INSTALLMENT_REMINDERS: "1"
+          EOF
+          compose=(docker compose -f docker-compose.yml -f docker-compose.replica-test.yml -f replica-ci-app.yml)
+          if ! "${compose[@]}" up -d --build --wait --wait-timeout 180 app; then
+            "${compose[@]}" logs app database replica-init
+            exit 1
+          fi
+          verify_from_app() {
+            "${compose[@]}" exec -T app python - <<'PY'
+          import asyncio
+          import os
+          from motor.motor_asyncio import AsyncIOMotorClient
+
+          async def main():
+              client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=10000)
+              try:
+                  hello = await client.admin.command("hello")
+                  if hello.get("setName") != "rs0" or not hello.get("isWritablePrimary"):
+                      raise RuntimeError("App did not reach the writable replica set")
+                  checks = client["replica_ci"]["app_checks"]
+                  await checks.delete_many({})
+                  async with await client.start_session() as session:
+                      session.start_transaction()
+                      await checks.insert_one({"_id": "committed"}, session=session)
+                      await session.commit_transaction()
+                      session.start_transaction()
+                      await checks.insert_one({"_id": "aborted"}, session=session)
+                      await session.abort_transaction()
+                  if await checks.count_documents({"_id": "committed"}) != 1:
+                      raise RuntimeError("Committed app transaction is missing")
+                  if await checks.count_documents({"_id": "aborted"}) != 0:
+                      raise RuntimeError("Aborted app transaction was persisted")
+                  await checks.delete_many({})
+              finally:
+                  client.close()
+
+          asyncio.run(main())
+          print("Application container transaction check passed")
+          PY
+          }
+          verify_from_app
+          "${compose[@]}" restart database
+          if ! "${compose[@]}" up -d --force-recreate --wait --wait-timeout 180 replica-init; then
+            "${compose[@]}" logs database replica-init
+            exit 1
+          fi
+          verify_from_app
+          "${compose[@]}" restart app
+          if ! "${compose[@]}" up -d --wait --wait-timeout 180 app; then
+            "${compose[@]}" logs app database replica-init
+            exit 1
+          fi
+          verify_from_app
       - name: Remove isolated containers and volume
         if: always()
         run: docker compose down --volumes --remove-orphans
