@@ -28,6 +28,7 @@ import io
 import base64
 import secrets
 import hashlib
+import hmac
 import asyncio
 import math
 import json
@@ -478,6 +479,7 @@ async def lifespan(app: FastAPI):
     await db.payments.create_index("paid_at")
     await db.payments.create_index("receipt_number", unique=True)
     await db.payments.create_index([("company_id", 1), ("paid_at", -1)])
+    await db.sms_history.create_index([("company_id", 1), ("created_at", -1)])
     await db.payments.create_index([("tenant_id", 1), ("paid_at", -1)])
     await db.payments.create_index([("company_id", 1), ("status", 1)])
     await db.payments.create_index([("company_id", 1), ("status", 1), ("paid_at", -1)])
@@ -1047,7 +1049,8 @@ async def _power_notify_tenant(cid: str, tenant_id: str, text: str) -> None:
         t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0, "phone": 1})
         cfg = await get_company_section(cid, "messente")
         if t and t.get("phone") and cfg.get("enabled"):
-            await _messente_send(cfg, "whatsapp" if cfg.get("whatsapp_from") else "sms", t["phone"], text)
+            await _messente_send(cfg, "whatsapp" if cfg.get("whatsapp_from") else "sms", t["phone"], text,
+                                 company_id=cid, purpose="Stroommelding")
     except Exception as e:  # noqa: BLE001
         print(f"[power] huurder-bericht mislukt: {e}")
 
@@ -2129,7 +2132,10 @@ async def _send_password_reset_sms(phone: str, name: str, code: str, company_id:
         f"Je SuriRent herstelcode: {code}\n\n"
         f"15 minuten geldig. Heb je dit niet aangevraagd? Negeer dit bericht."
     )
-    await send_sms(cfg, phone, msg)
+    if company_id:
+        await _send_company_sms(company_id, cfg, phone, msg, "Wachtwoordherstel")
+    else:
+        await send_sms(cfg, phone, msg)
 
 
 @api.get("/auth/me")
@@ -7772,7 +7778,7 @@ async def tenant_forgot_pin(body: TenantForgotPinIn, request: Request):
                     print(f"[forgot-pin] whatsapp send failed: {e}")
                     # Val terug op SMS als WhatsApp faalt.
                     try:
-                        await send_sms(cfg, phone, msg)
+                        await _send_company_sms(cid, cfg, phone, msg, "PIN-herstel")
                         via.append("sms")
                     except MessenteError as e2:
                         print(f"[forgot-pin] whatsapp+sms send failed: {e2}")
@@ -9873,13 +9879,13 @@ async def request_tenant_signature(tenant_id: str, body: SignatureRequestIn,
             await send_whatsapp(messente_cfg, phone, msg)
             used_channel = "whatsapp"
         else:
-            await send_sms(messente_cfg, phone, msg)
+            await _send_company_sms(cid, messente_cfg, phone, msg, "Handtekeningverzoek")
             used_channel = "sms"
     except MessenteError as e:
         # Val terug op SMS wanneer WhatsApp faalde (bv. niet gejoinde sandbox).
         if body.channel == "whatsapp":
             try:
-                await send_sms(messente_cfg, phone, msg)
+                await _send_company_sms(cid, messente_cfg, phone, msg, "Handtekeningverzoek")
                 used_channel = "sms"
             except MessenteError as e2:
                 raise HTTPException(status_code=502, detail=f"Zowel WhatsApp als SMS faalden: {e2}") from e2
@@ -13886,7 +13892,7 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
 
     if has_sms:
         try:
-            await send_sms(cfg, to, msg)
+            await _send_company_sms(cid, cfg, to, msg, "Betaalbewijs")
             return {"sent": True, "channel": "sms", "to": to}
         except MessenteError as e:
             print(f"[kiosk-messente] sms failed payment={payment_id} err={e}")
@@ -20210,7 +20216,7 @@ def _validate_messente_settings(merged: dict) -> None:
         merged[key] = value
 
 
-async def _test_messente_settings(cfg: dict, body: Optional[SettingsTestIn], brand_name: str):
+async def _test_messente_settings(cfg: dict, body: Optional[SettingsTestIn], brand_name: str, company_id: Optional[str] = None):
     from messente_service import send_whatsapp, send_sms, MessenteError, _validate_number
     if not cfg.get("enabled"):
         raise HTTPException(status_code=400, detail="Schakel Messente in en bewaar eerst de instellingen.")
@@ -20241,7 +20247,10 @@ async def _test_messente_settings(cfg: dict, body: Optional[SettingsTestIn], bra
                 variables = {"1": "123456"}
             await send_whatsapp(cfg, target, test_msg, template_kind=template_kind, variables=variables)
         else:
-            await send_sms(cfg, target, test_msg)
+            if company_id:
+                await _send_company_sms(company_id, cfg, target, test_msg, "Testbericht")
+            else:
+                await send_sms(cfg, target, test_msg)
         label = "WhatsApp" if channel == "whatsapp" else "SMS"
         return {"section": "messente", "ok": True, "detail": f"Messente heeft het {label}-testbericht geaccepteerd voor {target}. Controleer de afleverstatus in Messente."}
     except MessenteError as e:
@@ -20303,7 +20312,7 @@ async def test_settings_section(section: str, body: Optional[SettingsTestIn] = N
 
     if section == "messente":
         co = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
-        return await _test_messente_settings(cfg, body, co.get("name") or "Vastgoed")
+        return await _test_messente_settings(cfg, body, co.get("name") or "Vastgoed", company_id=cid)
 
     if section == "shelly":
         from shelly_service import list_devices, ShellyError
@@ -21069,15 +21078,107 @@ def _receipt_template(cfg: dict, payment_id: Optional[str], name: str, company: 
     return "receipt", whatsapp_variables(name, company, amount, reference, image_url)
 
 
+async def _send_company_sms(company_id: str, cfg: dict, to: str, body: str, purpose: str):
+    from urllib.parse import urlsplit
+    from messente_service import send_sms, _validate_number
+    from settings_service import encrypt
+
+    recipient = _validate_number(to)
+    record_id = secrets.token_urlsafe(24)
+    base = (os.environ.get("APP_PUBLIC_URL") or "").rstrip("/")
+    parsed = urlsplit(base)
+    callback = f"{base}/api/public/messente/sms-status/{record_id}" if (
+        parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password
+        and not parsed.path and not parsed.query and not parsed.fragment
+    ) else None
+    await db.sms_history.insert_one({
+        "_id": record_id, "company_id": company_id, "to": recipient, "purpose": purpose,
+        "created_at": iso(now_utc()), "status": "sending",
+        "callback_secret": encrypt(cfg.get("api_password")) if callback else None,
+    })
+    try:
+        result = await send_sms(cfg, recipient, body, dlr_url=callback)
+    except Exception:
+        await db.sms_history.update_one(
+            {"_id": record_id, "status": "sending"},
+            {"$set": {"status": "unconfirmed"}},
+        )
+        raise
+    sms = next(item for item in result["messages"] if isinstance(item, dict)
+               and item.get("channel") == "sms" and item.get("message_id"))
+    await db.sms_history.update_one({"_id": record_id}, {"$set": {
+        "omnimessage_id": result["omnimessage_id"], "message_id": sms["message_id"],
+    }})
+    await db.sms_history.update_one(
+        {"_id": record_id, "status": "sending"},
+        {"$set": {"status": "accepted" if callback else "status_unavailable"}},
+    )
+    return result
+
+
+@api.post("/public/messente/sms-status/{record_id}")
+async def messente_sms_status(record_id: str, request: Request):
+    from settings_service import decrypt
+    doc = await db.sms_history.find_one({"_id": record_id})
+    secret = decrypt(doc.get("callback_secret")) if doc else None
+    raw = await request.body()
+    signature = request.headers.get("X-Messente-Signature", "")
+    if not secret or not hmac.compare_digest(hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest(), signature):
+        raise HTTPException(status_code=401, detail="Ongeldige handtekening")
+    try:
+        report = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Ongeldig afleverrapport")
+    if not isinstance(report, dict) or report.get("channel") != "sms" or report.get("to") != doc["to"]:
+        raise HTTPException(status_code=400, detail="Ongeldig afleverrapport")
+    message_id = report.get("message_id")
+    omni_id = report.get("omnimessage_id")
+    if not isinstance(message_id, str) or not message_id or not isinstance(omni_id, str) or not omni_id:
+        raise HTTPException(status_code=400, detail="Ongeldig afleverrapport")
+    if doc.get("message_id") and doc["message_id"] != message_id:
+        raise HTTPException(status_code=400, detail="Onbekend bericht")
+    status = report.get("status")
+    if not isinstance(status, str) or status not in {"ACK", "DELIVRD", "UNDELIV", "FAILED", "UNKNOWN", "ACCEPTD", "REJECTD", "EXPIRED", "NACK", "SEEN"}:
+        raise HTTPException(status_code=400, detail="Onbekende afleverstatus")
+    timestamp = report.get("timestamp")
+    if not isinstance(timestamp, str):
+        raise HTTPException(status_code=400, detail="Ongeldige rapportdatum")
+    try:
+        parsed_timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ongeldige rapportdatum")
+    if parsed_timestamp.tzinfo is None:
+        parsed_timestamp = parsed_timestamp.replace(tzinfo=timezone.utc)
+    timestamp = parsed_timestamp.astimezone(timezone.utc).isoformat()
+    await db.sms_history.update_one(
+        {"_id": record_id, "$or": [{"status_at": {"$exists": False}}, {"status_at": {"$lt": timestamp}}]},
+        {"$set": {"status": status, "status_at": timestamp, "message_id": message_id, "omnimessage_id": omni_id}},
+    )
+    return {"ok": True}
+
+
+@api.get("/sms/history")
+async def sms_history(user=Depends(require_role("admin", "superadmin"))):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
+    return await db.sms_history.find(
+        {"company_id": cid}, {"_id": 0, "to": 1, "purpose": 1, "created_at": 1, "status": 1, "status_at": 1},
+    ).sort("created_at", -1).to_list(100)
+
+
 async def _messente_send(cfg: dict, channel: str, to: str, body: str,
                        *, template_kind: Optional[str] = None, variables: Optional[dict] = None,
-                       media_url: Optional[str] = None):
+                       media_url: Optional[str] = None, company_id: Optional[str] = None,
+                       purpose: str = "Bericht"):
     from messente_service import send_whatsapp, send_sms, MessenteError
     try:
         if channel == "whatsapp":
             await send_whatsapp(cfg, to, body, media_url=media_url, template_kind=template_kind, variables=variables)
         elif channel == "sms":
-            await send_sms(cfg, to, body)
+            if not company_id:
+                raise HTTPException(status_code=400, detail="Bedrijf ontbreekt voor SMS-overzicht.")
+            await _send_company_sms(company_id, cfg, to, body, purpose)
         else:
             raise HTTPException(status_code=400, detail="Onbekend berichtenkanaal.")
     except MessenteError as e:
@@ -21117,6 +21218,7 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
     await _messente_send(
         cfg, body.channel, to, msg, template_kind=template_kind, variables=variables,
         media_url=_public_url(f"/api/payments/{payment_id}/image"),
+        company_id=company_id_of(user), purpose="Betaalbewijs",
     )
     return {"ok": True, "sent_to": to, "channel": body.channel}
 
@@ -21147,7 +21249,7 @@ async def message_invoice(invoice_id: str, body: MessageSendIn, user=Depends(get
         f"— {brand_name}"
     )
     await _messente_send(
-        cfg, body.channel, to, msg, template_kind="reminder",
+        cfg, body.channel, to, msg, template_kind="reminder", company_id=company_id_of(user), purpose="Factuur",
         variables=whatsapp_variables(
             tenant.get("name") or "Huurder", brand_name, f"{inv['currency']} {inv['amount']:.2f}",
             inv["invoice_number"], _public_url(f"/api/invoices/{invoice_id}/image"),
@@ -21250,7 +21352,7 @@ async def tenant_payment_reminder(
         f"Gelieve zo spoedig mogelijk te betalen.\n\n— {brand_name}"
     )
     await _messente_send(
-        cfg, channel, to, msg, template_kind="reminder",
+        cfg, channel, to, msg, template_kind="reminder", company_id=company_id_of(user), purpose="Betalingsherinnering",
         variables=whatsapp_variables(
             tenant.get("name") or "Huurder", brand_name, f"{cur} {total:.2f}",
             period_label, _public_url("/kiosk/huurder"),
@@ -21287,7 +21389,7 @@ async def message_contract(contract_id: str, body: MessageSendIn, user=Depends(g
         f"{sign_line}\n\n"
         f"— {brand_name}"
     )
-    await _messente_send(cfg, body.channel, to, msg)
+    await _messente_send(cfg, body.channel, to, msg, company_id=company_id_of(user), purpose="Contract")
     return {"ok": True, "sent_to": to, "channel": body.channel}
 
 
@@ -21314,7 +21416,7 @@ async def message_overdue_reminder(tenant_id: str, body: MessageSendIn, user=Dep
         f"— {brand_name}"
     )
     await _messente_send(
-        cfg, body.channel, to, msg, template_kind="reminder",
+        cfg, body.channel, to, msg, template_kind="reminder", company_id=company_id_of(user), purpose="Betalingsherinnering",
         variables=whatsapp_variables(
             t.get("name") or "Huurder", brand_name, f"{bal['currency']} {bal['balance']:.2f}",
             "Openstaand saldo", _public_url("/kiosk/huurder"),
@@ -21692,7 +21794,7 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
                     )
                 await _messente_send(
                     cfg, channel, phone, body, media_url=receipt_image_url,
-                    template_kind=template_kind, variables=variables,
+                    template_kind=template_kind, variables=variables, company_id=cid, purpose="Betalingsregeling",
                 )
             except Exception as e:  # noqa: BLE001
                 print(f"[plan-notify] messente fail: {e}")
@@ -22472,7 +22574,8 @@ async def _send_upcoming_invoice_reminders():
                 try:
                     channel = "whatsapp" if messente_cfg.get("whatsapp_from") else "sms"
                     await _messente_send(
-                        messente_cfg, channel, phone, wa_msg, template_kind="reminder",
+                        messente_cfg, channel, phone, wa_msg, template_kind="reminder", company_id=cid,
+                        purpose="Betalingsherinnering",
                         variables=whatsapp_variables(
                             tenant.get("name") or "Huurder", brand, f"{currency} {remaining:.2f}",
                             inv.get("invoice_number") or inv["id"],
@@ -22633,7 +22736,7 @@ async def _send_overdue_installment_reminders():
             try:
                 await _messente_send(
                     messente_cfg, "whatsapp" if messente_cfg.get("whatsapp_from") else "sms",
-                    tenant["phone"], msg, template_kind="reminder",
+                    tenant["phone"], msg, template_kind="reminder", company_id=cid, purpose="Betalingsherinnering",
                     variables=whatsapp_variables(
                         tenant.get("name") or "Huurder", brand_name_wa, f"{cur} {total:.2f}",
                         f"{n} achterstallige termijnen", _public_url("/kiosk/huurder"),

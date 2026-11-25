@@ -155,7 +155,7 @@ def test_receipt_endpoint_supplies_template_data_without_changing_sms(monkeypatc
         tenants=SimpleNamespace(find_one=AsyncMock(return_value={"name": "Huurder", "phone": "+5971234567"})),
     ))
     monkeypatch.setattr(messente_service, "send_whatsapp", send_wa)
-    monkeypatch.setattr(messente_service, "send_sms", send_sms)
+    monkeypatch.setattr(server, "_send_company_sms", send_sms)
     monkeypatch.setenv("APP_PUBLIC_URL", "https://example.com")
     result = asyncio.run(server.message_payment_receipt(
         "payment-1", server.MessageSendIn(channel=channel), user={"id": "admin"}
@@ -380,7 +380,7 @@ def test_settings_test_can_select_sms_when_whatsapp_is_configured(monkeypatch):
         companies=SimpleNamespace(find_one=AsyncMock(return_value={"name": "Bedrijf"})),
     ))
     monkeypatch.setattr(messente_service, "send_whatsapp", wa)
-    monkeypatch.setattr(messente_service, "send_sms", sms)
+    monkeypatch.setattr(server, "_send_company_sms", sms)
     result = asyncio.run(server.test_settings_section(
         "messente", server.SettingsTestIn(to="+5971234567", channel="sms"), user={"id": "admin"},
     ))
@@ -396,12 +396,13 @@ def test_password_reset_uses_company_messente_sms(monkeypatch):
     send = AsyncMock()
     config = AsyncMock(return_value={"enabled": True, "sms_from": "Bedrijf"})
     monkeypatch.setattr(server, "get_company_section", config)
-    monkeypatch.setattr(messente_service, "send_sms", send)
+    monkeypatch.setattr(server, "_send_company_sms", send)
     asyncio.run(server._send_password_reset_sms("+5971234567", "Huurder", "123456", "company-1"))
     config.assert_awaited_once_with("company-1", "messente")
-    assert send.await_args.args[0]["sms_from"] == "Bedrijf"
-    assert send.await_args.args[1] == "+5971234567"
-    assert "123456" in send.await_args.args[2]
+    assert send.await_args.args[0] == "company-1"
+    assert send.await_args.args[1]["sms_from"] == "Bedrijf"
+    assert send.await_args.args[2] == "+5971234567"
+    assert "123456" in send.await_args.args[3]
     assert send.await_args.kwargs == {}
 
 
@@ -419,10 +420,14 @@ def test_password_reset_uses_encrypted_platform_account_when_no_enabled_company_
     monkeypatch.setattr(server, "db", SimpleNamespace(
         saas_settings=SimpleNamespace(find_one=AsyncMock(return_value={"messente": platform})),
     ))
-    monkeypatch.setattr(messente_service, "send_sms", send)
+    if company_id:
+        monkeypatch.setattr(server, "_send_company_sms", send)
+    else:
+        monkeypatch.setattr(messente_service, "send_sms", send)
     asyncio.run(server._send_password_reset_sms("+5971234567", "Huurder", "123456", company_id))
-    assert send.await_args.args[0]["api_password"] == "platform-secret"
-    assert send.await_args.args[0]["api_username"] == "platform-user"
+    cfg = send.await_args.args[1 if company_id else 0]
+    assert cfg["api_password"] == "platform-secret"
+    assert cfg["api_username"] == "platform-user"
 
 
 def test_password_reset_does_not_retry_rejected_company_send_using_platform(monkeypatch):
@@ -433,7 +438,7 @@ def test_password_reset_does_not_retry_rejected_company_send_using_platform(monk
     lookup = AsyncMock()
     monkeypatch.setattr(server, "get_company_section", AsyncMock(return_value={"enabled": True}))
     monkeypatch.setattr(server, "db", SimpleNamespace(saas_settings=SimpleNamespace(find_one=lookup)))
-    monkeypatch.setattr(messente_service, "send_sms", send)
+    monkeypatch.setattr(server, "_send_company_sms", send)
     with pytest.raises(messente_service.MessenteError):
         asyncio.run(server._send_password_reset_sms("+5971234567", "Huurder", "123456", "company-1"))
     lookup.assert_not_awaited()
@@ -544,7 +549,7 @@ def test_paid_installment_notification_uses_messente_and_supports_sms_only(monke
     monkeypatch.setattr(server, "_brand_name_of", AsyncMock(return_value="Bedrijf"))
     monkeypatch.setattr(server, "_notify_kiosk_employees", AsyncMock())
     monkeypatch.setattr(messente_service, "send_whatsapp", wa)
-    monkeypatch.setattr(messente_service, "send_sms", sms)
+    monkeypatch.setattr(server, "_send_company_sms", sms)
     monkeypatch.setattr(server, "db", SimpleNamespace(
         payment_plans=SimpleNamespace(find_one=AsyncMock(return_value={
             "id": "plan-1", "tenant_id": "tenant-1", "company_id": "company-1", "currency": "SRD",
@@ -573,7 +578,7 @@ def test_tenant_pin_recovery_uses_authentication_template_and_sms_fallback(monke
     wa = AsyncMock(side_effect=messente_service.MessenteError("Template geweigerd"))
     sms = AsyncMock()
     monkeypatch.setattr(messente_service, "send_whatsapp", wa)
-    monkeypatch.setattr(messente_service, "send_sms", sms)
+    monkeypatch.setattr(server, "_send_company_sms", sms)
     monkeypatch.setattr(server, "_client_ip", lambda request: "test-ip")
     monkeypatch.setattr(server, "_pin_throttle_check", lambda key: None)
     monkeypatch.setattr(server, "_pin_throttle_clear", lambda key: None)
