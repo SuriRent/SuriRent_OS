@@ -6,6 +6,7 @@ op het kiosk-scherm). Bedragen in SRD/USD worden naar EUR omgerekend.
 from __future__ import annotations
 
 import secrets
+from decimal import Decimal, InvalidOperation
 from typing import Literal, Optional
 
 import stripe
@@ -209,17 +210,63 @@ async def public_kiosk_pay(token: str):
             "client_secret": tx["client_secret"] if tx["status"] == "pending" else None, "publishable_key": pk}
 
 
-async def consume_kiosk_stripe_payment(cid: str, pi_id: str) -> dict:
-    """Bij boeken van de kiosk-betaling: verifieer dat de Stripe-betaling geslaagd
-    is en nog niet eerder is geboekt (idempotent)."""
-    tx = await _deps.db.kiosk_stripe_payments.find_one({"payment_intent_id": pi_id, "company_id": cid}, {"_id": 0})
+def _payment_cents(value) -> int:
+    try:
+        amount = Decimal(str(value))
+        cents = amount * 100
+        if not amount.is_finite() or cents != cents.to_integral_value() or cents <= 0:
+            raise InvalidOperation
+        return int(cents)
+    except (InvalidOperation, ValueError, TypeError, OverflowError) as exc:
+        raise HTTPException(400, "Ongeldig Stripe-betaalbedrag") from exc
+
+
+async def _verified_payment(cid: str, tenant_id: str, pi_id: str, amount: float,
+                            currency: str, method: str) -> tuple[dict, int, int]:
+    tx = await _deps.db.kiosk_stripe_payments.find_one(
+        {"payment_intent_id": pi_id, "company_id": cid, "tenant_id": tenant_id}, {"_id": 0})
     if not tx:
         raise HTTPException(404, "Stripe-betaling niet gevonden")
     tx = await _refresh(tx)
     if tx["status"] != "paid":
         raise HTTPException(400, "Stripe-betaling is nog niet voltooid")
+    amount_cents, total_cents = _payment_cents(amount), _payment_cents(tx.get("amount"))
+    if (currency != tx.get("currency") or method != tx.get("method")
+            or amount_cents > total_cents):
+        raise HTTPException(400, "Bedrag, valuta of methode komt niet overeen met de Stripe-betaling")
+    return tx, amount_cents, total_cents
+
+
+async def consume_kiosk_stripe_payment(cid: str, pi_id: str, *, tenant_id: str,
+                                       amount: float, currency: str, method: str) -> dict:
+    """Reserve a whole intent for one kiosk booking, before creating the payment."""
+    tx, amount_cents, total_cents = await _verified_payment(cid, tenant_id, pi_id, amount, currency, method)
+    if amount_cents != total_cents:
+        raise HTTPException(400, "Kioskbetaling moet het volledige Stripe-bedrag boeken")
     res = await _deps.db.kiosk_stripe_payments.find_one_and_update(
-        {"payment_intent_id": pi_id, "consumed": False}, {"$set": {"consumed": True}})
+        {"payment_intent_id": pi_id, "company_id": cid, "tenant_id": tenant_id, "status": "paid",
+         "currency": currency, "method": method, "amount": tx["amount"],
+         "consumed": False, "booked_amount": {"$in": [None, 0]}},
+        {"$set": {"consumed": True}})
     if not res:
         raise HTTPException(409, "Deze Stripe-betaling is al geboekt")
     return tx
+
+
+async def consume_tenant_stripe_payment(cid: str, tenant_id: str, pi_id: str,
+                                        amount: float, currency: str) -> None:
+    """Reserve a portion of an intent without allowing a kiosk to consume it too."""
+    tx, amount_cents, total_cents = await _verified_payment(cid, tenant_id, pi_id, amount, currency, "card")
+    scope = {"payment_intent_id": pi_id, "company_id": cid, "tenant_id": tenant_id, "status": "paid",
+             "currency": currency, "method": "card", "amount": tx["amount"]}
+    await _deps.db.kiosk_stripe_payments.update_one(
+        {**scope, "booked_amount": {"$exists": False}, "consumed": {"$ne": True}},
+        {"$set": {"booked_amount": 0.0}},
+    )
+    limit = (total_cents - amount_cents) / 100 + 1e-9
+    result = await _deps.db.kiosk_stripe_payments.find_one_and_update(
+        {**scope, "consumed": {"$ne": True}, "booked_amount": {"$gte": 0, "$lte": limit}},
+        {"$inc": {"booked_amount": amount_cents / 100}},
+    )
+    if not result:
+        raise HTTPException(409, "Bedrag komt niet overeen met de Stripe-betaling")

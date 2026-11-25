@@ -12,6 +12,7 @@ import { useAutoRefresh } from '../../../lib/auto-refresh';
 import { useAdminEvents } from '../../../lib/admin-events';
 import { usePagedList, LoadMoreSentinel, useDebounced } from '../../../lib/use-paged-list';
 import { useApiSWR } from '../../../lib/swr';
+import { useAuth } from '../../../lib/auth';
 import { SendDialog } from '../../../components/EmailDialog';
 import { KioskReceiptImageButton } from '../../../components/KioskReceiptImageButton';
 import SignaturePad from '../../../components/SignaturePad';
@@ -124,6 +125,41 @@ function PendingPaymentCard({ p, onApprove }) {
         <CheckCircle2 className="w-4 h-4" /> Goedkeuren
       </button>
     </div>
+  );
+}
+
+export function ProcessingPayments({ payments, guards = [], tenants = [], unavailable = false }) {
+  const paymentIds = new Set(payments.map((p) => p.id));
+  const unmatchedGuards = guards.filter((guard) => (
+    guard.operation === 'bank_reconciliation' || !paymentIds.has(guard.operation_id)
+  ));
+  if (!payments.length && !unmatchedGuards.length && !unavailable) return null;
+  return (
+    <section className="mb-3 rounded-2xl border border-red-200 bg-red-50 p-3" data-testid="processing-payments">
+      <p className="text-xs font-black text-red-800">Betalingen in verwerking of ter controle</p>
+      <p className="mt-1 text-xs text-red-700">
+        Blijft een betaling hier staan, controleer de factuur en betaling voordat je opnieuw boekt.
+      </p>
+      {unavailable && <p className="mt-1 text-xs font-bold text-red-800">
+        Verwerkingsstatus kon niet worden opgehaald. Controleer je bedrijfsselectie en verbinding.
+      </p>}
+      <div className="mt-2 space-y-1">
+        {payments.map((p) => (
+          <div key={p.id} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+            {p.tenant_name || 'Huurder'} · {p.receipt_number || p.id} · {fmtMoney(p.amount, p.currency)}
+            {' · '}{p.status === 'rejecting' ? 'Afwijzing' : 'Goedkeuring'}
+          </div>
+        ))}
+        {unmatchedGuards.map((guard) => (
+          <div key={`${guard.operation}-${guard.operation_id}`}
+            className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+            {tenants.find((tenant) => tenant.id === guard.tenant_id)?.name || 'Huurder'}
+            {' · '}{guard.operation === 'bank_reconciliation' ? 'Bankregistratie' : 'Betaalverwerking'}
+            {' · '}{guard.operation_id}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -429,6 +465,7 @@ function PaymentRow({ p, onOpen }) {
 // =====================================================================
 function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }) {
   const p = payment;
+  const processing = p.status === 'approving' || p.status === 'rejecting';
   const [detailTab, setDetailTab] = useState('overzicht');
   const [linkedInvoice, setLinkedInvoice] = useState(null);
   // Openstaande facturen van deze huurder — voor "Wijzig gekoppelde factuur"
@@ -493,6 +530,7 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }
   const statusBadge = (() => {
     const s = p.status || 'approved';
     if (s === 'pending_approval') return { l: 'Wacht op goedkeuring', cls: 'bg-amber-100 text-amber-700' };
+    if (s === 'approving' || s === 'rejecting') return { l: 'In verwerking of ter controle', cls: 'bg-red-100 text-red-700' };
     if (s === 'rejected') return { l: 'Afgekeurd', cls: 'bg-red-100 text-red-700' };
     return { l: 'Ontvangen', cls: 'bg-emerald-100 text-emerald-700' };
   })();
@@ -536,7 +574,7 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }
             {[
               ['overzicht', 'Overzicht'],
               ...(p.invoice_id ? [['factuur', 'Factuur']] : []),
-              ['acties', 'Kwitantie en acties'],
+              ...(!processing ? [['acties', 'Kwitantie en acties']] : []),
             ].map(([tab, label]) => (
               <button key={tab} type="button" role="tab" aria-selected={detailTab === tab}
                 onClick={() => setDetailTab(tab)} data-testid={`payment-detail-tab-${tab}`}
@@ -740,7 +778,7 @@ function PaymentDetail({ payment, onBack, onEmail, onDelete, kioskMode = false }
       )}
 
       {/* SUB-CARD: ACTIES */}
-      {(!kioskMode || detailTab === 'acties') && <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      {!processing && (!kioskMode || detailTab === 'acties') && <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
           <h2 className="text-base font-black text-slate-900">Kwitantie en acties</h2>
         </div>
@@ -991,6 +1029,8 @@ function MonthStepper({ year, month, onPrev, onNext, isCurrent, count, sum, curr
 // Main page
 // =====================================================================
 export default function Payments({ embedded = false, kioskLayout = false, onBack }) {
+  const { user, activeCompanyId } = useAuth();
+  const reviewCompanyId = activeCompanyId || user?.company_id;
   // SWR cache: 3 endpoints parallel — bij tabwissel data instant uit cache
   const today = useMemo(() => new Date(), []);
   // Maand-picker — default = huidige maand. Pijltjes stappen 1 maand terug/vooruit.
@@ -1009,9 +1049,21 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
   const refetchP = paged.refetch;
   const { data: tenantsRaw, mutate: refetchT } = useApiSWR('/tenants');
   const { data: pendingRaw, mutate: refetchPend } = useApiSWR('/payments?status=pending_approval');
+  const reviewScope = reviewCompanyId ? encodeURIComponent(reviewCompanyId) : '';
+  const { data: processingRaw, error: processingError, mutate: refetchProcessing } = useApiSWR(
+    reviewScope ? `/payments?status=needs_review&view_company=${reviewScope}` : null,
+    { keepPreviousData: false },
+  );
+  const { data: guardsRaw, error: guardsError, mutate: refetchGuards } = useApiSWR(
+    reviewScope ? `/payments/processing-guards?view_company=${reviewScope}` : null,
+    { keepPreviousData: false },
+  );
   const filteredItems = paged.items;
   const tenants = tenantsRaw || [];
   const pending = pendingRaw || [];
+  const processing = processingRaw || [];
+  const guards = guardsRaw || [];
+  const reviewUnavailable = !reviewScope || !!processingError || !!guardsError;
   const loading = paged.loading;
   const summary = paged.summary || {};
   const [approveFor, setApproveFor] = useState(null);
@@ -1033,15 +1085,17 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
   const toggleExpandMobile = (id) => setExpanded((cur) => (cur === id ? null : id));
 
   const load = useCallback(async () => {
-    await Promise.all([refetchP(), refetchT(), refetchPend()]);
-  }, [refetchP, refetchT, refetchPend]);
+    await Promise.all([refetchP(), refetchT(), refetchPend(), refetchProcessing(), refetchGuards()]);
+  }, [refetchP, refetchT, refetchPend, refetchProcessing, refetchGuards]);
   // Aparte lichte refresh — alleen `pending_approval` fetchen. Wordt door
   // de 3s auto-refresh gebruikt zodat we niet elke 3s /payments én /tenants
   // meepakken (dat verspilde bandbreedte en veroorzaakte flikker op andere
   // tabs die dezelfde SWR-keys delen).
   const refreshPendingOnly = useCallback(() => {
     refetchPend();
-  }, [refetchPend]);
+    refetchProcessing();
+    refetchGuards();
+  }, [refetchPend, refetchProcessing, refetchGuards]);
 
   // Wanneer een admin de push-notificatie van een pending betaling
   // aanklikt landt hij hier met ?filter=pending in de URL. We scrollen
@@ -1272,6 +1326,7 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
                   className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-xs outline-none focus:border-[#FF5C00] sm:h-11 sm:text-sm" />
               </div>
 
+              <ProcessingPayments payments={processing} guards={guards} tenants={tenants} unavailable={reviewUnavailable} />
               {pending.length > 0 && (
                 <section className="mb-3 shrink-0 rounded-2xl border border-amber-200 bg-amber-50 p-3"
                   data-testid="pending-section-desktop">
@@ -1366,6 +1421,7 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
         {/* PENDING APPROVAL — sectie bovenaan, vóór de approved-lijst.
             Alleen zichtbaar als er pending betalingen wachten op goedkeuring.
             Bedragen tellen NIET mee in "Vandaag" / "Maand" totalen. */}
+        <ProcessingPayments payments={processing} guards={guards} tenants={tenants} unavailable={reviewUnavailable} />
         {pending.length > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 shadow-[0_1px_4px_-2px_rgba(245,158,11,0.20)]" data-testid="pending-section">
             <div className="flex items-center justify-between mb-2 px-1">
@@ -1465,6 +1521,7 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
 
       {/* PENDING APPROVAL — desktop variant. Tonen vóór de approved-lijst
           zodat beheerder direct ziet wat z'n medewerkers indienen. */}
+      <ProcessingPayments payments={processing} guards={guards} tenants={tenants} unavailable={reviewUnavailable} />
       {pending.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-[0_1px_4px_-2px_rgba(245,158,11,0.20)]" data-testid="pending-section-desktop">
           <div className="flex items-center justify-between mb-3 px-1">
@@ -1532,7 +1589,7 @@ export default function Payments({ embedded = false, kioskLayout = false, onBack
       {approveFor && (
         <ApprovePaymentSheet
           payment={approveFor}
-          onCancel={() => setApproveFor(null)}
+          onCancel={() => { setApproveFor(null); load(); }}
           onApproved={() => { setApproveFor(null); load(); }}
         />
       )}

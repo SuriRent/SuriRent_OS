@@ -500,6 +500,7 @@ def _build_pay_core(db, helpers):
     async def pay_installment_for(
         plan: dict, seq: int,
         *, method: str = "contant", amount=None, note: str = "",
+        stripe_payment_intent_id: Optional[str] = None,
         mope_payment_request_id: Optional[str] = None,
         received_by: str = "", approved_by_label: str = "",
         status: str = "approved", kiosk_employee_id=None, kiosk_employee_name=None,
@@ -549,6 +550,7 @@ def _build_pay_core(db, helpers):
             "currency": plan.get("currency", "SRD"),
             "category": "betalingsregeling",
             "method": method,
+            "stripe_payment_intent_id": stripe_payment_intent_id,
             "mope_payment_request_id": mope_payment_request_id,
             "status": status,  # approved by default; kiosk-pending-flow can pass 'pending_approval'
             "paid_at": now_iso,

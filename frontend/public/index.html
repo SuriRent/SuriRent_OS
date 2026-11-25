@@ -2,6 +2,14 @@
 <html lang="nl" style="background-color:#FF5C00;">
   <head>
     <script>
+      if (/^\/b\/[^/]+\/?$/.test(window.location.pathname)) {
+        var meta = document.createElement('meta');
+        meta.name = 'referrer';
+        meta.content = 'no-referrer';
+        document.head.appendChild(meta);
+      }
+    </script>
+    <script>
       // Markeer het browserplatform vroeg zodat globale CSS platformverschillen
       // kan opvangen zonder op specifieke telefoonmodellen te vertrouwen.
       (function () {

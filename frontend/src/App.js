@@ -67,6 +67,7 @@ const SharedReceivePage = lazyWithRetry(() => import('./pages/SharedReceivePage'
 const SaaSStripeCheckout = lazyWithRetry(() => import('./pages/SaaSStripeCheckout'));
 const SaaSBankCheckout = lazyWithRetry(() => import('./pages/SaaSBankCheckout'));
 const KioskStripePay = lazyWithRetry(() => import('./pages/KioskStripePay'));
+const SmsPaymentPage = lazyWithRetry(() => import('./pages/SmsPaymentPage'));
 
 function RouteFallback() {
   // Transparante fallback: we hebben al een HTML __pwa_splash die tot
@@ -485,6 +486,13 @@ export default function App() {
   const tenant = useTenantLandingResolver();
   if (pathname === '/bankgegevens' || pathname === '/bankgegevens/') {
     return <Suspense fallback={<RouteFallback />}><KioskBankDetailsPage /></Suspense>;
+  }
+  if (/^\/b\/[^/]+\/?$/.test(pathname)) {
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <Routes><Route path="/b/:token" element={<SmsPaymentPage />} /></Routes>
+      </Suspense>
+    );
   }
   // NB: we hiden de PWA HTML splash NIET meer op tenant.status change,
   // want daarna kan BrandedShell nog even bezig zijn met de company-

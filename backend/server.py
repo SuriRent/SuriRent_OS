@@ -16,7 +16,7 @@ from typing import List, Optional, Literal
 
 from pymongo.errors import DuplicateKeyError
 from gridfs.errors import NoFile
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, Query, UploadFile, File, Body, Form, Header, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from brotli_asgi import BrotliMiddleware
@@ -480,6 +480,7 @@ async def lifespan(app: FastAPI):
     await db.payments.create_index("receipt_number", unique=True)
     await db.payments.create_index([("company_id", 1), ("paid_at", -1)])
     await db.sms_history.create_index([("company_id", 1), ("created_at", -1)])
+    await db.sms_payment_links.create_index("expires_at", expireAfterSeconds=0)
     await db.payments.create_index([("tenant_id", 1), ("paid_at", -1)])
     await db.payments.create_index([("company_id", 1), ("status", 1)])
     await db.payments.create_index([("company_id", 1), ("status", 1), ("paid_at", -1)])
@@ -7934,25 +7935,9 @@ async def tenant_portal_stripe_status(pi_id: str, tenant=Depends(get_tenant_sess
     return await kiosk_stripe_status(pi_id, {"company_id": tenant.get("company_id")})
 
 
-async def _tenant_consume_stripe(tenant: dict, pi_id: str, amount: float) -> None:
-    """Verifieer dat de Stripe-betaling van deze huurder geslaagd is en boek er
-    maximaal het betaalde bedrag van (meerdere posten mogen samen één betaling delen)."""
-    from routes.company_stripe import _refresh
-    tx = await db.kiosk_stripe_payments.find_one(
-        {"payment_intent_id": pi_id, "tenant_id": tenant["id"], "company_id": tenant.get("company_id")}, {"_id": 0})
-    if not tx:
-        raise HTTPException(status_code=404, detail="Stripe-betaling niet gevonden")
-    tx = await _refresh(tx)
-    if tx["status"] != "paid":
-        raise HTTPException(status_code=400, detail="Stripe-betaling is nog niet voltooid")
-    await db.kiosk_stripe_payments.update_one(
-        {"payment_intent_id": pi_id, "booked_amount": {"$exists": False}}, {"$set": {"booked_amount": 0.0}})
-    limit = float(tx["amount"]) + 0.01 - float(amount)
-    res = await db.kiosk_stripe_payments.find_one_and_update(
-        {"payment_intent_id": pi_id, "booked_amount": {"$lte": limit}},
-        {"$inc": {"booked_amount": float(amount)}})
-    if not res:
-        raise HTTPException(status_code=409, detail="Bedrag komt niet overeen met de Stripe-betaling")
+async def _tenant_consume_stripe(tenant: dict, pi_id: str, amount: float, currency: str) -> None:
+    from routes.company_stripe import consume_tenant_stripe_payment
+    await consume_tenant_stripe_payment(tenant.get("company_id"), tenant["id"], pi_id, amount, currency)
 
 
 @api.get("/tenant-portal/payments")
@@ -8123,7 +8108,7 @@ async def _ocr_and_auto_approve_payment(*, payment_id: str, statement_id: str,
         ocr = await _ocr_bank_statement(statement_id)
     except Exception as e:
         await db.payments.update_one(
-            {"id": payment_id},
+            {"id": payment_id, "company_id": company_id},
             {"$set": {"ocr_status": "failed", "ocr_error": str(e)[:300],
                       "ocr_run_at": iso(now_utc())}},
         )
@@ -8146,7 +8131,7 @@ async def _ocr_and_auto_approve_payment(*, payment_id: str, statement_id: str,
         "ocr_mismatch_reasons": reasons,
         "ocr_run_at": iso(now_utc()),
     }
-    await db.payments.update_one({"id": payment_id}, {"$set": ocr_doc})
+    await db.payments.update_one({"id": payment_id, "company_id": company_id}, {"$set": ocr_doc})
 
     if not ok:
         try:
@@ -8161,81 +8146,19 @@ async def _ocr_and_auto_approve_payment(*, payment_id: str, statement_id: str,
             pass
         return
 
-    p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
+    p = await db.payments.find_one({"id": payment_id, "company_id": company_id}, {"_id": 0})
     if not p or p.get("status") != "pending_approval":
         return
-    approved_at = iso(now_utc())
-
-    matched_invoice = None
-    if p.get("category") == "huur":
-        # PERIOD-STRICT: match ALLEEN de aangewezen periode's factuur
-        # ongeacht status. Voorkomt dat een OCR-goedgekeurde payment voor
-        # juli per ongeluk wordt gekoppeld aan augustus (Jacyntha-bug).
-        if p.get("period_month") and p.get("period_year"):
-            period_q = {"tenant_id": p["tenant_id"],
-                        "period_month": p["period_month"],
-                        "period_year": p["period_year"]}
-            if company_id:
-                period_q["company_id"] = company_id
-            matched_invoice = await db.invoices.find_one(period_q, {"_id": 0})
-        # Fallback ALLEEN wanneer geen periode is opgegeven.
-        if not matched_invoice and not (p.get("period_month") and p.get("period_year")):
-            inv_q = {"tenant_id": p["tenant_id"], "status": {"$nin": ["paid", "archived"]}}
-            if company_id:
-                inv_q["company_id"] = company_id
-            matched_invoice = await db.invoices.find_one(
-                inv_q, {"_id": 0},
-                sort=[("period_year", 1), ("period_month", 1)],
-            )
-
-    update = {
-        "status": "approved", "approved_at": approved_at,
-        "approved_by": "OCR auto-approve", "auto_approved": True,
-    }
-    if matched_invoice:
-        update["invoice_id"] = matched_invoice["id"]
-        update["invoice_number"] = matched_invoice.get("invoice_number")
-    await db.payments.update_one({"id": payment_id}, {"$set": update})
-
-    if matched_invoice:
-        try:
-            inv_amt = float(matched_invoice.get("amount") or 0)
-            already_paid = matched_invoice.get("paid_amount")
-            if already_paid is None:
-                already_paid = await _invoice_currently_paid(matched_invoice["id"], exclude_payment_id=payment_id)
-            open_on = max(0.0, round(inv_amt - float(already_paid or 0), 2))
-            pay_amt = float(p.get("amount") or 0)
-            primary = min(pay_amt, open_on) if open_on > 0 else pay_amt
-            overflow = round(pay_amt - primary, 2)
-            if primary > 0:
-                await _apply_payment_to_invoice(
-                    matched_invoice["id"], primary,
-                    payment_id=p["id"], paid_at=approved_at,
-                    method=p.get("method"),
-                    receipt_number=p.get("receipt_number"),
-                )
-            if overflow > 0:
-                other_ids: list[str] = []
-                async for inv in db.invoices.find(
-                    {"tenant_id": p["tenant_id"],
-                     "currency": p.get("currency") or "SRD",
-                     "status": {"$nin": ["paid", "cancelled", "archived"]},
-                     "id": {"$ne": matched_invoice["id"]},
-                     **({"company_id": company_id} if company_id else {})},
-                    {"_id": 0, "id": 1},
-                ).sort([("period_year", 1), ("period_month", 1)]):
-                    other_ids.append(inv["id"])
-                if other_ids:
-                    await _allocate_payment_to_invoices(
-                        other_ids, overflow,
-                        payment_id=p["id"], paid_at=approved_at,
-                        method=p.get("method"),
-                        receipt_number=p.get("receipt_number"),
-                    )
-        except Exception as e:
-            print(f"[ocr.auto-approve] invoice apply failed: {e}")
-
-    await _reconcile_power_after_payment(company_id)
+    try:
+        await _approve_payment_core(
+            {"id": payment_id, "company_id": company_id}, None,
+            "system", "OCR auto-approve", via="ocr",
+        )
+    except PaymentApprovalNotPending:
+        return
+    except PaymentProcessingConflict:
+        _logging.getLogger(__name__).warning("OCR approval deferred by payment guard: %s", payment_id)
+        return
 
     try:
         await _notify_company_admins(
@@ -8518,6 +8441,8 @@ async def register_reconciled_payment(
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    if not math.isfinite(body.amount):
+        raise HTTPException(status_code=400, detail="Ongeldig betaalbedrag.")
     try:
         paid_date = datetime.strptime(body.paid_date, "%Y-%m-%d").replace(
             hour=12, tzinfo=timezone.utc
@@ -8531,63 +8456,6 @@ async def register_reconciled_payment(
     if not tenant:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
 
-    statement = await db.bank_statements.find_one(
-        {"id": statement_id, "company_id": cid}, {"_id": 0}
-    )
-    if not statement:
-        raise HTTPException(status_code=404, detail="Bankbewijs niet gevonden")
-    existing_payment = await db.payments.find_one(
-        {"bank_statement_id": statement_id, "company_id": cid}, {"_id": 0}
-    )
-    if existing_payment:
-        if statement.get("reconciliation_status") != "registered":
-            await db.bank_statements.update_one(
-                {"id": statement_id, "company_id": cid},
-                {"$set": {
-                    "reconciliation_status": "registered",
-                    "payment_id": existing_payment["id"],
-                }},
-            )
-        return await _enrich_payment(existing_payment)
-    if statement.get("reconciliation_status") == "registered":
-        raise HTTPException(status_code=409, detail="Dit bankbewijs is al verwerkt.")
-    reference = (body.bank_reference or "").strip()
-    if reference:
-        duplicate = await db.payments.find_one(
-            {
-                "company_id": cid,
-                "method": "bank",
-                "amount": body.amount,
-                "currency": body.currency,
-                "paid_at": iso(paid_date),
-                "bank_reference": reference,
-                "status": {"$ne": "rejected"},
-            },
-            {"_id": 0, "receipt_number": 1},
-        )
-        if duplicate:
-            receipt = duplicate.get("receipt_number") or "bestaande betaling"
-            raise HTTPException(
-                status_code=409,
-                detail=f"Mogelijke dubbele betaling: deze referentie staat al op {receipt}.",
-            )
-
-    attempt_id = new_id()
-    claim = await db.bank_statements.update_one(
-        {
-            "id": statement_id,
-            "company_id": cid,
-            "reconciliation_status": "uploaded",
-        },
-        {"$set": {
-            "reconciliation_status": "registering",
-            "registration_attempt_id": attempt_id,
-            "registration_started_at": iso(now_utc()),
-        }},
-    )
-    if not claim.modified_count:
-        raise HTTPException(status_code=409, detail="Dit bankbewijs wordt al verwerkt.")
-
     payment_body = PaymentIn(
         tenant_id=body.tenant_id,
         amount=body.amount,
@@ -8599,39 +8467,47 @@ async def register_reconciled_payment(
         note=body.note or "",
         received_by=user.get("name") or user.get("email") or "Beheerder",
     )
-    payment_metadata = {
-        "bank_statement_id": statement_id,
-        "bank_statement_filename": statement.get("filename"),
-        "bank_statement_size": statement.get("size"),
-        "bank_statement_content_type": statement.get("content_type"),
-        "bank_payer_name": (body.bank_payer_name or "").strip(),
-        "bank_reference": reference,
-    }
-    try:
-        doc = await _create_payment_doc(
-            payment_body,
-            company_id=cid,
-            approved_by=user.get("name") or user.get("email"),
-            paid_at_override=iso(paid_date),
-            bank_statement_metadata=payment_metadata,
-        )
-        await db.bank_statements.update_one(
-            {"id": statement_id, "company_id": cid, "registration_attempt_id": attempt_id},
-            {"$set": {
-                "reconciliation_status": "registered",
-                "payment_id": doc["id"],
-                "registered_at": iso(now_utc()),
-            }, "$unset": {"registration_attempt_id": "", "registration_started_at": ""}},
-        )
-    except Exception:
-        await db.bank_statements.update_one(
-            {"id": statement_id, "company_id": cid, "registration_attempt_id": attempt_id},
-            {"$set": {
-                "reconciliation_status": statement.get("reconciliation_status", "uploaded"),
-            }, "$unset": {"registration_attempt_id": "", "registration_started_at": ""}},
-        )
-        raise
+    from bank_reconciliation_guard import register_bank_payment
+    from sms_payment_attempts import PaymentAttemptConflict
 
+    async def create_bank_payment(statement, reference):
+        payment_metadata = {
+            "bank_statement_id": statement_id,
+            "bank_statement_filename": statement.get("filename"),
+            "bank_statement_size": statement.get("size"),
+            "bank_statement_content_type": statement.get("content_type"),
+            "bank_payer_name": (body.bank_payer_name or "").strip(),
+            "bank_reference": reference,
+        }
+        return await _create_payment_doc(
+            payment_body, company_id=cid,
+            approved_by=user.get("name") or user.get("email"),
+            paid_at_override=iso(paid_date), bank_statement_metadata=payment_metadata,
+            strict_financial=True,
+        )
+
+    try:
+        doc, created, rejection = await register_bank_payment(
+            db, company_id=cid, tenant_id=body.tenant_id, statement_id=statement_id,
+            body=body, paid_at=iso(paid_date), now=lambda: iso(now_utc()), new_id=new_id,
+            create_payment=create_bank_payment,
+        )
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        _logging.getLogger(__name__).exception(
+            "Bank reconciliation requires review: company=%s statement=%s", cid, statement_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="De bankbetaling is mogelijk gedeeltelijk verwerkt. Controleer deze voordat u opnieuw boekt.",
+        ) from exc
+    if rejection:
+        raise rejection
+    if not created:
+        return await _enrich_payment(doc)
+
+    asyncio.create_task(_notify_tenant_payment(dict(doc)))
     await _kiosk_overview_invalidate(cid, doc.get("tenant_id"))
     enriched = await _enrich_payment(doc)
 
@@ -8681,9 +8557,10 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     if body.method == "creditcard":
         if not body.stripe_payment_intent_id:
             raise HTTPException(status_code=400, detail="Creditcard vereist een voltooide Stripe-betaling")
-        await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount)
     elif body.stripe_payment_intent_id:
         raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Stripe-betaling")
+    if body.method != "mope" and body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     if needs_proof:
         if not body.bank_statement_id:
             raise HTTPException(
@@ -8710,6 +8587,8 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
     else:
         period_month = body.period_month
         period_year = body.period_year
+    if body.method == "creditcard":
+        await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount, body.currency)
     if body.method == "mope":
         if not body.mope_payment_request_id:
             raise HTTPException(status_code=400, detail="Mopé vereist een voltooide betaling")
@@ -8718,8 +8597,6 @@ async def tenant_portal_create_payment(body: TenantPaymentIn, tenant=Depends(get
             body.mope_payment_request_id, company_id=tenant["company_id"], tenant_id=tenant["id"],
             amount=body.amount, currency=body.currency,
         )
-    elif body.mope_payment_request_id:
-        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     pin = PaymentIn(
         tenant_id=tenant["id"],
         apartment_id=tenant.get("apartment_id"),
@@ -10434,7 +10311,8 @@ async def _enrich_payments_bulk(payments: list[dict]) -> list[dict]:
     return out
 
 
-async def _invoice_currently_paid(invoice_id: str, exclude_payment_id: Optional[str] = None) -> float:
+async def _invoice_currently_paid(invoice_id: str, exclude_payment_id: Optional[str] = None,
+                                  *, strict: bool = False) -> float:
     """Som van alle approved payments die aan deze factuur gelinkt zijn (optioneel zonder één betaling).
     Wordt gebruikt voor fallback wanneer `paid_amount` nog niet gemigreerd is."""
     total = 0.0
@@ -10445,7 +10323,8 @@ async def _invoice_currently_paid(invoice_id: str, exclude_payment_id: Optional[
         try:
             total += float(p.get("amount") or 0)
         except Exception:
-            pass
+            if strict:
+                raise
     return round(total + 1e-9, 2)
 
 
@@ -10453,7 +10332,8 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
                                     payment_id: Optional[str] = None,
                                     paid_at: Optional[str] = None,
                                     method: Optional[str] = None,
-                                    receipt_number: Optional[str] = None) -> dict:
+                                    receipt_number: Optional[str] = None,
+                                    *, strict: bool = False) -> dict:
     """Past `amount` toe op factuur:
        • paid_amount += amount (cumulatief — meerdere partial-payments mogelijk)
        • status → 'paid' wanneer paid_amount >= 100% van het factuurbedrag
@@ -10470,6 +10350,8 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
     """
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
+        if strict:
+            raise RuntimeError("Factuur voor betaling ontbreekt")
         return {}
     # Idempotency guard: is deze payment_id + invoice_id combinatie al toegepast?
     if payment_id:
@@ -10495,12 +10377,14 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
     if inv.get("paid_amount") is None:
         # Huidige betaling niet meetellen (staat al in DB) — anders dubbel-tellen.
         if payment_id:
-            base = await _invoice_currently_paid(invoice_id, exclude_payment_id=payment_id)
+            base = await _invoice_currently_paid(invoice_id, exclude_payment_id=payment_id, strict=strict)
         else:
-            base = max(0.0, await _invoice_currently_paid(invoice_id) - float(amount or 0))
-        await db.invoices.update_one(
+            base = max(0.0, await _invoice_currently_paid(invoice_id, strict=strict) - float(amount or 0))
+        migrated = await db.invoices.update_one(
             {"id": invoice_id}, {"$set": {"paid_amount": round(base, 2)}}
         )
+        if strict and migrated.matched_count != 1:
+            raise RuntimeError("Factuur voor betaling ontbreekt")
         inv["paid_amount"] = round(base, 2)
     new_paid = round(float(inv.get("paid_amount") or 0) + float(amount or 0), 2)
     update = {"paid_amount": new_paid}
@@ -10518,7 +10402,9 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
         # (Invoices.jsx) en in OCR-rapportages. Status springt automatisch
         # naar "paid" zodra cumulatief ≥ 100% van het factuurbedrag binnen is.
         update["status"] = "partial"
-    await db.invoices.update_one({"id": invoice_id}, {"$set": update})
+    updated = await db.invoices.update_one({"id": invoice_id}, {"$set": update})
+    if strict and updated.matched_count != 1:
+        raise RuntimeError("Factuur voor betaling ontbreekt")
     inv.update(update)
     # Registreer de allocatie op de payment doc zodat toekomstige aanroepen
     # de idempotency-guard hierboven kunnen raadplegen. Push naar de
@@ -10526,7 +10412,7 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
     # niet bestaat, wat we al hebben gecontroleerd).
     if payment_id:
         try:
-            await db.payments.update_one(
+            recorded = await db.payments.update_one(
                 {"id": payment_id},
                 {"$push": {"allocations": {
                     "invoice_id": invoice_id,
@@ -10534,7 +10420,11 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
                     "applied_at": iso(now_utc()),
                 }}},
             )
+            if strict and recorded.matched_count != 1:
+                raise RuntimeError("Betaling voor factuurallocatie ontbreekt")
         except Exception as _e:  # noqa: BLE001
+            if strict:
+                raise
             # Best-effort — betaling zelf al toegepast, alleen tracking mist.
             print(f"[apply] allocation tracking failed: {_e}")
     # Sync eventueel gekoppelde betalingsregelingen (FIFO installments) met
@@ -10543,6 +10433,8 @@ async def _apply_payment_to_invoice(invoice_id: str, amount: float,
     try:
         await _sync_plan_installments_with_invoice(invoice_id)
     except Exception as e:  # noqa: BLE001
+        if strict:
+            raise
         print(f"[invoice.apply] plan-sync failed for {invoice_id}: {e}")
     return inv
 
@@ -10705,7 +10597,7 @@ async def _redistribute_pending_installments(plan_id: str) -> None:
 async def _allocate_payment_to_invoices(
     invoice_ids: List[str], amount: float, payment_id: Optional[str],
     paid_at: Optional[str] = None, method: Optional[str] = None,
-    receipt_number: Optional[str] = None,
+    receipt_number: Optional[str] = None, *, strict: bool = False,
 ) -> float:
     """FIFO-allocatie: verdeel `amount` over de opgegeven facturen
     (oudst eerst, oude facturen krijgen voorrang). Stopt zodra het bedrag
@@ -10716,6 +10608,8 @@ async def _allocate_payment_to_invoices(
     invs: list = []
     async for inv in db.invoices.find({"id": {"$in": invoice_ids}}, {"_id": 0}):
         invs.append(inv)
+    if strict and len(invs) != len(set(invoice_ids)):
+        raise RuntimeError("Factuur voor betaling ontbreekt")
     invs.sort(key=lambda x: (
         x.get("period_year", 0), x.get("period_month", 0), x.get("created_at") or "",
     ))
@@ -10727,7 +10621,7 @@ async def _allocate_payment_to_invoices(
         inv_amt = float(inv.get("amount") or 0)
         # Bepaal hoeveel deze factuur nog open heeft.
         if inv.get("paid_amount") is None:
-            existing = await _invoice_currently_paid(inv["id"], exclude_payment_id=payment_id)
+            existing = await _invoice_currently_paid(inv["id"], exclude_payment_id=payment_id, strict=strict)
         else:
             existing = float(inv.get("paid_amount") or 0)
         open_amt = max(0.0, round(inv_amt - existing, 2))
@@ -10736,7 +10630,7 @@ async def _allocate_payment_to_invoices(
         chunk = round(min(remaining, open_amt), 2)
         await _apply_payment_to_invoice(
             inv["id"], chunk, payment_id=payment_id, paid_at=paid_at,
-            method=method, receipt_number=receipt_number,
+            method=method, receipt_number=receipt_number, strict=strict,
         )
         remaining = round(remaining - chunk, 2)
         allocated = round(allocated + chunk, 2)
@@ -10752,7 +10646,8 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                               approved_at: Optional[str] = None,
                               approved_by_user_id: Optional[str] = None,
                               paid_at_override: Optional[str] = None,
-                              bank_statement_metadata: Optional[dict] = None) -> dict:
+                              bank_statement_metadata: Optional[dict] = None,
+                              *, strict_financial: bool = False) -> dict:
     q = {"id": body.tenant_id}
     if company_id:
         q["company_id"] = company_id
@@ -10853,6 +10748,8 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                         new_inv.pop("_id", None)
                         matched_invoice = new_inv
                     except Exception as _e:  # noqa: BLE001
+                        if strict_financial:
+                            raise
                         # Best-effort — betaling gaat sowieso door. Log alleen.
                         print(f"[auto-invoice on payment] create failed: {_e}")
     doc = {
@@ -10894,7 +10791,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
         doc.update(bank_statement_metadata)
     await db.payments.insert_one(doc)
     doc.pop("_id", None)
-    if status == "approved":
+    if status == "approved" and not strict_financial:
         asyncio.create_task(_notify_tenant_payment(dict(doc)))
     # Factuur sluiten — alleen voor approved payments. Pending betalingen krijgen
     # bij goedkeuring alsnog de invoice-koppeling via /payments/{id}/approve.
@@ -10910,7 +10807,9 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
             inv_amt = float(matched_invoice.get("amount") or 0)
             already_paid = matched_invoice.get("paid_amount")
             if already_paid is None:
-                already_paid = await _invoice_currently_paid(matched_invoice["id"], exclude_payment_id=doc["id"])
+                already_paid = await _invoice_currently_paid(
+                    matched_invoice["id"], exclude_payment_id=doc["id"], strict=strict_financial,
+                )
             open_on_matched = max(0.0, round(inv_amt - float(already_paid or 0), 2))
             pay_amt = float(body.amount or 0)
             primary_chunk = min(pay_amt, open_on_matched) if open_on_matched > 0 else pay_amt
@@ -10920,7 +10819,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                 await _apply_payment_to_invoice(
                     matched_invoice["id"], primary_chunk,
                     payment_id=doc["id"], paid_at=paid_at,
-                    method=body.method, receipt_number=receipt_no,
+                    method=body.method, receipt_number=receipt_no, strict=strict_financial,
                 )
             # Overflow FIFO-alloceren over andere openstaande facturen
             # (zelfde tenant + currency, niet de matched factuur). Wanneer
@@ -10952,7 +10851,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                     applied_overflow = await _allocate_payment_to_invoices(
                         other_inv_ids, overflow,
                         payment_id=doc["id"], paid_at=paid_at,
-                        method=body.method, receipt_number=receipt_no,
+                        method=body.method, receipt_number=receipt_no, strict=strict_financial,
                     )
                     leftover = round(overflow - applied_overflow, 2)
                 else:
@@ -10961,12 +10860,16 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                 # facturen → bewaar als krediet op de huurder voor de
                 # volgende auto-generatie.
                 if leftover and leftover > 0:
-                    await db.payments.update_one(
+                    credit = await db.payments.update_one(
                         {"id": doc["id"]},
                         {"$set": {"credit_remaining": float(leftover),
                                   "credit_origin": "overflow"}},
                     )
+                    if strict_financial and credit.matched_count != 1:
+                        raise RuntimeError("Betaling voor krediet ontbreekt")
         except Exception as e:
+            if strict_financial:
+                raise
             print(f"[payments] invoice apply failed: {e}")
     if status == "approved":
         await _reconcile_power_after_payment(doc.get("company_id"))
@@ -10977,7 +10880,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
 async def list_payments(
     user=Depends(get_current_user),
     tenant_id: Optional[str] = Query(None),
-    status: Optional[str] = Query(None, description="approved | pending_approval | all"),
+    status: Optional[str] = Query(None, description="approved | pending_approval | needs_review | all"),
     limit: int = Query(200),
 ):
     q = dict(scope(user))
@@ -10986,11 +10889,13 @@ async def list_payments(
     # Standaard: alleen approved zien op de hoofdpagina. Pending heeft eigen sectie.
     if status == "pending_approval":
         q["status"] = "pending_approval"
+    elif status == "needs_review":
+        q["status"] = {"$in": ["approving", "rejecting"]}
     elif status == "all":
         pass  # geen filter
     else:
         # Default sluit pending uit zodat totalen kloppen.
-        q["status"] = {"$ne": "pending_approval"}
+        q["status"] = {"$nin": ["pending_approval", "approving", "rejecting"]}
     docs = await db.payments.find(q, {"_id": 0}).sort("paid_at", -1).to_list(limit)
     return await _enrich_payments_bulk(docs)
 
@@ -11000,7 +10905,7 @@ async def list_payments_paged(start: str, end: str, today_start: str, q: str = "
                               offset: int = 0, limit: int = 25, user=Depends(get_current_user)):
     """Goedgekeurde betalingen van één maand (start..end, lokale grenzen), 25 per pagina.
     Zoeken + totalen server-side over de hele maand."""
-    base = {**scope(user), "status": {"$ne": "pending_approval"}}
+    base = {**scope(user), "status": {"$nin": ["pending_approval", "approving", "rejecting"]}}
 
     async def month_compute():
         docs = await db.payments.find({**base, "paid_at": {"$gte": start, "$lt": end}}, {"_id": 0}).sort("paid_at", -1).to_list(5000)
@@ -11051,6 +10956,8 @@ async def delete_payment(
     pay = await db.payments.find_one({**scope(user), "id": payment_id}, {"_id": 0})
     if not pay:
         raise HTTPException(status_code=404, detail="Betaling niet gevonden")
+    if pay.get("status") in ("approving", "rejecting"):
+        raise HTTPException(status_code=409, detail="Betaling is in verwerking of moet eerst worden gecontroleerd.")
 
     pay_amount = float(pay.get("amount") or 0)
     deleted_invoices = []
@@ -11194,6 +11101,22 @@ async def payments_pending_count(user=Depends(get_current_user)):
     return {"count": n, "latest": latest}
 
 
+@api.get("/payments/processing-guards")
+async def payment_processing_guards(user=Depends(get_current_user)):
+    cid = company_id_of(user)
+    if not cid:
+        raise HTTPException(status_code=400, detail="Geen actief bedrijf")
+    docs = await db.tenant_payment_guards.find(
+        {"company_id": cid, "kind": "legacy",
+         "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection"]}},
+        {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
+    ).sort("created_at", -1).to_list(200)
+    return [{
+        "tenant_id": doc.get("tenant_id"), "operation": doc.get("operation"),
+        "operation_id": doc.get("operation_id"), "created_at": doc.get("created_at"),
+    } for doc in docs]
+
+
 @api.get("/payments/{payment_id}", response_model=PaymentOut)
 async def get_payment(payment_id: str, user=Depends(get_current_user)):
     doc = await db.payments.find_one({**scope(user), "id": payment_id}, {"_id": 0})
@@ -11235,20 +11158,78 @@ async def _auto_approve_pending_kiosk_payments():
         print(f"[auto-approve] failed: {e}")
 
 
-async def _approve_payment_core(q: dict, signature: str | None, uid: str, uname: str, via: str | None = None):
-    """Goedkeuren + openstaande factuur koppelen. Atomair geclaimd → nooit dubbel geboekt."""
-    p = await db.payments.find_one_and_update(
-        {**q, "status": "pending_approval"}, {"$set": {"status": "approving"}}, projection={"_id": 0},
-    )
-    if not p:
-        if await db.payments.find_one(q, {"_id": 1}):
-            raise HTTPException(status_code=400, detail="Deze betaling is geen pending betaling")
-        raise HTTPException(status_code=404, detail="Betaling niet gevonden")
+class PaymentApprovalNotPending(HTTPException):
+    pass
+
+
+class PaymentProcessingConflict(HTTPException):
+    pass
+
+
+async def _guarded_pending_payment(q: dict, *, next_status: str, operation: str, process):
+    from sms_payment_attempts import PaymentAttemptConflict
+    from tenant_payment_guard import acquire_payment_guard, release_payment_guard
+
+    snapshot = await db.payments.find_one(q, {"_id": 0})
+    if not snapshot:
+        raise PaymentApprovalNotPending(status_code=404, detail="Betaling niet gevonden")
+    if snapshot.get("status") != "pending_approval":
+        raise PaymentApprovalNotPending(status_code=400, detail="Deze betaling is geen pending betaling")
+    company_id, tenant_id, payment_id = snapshot.get("company_id"), snapshot.get("tenant_id"), snapshot.get("id")
+    if not all(isinstance(value, str) and value for value in (company_id, tenant_id, payment_id)):
+        raise HTTPException(status_code=409, detail="Betaalgegevens zijn onvolledig; controleer de betaling.")
+    owner = secrets.token_urlsafe(24)
     try:
-        return await _approve_claimed(p, signature, uid, uname, via)
-    except BaseException:
-        await db.payments.update_one({"id": p["id"], "status": "approving"}, {"$set": {"status": "pending_approval"}})
-        raise
+        await acquire_payment_guard(
+            db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner,
+            operation=operation, operation_id=payment_id,
+        )
+    except PaymentAttemptConflict as exc:
+        raise PaymentProcessingConflict(
+            status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.",
+        ) from exc
+    try:
+        claimed = await db.payments.find_one_and_update(
+            {**q, "company_id": company_id, "tenant_id": tenant_id, "status": "pending_approval"},
+            {"$set": {"status": next_status}}, projection={"_id": 0},
+        )
+        result = await process(claimed) if claimed else None
+    except Exception as exc:
+        _logging.getLogger(__name__).exception("Payment operation requires review: %s", payment_id)
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=500,
+            detail="De betaling is mogelijk gedeeltelijk verwerkt. Controleer deze voordat u opnieuw boekt.",
+        ) from exc
+    try:
+        await release_payment_guard(
+            db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner,
+        )
+    except Exception as exc:
+        _logging.getLogger(__name__).exception("Payment guard release requires review: %s", payment_id)
+        raise HTTPException(
+            status_code=500,
+            detail="De betaling is mogelijk verwerkt. Controleer deze voordat u opnieuw boekt.",
+        ) from exc
+    if not claimed:
+        raise PaymentApprovalNotPending(status_code=400, detail="Deze betaling is geen pending betaling")
+    return result
+
+
+async def _approve_payment_core(q: dict, signature: str | None, uid: str, uname: str, via: str | None = None):
+    """Guard the tenant and claim a pending approval before financial changes."""
+    async def process(p):
+        try:
+            return await _approve_claimed(p, signature, uid, uname, via)
+        except Exception as exc:
+            _logging.getLogger(__name__).exception("Payment approval requires review: %s", p["id"])
+            raise HTTPException(
+                status_code=500,
+                detail="De goedkeuring is mogelijk gedeeltelijk verwerkt. Controleer de betaling voordat u opnieuw boekt.",
+            ) from exc
+
+    return await _guarded_pending_payment(q, next_status="approving", operation="payment_approval", process=process)
 
 
 async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str, via: str | None):
@@ -11287,6 +11268,8 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
     }
     if via:
         update["approved_via"] = via
+    if via == "ocr":
+        update["auto_approved"] = True
     if matched_invoice:
         update["invoice_id"] = matched_invoice["id"]
         update["invoice_number"] = matched_invoice.get("invoice_number")
@@ -11297,7 +11280,9 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
             inv_amt_a = float(matched_invoice.get("amount") or 0)
             already_paid_a = matched_invoice.get("paid_amount")
             if already_paid_a is None:
-                already_paid_a = await _invoice_currently_paid(matched_invoice["id"], exclude_payment_id=p.get("id"))
+                already_paid_a = await _invoice_currently_paid(
+                    matched_invoice["id"], exclude_payment_id=p.get("id"), strict=True,
+                )
             open_on_matched_a = max(0.0, round(inv_amt_a - float(already_paid_a or 0), 2))
             pay_amt_a = float(p.get("amount") or 0)
             primary_chunk_a = min(pay_amt_a, open_on_matched_a) if open_on_matched_a > 0 else pay_amt_a
@@ -11306,7 +11291,7 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
                 await _apply_payment_to_invoice(
                     matched_invoice["id"], primary_chunk_a,
                     payment_id=p["id"], paid_at=approved_at,
-                    method=p.get("method"), receipt_number=p.get("receipt_number"),
+                    method=p.get("method"), receipt_number=p.get("receipt_number"), strict=True,
                 )
             if overflow_a > 0:
                 other_inv_ids_a = []
@@ -11323,51 +11308,62 @@ async def _approve_claimed(p: dict, signature: str | None, uid: str, uname: str,
                     await _allocate_payment_to_invoices(
                         other_inv_ids_a, overflow_a,
                         payment_id=p["id"], paid_at=approved_at,
-                        method=p.get("method"), receipt_number=p.get("receipt_number"),
+                        method=p.get("method"), receipt_number=p.get("receipt_number"), strict=True,
                     )
-        except Exception as e:
-            print(f"[payments.approve] invoice apply failed: {e}")
+        except Exception:
+            _logging.getLogger(__name__).exception("Payment approval invoice allocation failed: %s", pid)
+            raise
     # Goedkeuring van een betalingsregeling-termijn (kiosk-flow met
     # pending_approval): alloceer alsnog op de gelinkte facturen + mark de
     # bijbehorende installment als 'paid'.
     plan_id = (p.get("metadata") or {}).get("plan_id") if isinstance(p.get("metadata"), dict) else None
     inst_seq = (p.get("metadata") or {}).get("installment_seq") if isinstance(p.get("metadata"), dict) else None
-    if plan_id and p.get("category") == "betalingsregeling":
+    if p.get("category") == "betalingsregeling":
         try:
-            plan = await db.payment_plans.find_one({"id": plan_id}, {"_id": 0})
-            if plan and (plan.get("invoice_ids") or []):
-                await _allocate_payment_to_invoices(
+            if not plan_id or inst_seq is None:
+                raise RuntimeError("Regelingstermijn voor goedkeuring ontbreekt")
+            plan = await db.payment_plans.find_one(
+                {"id": plan_id, "company_id": p.get("company_id"), "tenant_id": p.get("tenant_id")},
+                {"_id": 0},
+            )
+            if not plan:
+                raise RuntimeError("Regeling voor goedkeuring ontbreekt")
+            if plan.get("invoice_ids"):
+                allocated = await _allocate_payment_to_invoices(
                     plan["invoice_ids"], float(p.get("amount") or 0),
                     payment_id=p["id"], paid_at=approved_at,
-                    method=p.get("method"), receipt_number=p.get("receipt_number"),
+                    method=p.get("method"), receipt_number=p.get("receipt_number"), strict=True,
                 )
+                if round(allocated, 2) != round(float(p.get("amount") or 0), 2):
+                    raise RuntimeError("Regelingstermijn kon niet volledig worden toegewezen")
             # Markeer installment als paid (was 'pending_payment')
-            if inst_seq is not None:
-                await db.payment_plan_installments.update_one(
-                    {"plan_id": plan_id, "sequence": inst_seq},
-                    {"$set": {"status": "paid"}},
-                )
+            installment = await db.payment_plan_installments.update_one(
+                {"plan_id": plan_id, "sequence": inst_seq, "status": "pending_payment", "payment_id": pid},
+                {"$set": {"status": "paid"}},
+            )
+            if installment.matched_count != 1:
+                raise RuntimeError("Regelingstermijn voor goedkeuring is gewijzigd")
             # Plan-completion check
-            if plan:
-                remaining_pending = await db.payment_plan_installments.count_documents(
-                    {"plan_id": plan_id, "status": {"$in": ["pending", "pending_payment"]}}
+            remaining_pending = await db.payment_plan_installments.count_documents(
+                {"plan_id": plan_id, "status": {"$in": ["pending", "pending_payment"]}}
+            )
+            if remaining_pending == 0:
+                completed = await db.payment_plans.update_one(
+                    {"id": plan_id, "company_id": p.get("company_id"), "tenant_id": p.get("tenant_id")},
+                    {"$set": {"status": "completed", "completed_at": approved_at}},
                 )
-                if remaining_pending == 0:
-                    await db.payment_plans.update_one(
-                        {"id": plan_id},
-                        {"$set": {"status": "completed", "completed_at": approved_at}},
-                    )
-            # WhatsApp/SMS bevestiging — ook bij admin-approval van kiosk-pending.
-            # FIRE-AND-FORGET: Messente + SMTP + PDF render kunnen 5-10s duren;
-            # de admin UI moet NIET wachten daarop. Background task stuurt
-            # de notificatie nadat de response al uit is.
-            if inst_seq is not None:
-                asyncio.create_task(_notify_tenant_installment_paid(plan_id, inst_seq))
-        except Exception as e:  # noqa: BLE001
-            print(f"[payments.approve] plan allocation failed: {e}")
-    await db.payments.update_one({"id": pid}, {"$set": update})
+                if completed.matched_count != 1:
+                    raise RuntimeError("Regeling voor goedkeuring is gewijzigd")
+        except Exception:
+            _logging.getLogger(__name__).exception("Payment approval plan allocation failed: %s", pid)
+            raise
+    finalized = await db.payments.update_one({"id": pid, "status": "approving"}, {"$set": update})
+    if finalized.matched_count != 1:
+        raise RuntimeError("Goedkeuring kon niet worden afgerond; controleer de betaling")
     p.update(update)
     await _reconcile_power_after_payment(p.get("company_id"))
+    if p.get("category") == "betalingsregeling":
+        asyncio.create_task(_notify_tenant_installment_paid(plan_id, inst_seq))
     asyncio.create_task(_notify_tenant_payment(dict(p)))
     if p.get("kiosk_employee_id"):
         asyncio.create_task(_notify_kiosk_employees(
@@ -11386,11 +11382,13 @@ async def reject_payment(pid: str, body: PaymentRejectIn, user=Depends(require_r
 
 
 async def _reject_payment_core(q: dict, reason: str, uid: str):
-    p = await db.payments.find_one(q, {"_id": 0})
-    if not p:
-        raise HTTPException(status_code=404, detail="Betaling niet gevonden")
-    if p.get("status") != "pending_approval":
-        raise HTTPException(status_code=400, detail="Deze betaling is geen pending betaling")
+    async def process(p):
+        return await _reject_claimed(p, reason, uid)
+
+    return await _guarded_pending_payment(q, next_status="rejecting", operation="payment_rejection", process=process)
+
+
+async def _reject_claimed(p: dict, reason: str, uid: str):
     pid = p["id"]
     update = {"status": "rejected", "rejected_reason": (reason or "").strip(),
               "approved_at": iso(now_utc()),
@@ -11399,15 +11397,25 @@ async def _reject_payment_core(q: dict, reason: str, uid: str):
     # 'm opnieuw kan betalen.
     plan_id = (p.get("metadata") or {}).get("plan_id") if isinstance(p.get("metadata"), dict) else None
     inst_seq = (p.get("metadata") or {}).get("installment_seq") if isinstance(p.get("metadata"), dict) else None
-    if plan_id and inst_seq is not None and p.get("category") == "betalingsregeling":
-        try:
-            await db.payment_plan_installments.update_one(
-                {"plan_id": plan_id, "sequence": inst_seq, "status": "pending_payment"},
+    try:
+        if p.get("category") == "betalingsregeling":
+            if not plan_id or inst_seq is None:
+                raise RuntimeError("Regelingstermijn voor afwijzing ontbreekt")
+            installment = await db.payment_plan_installments.update_one(
+                {"plan_id": plan_id, "sequence": inst_seq, "status": "pending_payment", "payment_id": pid},
                 {"$set": {"status": "pending", "paid_at": None, "payment_id": None}},
             )
-        except Exception as e:  # noqa: BLE001
-            print(f"[payments.reject] plan revert failed: {e}")
-    await db.payments.update_one({"id": pid}, {"$set": update})
+            if installment.matched_count != 1:
+                raise RuntimeError("Regelingstermijn voor afwijzing is gewijzigd")
+        finalized = await db.payments.update_one({"id": pid, "status": "rejecting"}, {"$set": update})
+        if finalized.matched_count != 1:
+            raise RuntimeError("Afwijzing kon niet worden afgerond")
+    except Exception as exc:
+        _logging.getLogger(__name__).exception("Payment rejection requires review: %s", pid)
+        raise HTTPException(
+            status_code=500,
+            detail="De afwijzing is mogelijk gedeeltelijk verwerkt. Controleer de betaling voordat u opnieuw boekt.",
+        ) from exc
     p.update(update)
     if p.get("kiosk_employee_id"):
         asyncio.create_task(_notify_kiosk_employees(
@@ -13113,12 +13121,17 @@ async def kiosk_create_payment(
     employee_pin: Optional[str] = Query(None, description="PIN ter dubbele bevestiging"),
 ):
     cid = _session.get("company_id")
+    if body.method != "mope" and body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     if body.stripe_payment_intent_id:
         # Online (Stripe) betaald → geverifieerd, dus direct goedgekeurd.
         from routes.company_stripe import consume_kiosk_stripe_payment
-        stx = await consume_kiosk_stripe_payment(cid, body.stripe_payment_intent_id)
-        if body.method not in ("creditcard", "ideal") or float(body.amount) > float(stx["amount"]) + 0.01:
+        if body.method not in ("creditcard", "ideal"):
             raise HTTPException(status_code=400, detail="Bedrag/methode komt niet overeen met de Stripe-betaling")
+        await consume_kiosk_stripe_payment(
+            cid, body.stripe_payment_intent_id, tenant_id=body.tenant_id, amount=body.amount,
+            currency=body.currency, method="card" if body.method == "creditcard" else "ideal",
+        )
         employee_id = None
     elif body.method in ("creditcard", "ideal"):
         raise HTTPException(status_code=400, detail="Creditcard/iDEAL vereist een Stripe-betaling")
@@ -13131,8 +13144,6 @@ async def kiosk_create_payment(
             amount=body.amount, currency=body.currency,
         )
         employee_id = None
-    elif body.mope_payment_request_id:
-        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     # Als een kiosk-medewerker is opgegeven → betaling gaat in pending_approval.
     # Beheerder ziet het en moet handtekening zetten om te bevestigen.
     # Zonder employee_id → klassieke directe boeking (legacy gedrag).
@@ -21078,6 +21089,55 @@ def _receipt_template(cfg: dict, payment_id: Optional[str], name: str, company: 
     return "receipt", whatsapp_variables(name, company, amount, reference, image_url)
 
 
+@api.get("/public/sms-payment")
+async def sms_payment_info(response: Response, token: str = Header(default="", alias="X-Sms-Payment-Token")):
+    from routes.company_mope import _active as mope_active, _config as mope_config
+    from routes.company_stripe import _active as stripe_active, _cfg_doc as stripe_config
+    from sms_payment_links import get_payment_grant, payment_items
+
+    headers = {
+        "Cache-Control": "private, no-store",
+        "Referrer-Policy": "no-referrer",
+        "X-Robots-Tag": "noindex, nofollow",
+    }
+    response.headers.update(headers)
+    grant = await get_payment_grant(db.sms_payment_links, token)
+    if not grant:
+        raise HTTPException(status_code=404, detail="Deze betaallink is ongeldig of verlopen.", headers=headers)
+    cid = grant["company_id"]
+    tenant = await db.tenants.find_one(
+        {"id": grant["tenant_id"], "company_id": cid, "status": {"$ne": "archived"}},
+        {"_id": 0, "id": 1, "company_id": 1},
+    )
+    company = await db.companies.find_one(
+        {"id": cid}, {"_id": 0, "name": 1, "address": 1, "bank_account_sr": 1, "bank_account_nl": 1},
+    )
+    if not tenant or not company:
+        raise HTTPException(status_code=404, detail="Deze betaallink is ongeldig of verlopen.", headers=headers)
+    invoices = await db.invoices.find(
+        {"id": {"$in": grant["invoice_ids"]}, "company_id": cid, "tenant_id": tenant["id"]},
+        {"_id": 0},
+    ).to_list(None)
+    invoices = await _enrich_invoices_batch(invoices)
+    plans = await _plan_core["list_plans_for_tenant"](tenant["id"], cid, status="active") if grant["installments"] else []
+    methods = []
+    if await _company_has_plan_feature(cid, "allow_stripe"):
+        stripe = stripe_active((await stripe_config(cid)).get("stripe_config") or {})
+        if stripe["enabled"]:
+            methods.extend({"id": method, "label": "Creditcard" if method == "card" else "iDEAL"}
+                           for method in stripe["methods"])
+    if await _company_has_plan_feature(cid, "allow_mope") and mope_active(await mope_config(cid)):
+        methods.append({"id": "mope", "label": "Mopé"})
+    banks = [{"country": label, "account": company[key]} for key, label in (
+        ("bank_account_sr", "Suriname"), ("bank_account_nl", "Nederland"),
+    ) if company.get(key)]
+    return {
+        "company": {"name": company.get("name") or "Bedrijf", "address": company.get("address") or ""},
+        "items": payment_items(grant, invoices, plans), "online_methods": methods, "bank_accounts": banks,
+        "online_payment_available": False,
+    }
+
+
 async def _send_company_sms(company_id: str, cfg: dict, to: str, body: str, purpose: str):
     from urllib.parse import urlsplit
     from messente_service import send_sms, _validate_number
@@ -22195,10 +22255,18 @@ async def tenant_portal_pay_installment(
     )
     if not plan:
         raise HTTPException(status_code=404, detail="Regeling niet gevonden")
+    if body.method != "mope" and body.mope_payment_request_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     if body.method == "creditcard":
         if not body.stripe_payment_intent_id or not body.amount:
             raise HTTPException(status_code=400, detail="Creditcard vereist een voltooide Stripe-betaling")
-        await _tenant_consume_stripe(tenant, body.stripe_payment_intent_id, body.amount)
+        amount = await _mope_installment_amount(plan, seq, body.amount)
+        await _tenant_consume_stripe(
+            tenant, body.stripe_payment_intent_id, amount, plan.get("currency") or "SRD",
+        )
+        body.amount = amount
+    elif body.stripe_payment_intent_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Stripe-betaling")
     if body.method == "mope":
         if not body.mope_payment_request_id:
             raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
@@ -22209,11 +22277,10 @@ async def tenant_portal_pay_installment(
             amount=amount, currency=plan.get("currency") or "SRD",
         )
         body.amount = amount
-    elif body.mope_payment_request_id:
-        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
     out = await _plan_core["pay_installment_for"](
         plan, seq,
         method=body.method, amount=body.amount, note=body.note or "",
+        stripe_payment_intent_id=body.stripe_payment_intent_id,
         mope_payment_request_id=body.mope_payment_request_id,
         received_by=tenant.get("name") or "Huurder Kiosk",
         approved_by_label=tenant.get("name") or "Huurder Kiosk",

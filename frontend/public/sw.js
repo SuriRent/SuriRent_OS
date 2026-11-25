@@ -124,6 +124,9 @@ self.addEventListener('fetch', (event) => {
 
   if (req.method !== 'GET') return;
 
+  if (url.origin === self.location.origin
+      && (url.pathname.startsWith('/b/') || url.pathname === '/api/public/sms-payment')) return;
+
   // ===== API calls — NETWORK-FIRST met cache-fallback =====
   // Vroeger werden alle /api/* calls hard gebypassed (no caching). Dat
   // werkt prima met goede connectie maar laat de app volledig breken

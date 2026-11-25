@@ -1,0 +1,77 @@
+name: SMS payment transaction tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/sms_payment_booking.py'
+      - 'backend/sms_payment_attempts.py'
+      - 'backend/sms_payment_providers.py'
+      - 'backend/sms_payment_reconciliation.py'
+      - 'backend/tenant_payment_guard.py'
+      - 'backend/bank_reconciliation_guard.py'
+      - 'backend/routes/company_stripe.py'
+      - 'backend/payment_plans.py'
+      - 'backend/server.py'
+      - 'backend/tests/test_sms_payment_booking*.py'
+      - 'backend/tests/test_sms_payment_attempts.py'
+      - 'backend/tests/test_sms_payment_providers.py'
+      - 'backend/tests/test_tenant_payment_guard.py'
+      - 'backend/tests/test_bank_reconciliation_guard.py'
+      - 'backend/tests/test_bank_reconciliation_server.py'
+      - 'backend/tests/test_company_stripe_consumption.py'
+      - '.github/workflows/sms-payment-transactions.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  mongodb-transactions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test dependencies
+        run: |
+          python -m pip install motor==3.3.1 pymongo==4.5.0 stripe==15.1.0 fastapi==0.110.1 pydantic==2.12.5
+          python -m pip install python-dotenv==1.2.1 bcrypt==4.1.3 PyJWT==2.10.1 brotli-asgi==1.6.0 email-validator==2.3.0 python-multipart==0.0.21 reportlab==4.4.9 pillow==12.2.0 qrcode==8.2 num2words==0.5.14 cryptography==48.0.0 httpx==0.28.1 pywebpush==2.3.0 pypdf==6.11.0 google-auth==2.53.0 requests==2.34.2
+      - name: Start isolated MongoDB replica set
+        shell: bash
+        run: |
+          docker run --detach --rm --name sms-payment-test-mongo \
+            --publish 127.0.0.1:27017:27017 mongo:7.0 \
+            --replSet rs0 --bind_ip_all
+          for i in {1..60}; do
+            if docker exec sms-payment-test-mongo mongosh --quiet --eval 'db.adminCommand({ping: 1}).ok' | grep -qx 1; then
+              break
+            fi
+            if [ "$i" = 60 ]; then exit 1; fi
+            sleep 1
+          done
+          docker exec sms-payment-test-mongo mongosh --quiet --eval \
+            'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in {1..60}; do
+            if docker exec sms-payment-test-mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -qx true; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - name: Test booking and recovery
+        env:
+          PYTHONPATH: backend
+          SMS_BOOKING_MONGO_URL: 'mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true'
+        run: |
+          python -m unittest discover -s backend/tests -p 'test_sms_payment_booking*.py' -v
+          python -m unittest discover -s backend/tests -p 'test_sms_payment_attempts.py' -v
+          python -m unittest discover -s backend/tests -p 'test_sms_payment_providers.py' -v
+          python -m unittest discover -s backend/tests -p 'test_tenant_payment_guard.py' -v
+          python -m unittest discover -s backend/tests -p 'test_bank_reconciliation_guard.py' -v
+          python -m unittest discover -s backend/tests -p 'test_bank_reconciliation_server.py' -v
+          python -m unittest discover -s backend/tests -p 'test_company_stripe_consumption.py' -v
+      - name: Stop isolated MongoDB
+        if: always()
+        run: docker stop sms-payment-test-mongo || true

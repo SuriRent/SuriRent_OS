@@ -91,6 +91,91 @@ No automatic request retries are performed: after a network timeout, check
 Messente before resending to avoid duplicates. Switching provider does not
 remove Meta restrictions or the 24-hour window.
 
+### SMS payment links (in development)
+
+The payment-link groundwork is not connected to reminder sending or online
+checkout yet. Do not send these links to customers until provider verification
+and reliable payment booking are connected and verified end to end.
+
+The in-development attempt journal reserves at most one SMS checkout per
+company and tenant and leaves uncertain provider requests blocked for
+investigation. A successfully booked attempt can be archived and released
+atomically, preserving idempotent retries; this is not yet wired to checkout.
+The in-development Stripe and Mopé adapters create requests
+and check provider status against the reserved amount and identity. Before
+creating a provider request, they check that the reserved invoice or installment
+is currently bookable using the same rules as booking. This check is a snapshot,
+not a lock, and cannot prevent subsequent changes by other payment flows.
+Pending payments and payments currently being approved or rejected for that tenant cause the SMS attempt
+to fail closed until they are resolved. Every existing Stripe request except
+one recorded as cancelled, and every existing Mopé request, also blocks it.
+This intentionally includes paid requests because their status does not prove
+the payment was fully booked; a reliable reconciliation mechanism is still
+needed before those customers can use SMS checkout.
+Existing provider checkouts and other payment flows still require coordination.
+The adapters are
+not connected to the existing kiosk or tenant-portal payment flows and do not
+resolve overlaps with those flows.
+
+Existing Stripe intents are now claimed consistently across kiosk and tenant
+portal bookings: a partial tenant booking blocks kiosk consumption, and a
+kiosk claim blocks tenant consumption. Tenant installment payments record the
+Stripe intent ID; older installment payments may lack it and require review.
+The claim and subsequent payment allocation are still separate writes, so a
+failed or interrupted booking requires reconciliation and is not proof of a
+fully booked provider request.
+
+The internal reconciliation function can resume an open, verified or booked
+attempt, verifying the provider before booking and preserving uncertain
+attempts for manual investigation. It is not scheduled or exposed; closing the
+browser does not yet trigger recovery. Any future caller must authorize the
+exact attempt and run recovery independently of the link's expiry.
+
+The in-development booking code supports individual invoices without an active
+plan and specific installments on consistent plans. Inconsistent balances,
+pending installment payments, or overlapping plans require manual review.
+It requires MongoDB transactions. The Compose database
+above is a standalone MongoDB instance, so it cannot run this booking code.
+The `SMS payment transaction tests` GitHub Actions workflow starts a separate,
+disposable replica set for the booking tests; it does not migrate or access the
+deployment database. Run it after pushing the branch and inspect its result.
+The existing payment paths also need coordination before checkout can be
+enabled; do not treat the booking code as an active or complete integration.
+The planned coordination blocks other bookings for the same company and
+tenant while an SMS checkout is open. An interrupted or uncertain operation
+must remain blocked for investigation; guards must not expire automatically.
+The experimental SMS provider code now acquires the guard before contacting
+the provider and releases it transactionally after booking or cancellation
+before the provider request starts. An unstarted reservation rejected by its
+initial preflight or a conflicting guard is also cancelled transactionally,
+without releasing another operation's guard. The bank reconciliation registration route also acquires
+the tenant guard before claiming a statement or creating a payment. Allocation
+or plan-sync failures are reported instead of being treated as success, and an
+uncertain bank registration retains the guard and statement for manual review.
+The guard records `operation=bank_reconciliation` and the statement ID. Do not
+clear it or retry the booking without reconciling the payment, invoice,
+installments and statement first; there is no automated recovery UI yet.
+Other payment paths still do not acquire the guard; this is not yet safe
+interoperation and checkout must remain disabled.
+
+Manual, notification and OCR approvals and rejections now acquire the tenant
+guard before claiming the payment. If an operation fails, its guard and the
+`approving` or `rejecting` state remain for investigation rather than being
+retried automatically. The guard records `operation=payment_approval` or
+`payment_rejection` and the payment ID. Verify invoice allocations and plan
+installments before any manual repair; there is no automatic recovery
+interface. The payments screen shows these legacy guards (including a bank
+guard without a payment) for the active company, without providing an unsafe
+unlock action. The real MongoDB guard-race test has not yet been run here.
+
+The link is a bearer credential valid for 30 days. Nginx disables access
+logging for `/b/` and sends no-store, no-referrer and noindex headers for that
+page; the API receives the token in a header rather than its URL. Configure
+any upstream proxies, CDNs, monitoring and error-reporting systems not to log
+the `/b/` path or the `X-Sms-Payment-Token` header. The link can still appear
+in browser history and in the recipient's SMS. MongoDB removes expired grants
+using a TTL index; the API checks expiry independently of TTL cleanup.
+
 ### Receipt image template
 
 For a JPG directly in WhatsApp, create a utility template with an **image header**
