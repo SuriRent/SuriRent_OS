@@ -13,6 +13,11 @@ SuriRent is een webapplicatie voor vastgoed- en huurbeheer. De repository bevat 
 - [Beheer en onderhoud](#beheer-en-onderhoud)
 - [Mappenstructuur](#mappenstructuur)
 
+De zwevende WhatsApp-knop op de marketingwebsite gebruikt het nummer onder
+**Superadmin > Instellingen > Bankoverschrijving > WhatsApp**. Vul een nummer
+met landcode in en sla de instellingen op. Een leeg nummer verbergt de knop.
+Deze contactknop opent WhatsApp rechtstreeks en gebruikt geen Twilio.
+
 ## Architectuur
 
 De Coolify-deployment gebruikt de services uit `docker-compose.yml`:

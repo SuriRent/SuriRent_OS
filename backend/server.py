@@ -3142,6 +3142,14 @@ async def my_payments(user=Depends(get_current_user)):
     return docs
 
 
+@api.get("/public/marketing-contact")
+async def marketing_contact():
+    doc = await db.saas_settings.find_one(
+        {"id": SAAS_SETTINGS_ID}, {"_id": 0, "banking.whatsapp": 1},
+    ) or {}
+    return {"whatsapp": (doc.get("banking") or {}).get("whatsapp") or ""}
+
+
 @api.get("/billing/bank-details")
 async def billing_bank_details():
     """Public bank details for offline / wire transfer subscription payments.
