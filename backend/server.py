@@ -11225,7 +11225,7 @@ async def payment_processing_guards(user=Depends(get_current_user)):
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
                                 "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
                                 "installment_payment", "payment_plan_change", "payment_deletion",
-                                "credit_reconciliation", "invoice_change"]}},
+                                "credit_reconciliation", "invoice_change", "tenant_move_out"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
@@ -18197,17 +18197,35 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
     t = await db.tenants.find_one({"id": tenant_id, **scope(user)}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    cid = t.get("company_id")
+    if not cid:
+        raise HTTPException(status_code=409, detail="Huurder heeft geen geldige bedrijfscontext")
+    from tenant_payment_guard import guarded_tenant_move_out
+    return await guarded_tenant_move_out(
+        db, company_id=cid, tenant_id=tenant_id,
+        change=lambda: _tenant_move_out_locked(tenant_id, cid, body, user),
+    )
+
+
+async def _tenant_move_out_locked(tenant_id: str, cid: str, body: MoveOutIn, user: dict):
+    t = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0})
+    if not t:
+        return HTTPException(status_code=404, detail="Huurder niet gevonden")
     if t.get("status") in ("archived", "archiving"):
-        raise HTTPException(status_code=400, detail="Huurder is al gearchiveerd")
-    cid = t["company_id"]
-    ctx = await _move_out_context(cid, t, body.move_out_date)
-    claim = await db.tenants.update_one({"id": tenant_id, "status": {"$nin": ["archived", "archiving"]}},
+        return HTTPException(status_code=400, detail="Huurder is al gearchiveerd")
+    try:
+        ctx = await _move_out_context(cid, t, body.move_out_date)
+    except HTTPException as exc:
+        return exc
+    claim = await db.tenants.update_one({"id": tenant_id, "company_id": cid, "status": {"$nin": ["archived", "archiving"]}},
                                         {"$set": {"status": "archiving"}})
     if not claim.modified_count:
-        raise HTTPException(status_code=400, detail="Huurder is al gearchiveerd")
+        return HTTPException(status_code=400, detail="Huurder is al gearchiveerd")
     cur, dep = ctx["currency"], ctx["deposit"]
     if ctx["future_ids"]:
-        await db.invoices.delete_many({"id": {"$in": ctx["future_ids"]}, "company_id": cid})
+        deleted = await db.invoices.delete_many({"id": {"$in": ctx["future_ids"]}, "company_id": cid, "tenant_id": tenant_id})
+        if deleted.deleted_count != len(set(ctx["future_ids"])):
+            raise RuntimeError("Toekomstige facturen konden niet volledig worden verwijderd")
     arrears_items = [i for i in ctx["open_items"] if i["invoice_id"] not in set(body.exclude_invoice_ids)]
     arrears = round(sum(i["amount"] for i in arrears_items), 2)
     damage_items = [{"description": (i.description or "").strip() or "Schade", "amount": round(i.amount, 2)}
@@ -18225,8 +18243,11 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
             "settled_labels": [i["label"] for i in arrears_items],
             "receipt_number": rno, "paid_at": paid_at, "status": "approved", "created_at": paid_at,
         })
-        await _allocate_payment_to_invoices([i["invoice_id"] for i in arrears_items], settle, pid,
-                                            paid_at=paid_at, method="borgverrekening", receipt_number=rno)
+        allocated = await _allocate_payment_to_invoices([i["invoice_id"] for i in arrears_items], settle, pid,
+                                                        paid_at=paid_at, method="borgverrekening",
+                                                        receipt_number=rno, strict=True)
+        if abs(allocated - settle) > 0.005:
+            raise RuntimeError("Borgverrekening kon niet volledig worden toegewezen")
     calc = _settle_deposit(amount, damage, arrears)
     if calc["refund_amount"] > 0:
         await db.kasgeld.insert_one({
@@ -18241,7 +18262,11 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
               "damage_items": damage_items, "arrears_items": arrears_items,
               "refund_note": body.refund_note or "", "refunded_at": iso(now_utc()), "move_out": True}
     if dep:
-        await db.deposits.update_one({"id": dep["id"]}, {"$set": fields})
+        updated_deposit = await db.deposits.update_one(
+            {"id": dep["id"], "company_id": cid, "tenant_id": tenant_id, "status": "held"}, {"$set": fields},
+        )
+        if updated_deposit.matched_count != 1:
+            raise RuntimeError("Borg kon niet worden verwerkt")
         did = dep["id"]
     else:
         did = new_id()
@@ -18266,12 +18291,16 @@ async def tenant_move_out(tenant_id: str, body: MoveOutIn, user=Depends(require_
         upd = {"archived": True, "archived_at": arch_at}
         if inv.get("status") in _UNPAID_STATUSES:
             upd.update({"status": "archived", "status_before_archive": inv.get("status")})
-        await db.invoices.update_one({"id": inv["id"]}, {"$set": upd})
-    await db.tenants.update_one({"id": tenant_id}, {"$set": {
+        archived = await db.invoices.update_one({"id": inv["id"], "company_id": cid, "tenant_id": tenant_id}, {"$set": upd})
+        if archived.matched_count != 1:
+            raise RuntimeError("Factuur kon niet worden gearchiveerd")
+    archived_tenant = await db.tenants.update_one({"id": tenant_id, "company_id": cid, "status": "archiving"}, {"$set": {
         "status": "archived", "archived_at": iso(now_utc()), "move_out_date": date_s,
         "archived_apartment_id": t.get("apartment_id"), "archived_apartment_number": apt_number,
         "apartment_id": None, "outstanding_after_move_out": calc["amount_due"], "currency_at_move_out": cur,
         "move_out_deposit_id": did}})
+    if archived_tenant.matched_count != 1:
+        raise RuntimeError("Huurder kon niet worden gearchiveerd")
     d_doc = await db.deposits.find_one({"id": did}, {"_id": 0})
     return {"deposit": await _enrich_deposit(d_doc), "settled_invoices": settle}
 

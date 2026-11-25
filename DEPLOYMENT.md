@@ -219,6 +219,9 @@ Kiosk invoice fines and invoice deletion also acquire an `invoice_change`
 guard. Interrupted changes retain the guard for investigation; deletion checks
 direct, multi-invoice and allocation payment references before removing an
 invoice. Other invoice and tenant mutations are not yet all coordinated.
+Tenant move-out now holds a `tenant_move_out` guard through deposit allocation,
+invoice archival and tenant archival. Interrupted processing retains the guard;
+reconcile the deposit, payment, invoice allocations and tenant before repair.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

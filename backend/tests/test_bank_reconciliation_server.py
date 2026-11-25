@@ -625,6 +625,71 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
         self.assertEqual((guard["operation"], guard["operation_id"]), ("invoice_change", "i1"))
 
+    async def test_sms_guard_blocks_move_out_without_changes(self):
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with self.assertRaises(HTTPException) as error:
+            await server.tenant_move_out("t1", server.MoveOutIn(move_out_date="2026-02-01"), {})
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertNotEqual((await self.db.tenants.find_one({"id": "t1"})).get("status"), "archiving")
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 0)
+
+    async def test_move_out_holds_guard_and_allocates_deposit(self):
+        await self.db.deposits.insert_one({
+            "id": "d1", "company_id": "c1", "tenant_id": "t1", "status": "held",
+            "amount": 60, "currency": "SRD",
+        })
+        entered, resume = asyncio.Event(), asyncio.Event()
+        original = server._move_out_context
+
+        async def hold(*args):
+            entered.set()
+            await resume.wait()
+            return await original(*args)
+
+        with patch.object(server, "_move_out_context", side_effect=hold), \
+                patch.object(server, "_next_receipt_number", AsyncMock(return_value="receipt1")), \
+                patch.object(server, "_enrich_deposit", AsyncMock(side_effect=lambda deposit: deposit)), \
+                patch.object(server, "_notify_kiosk_employees", AsyncMock()):
+            task = asyncio.create_task(server.tenant_move_out(
+                "t1", server.MoveOutIn(move_out_date="2026-02-01"), {},
+            ))
+            await asyncio.wait_for(entered.wait(), 5)
+            try:
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            result = await task
+        self.assertEqual(result["settled_invoices"], 60)
+        invoice = await self.db.invoices.find_one({"id": "i1"})
+        payment = await self.db.payments.find_one({"method": "borgverrekening"})
+        self.assertEqual(invoice["paid_amount"], 60)
+        self.assertEqual(payment["allocations"][0]["amount"], 60)
+        self.assertEqual((await self.db.tenants.find_one({"id": "t1"}))["status"], "archived")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_move_out_failure_retains_guard_for_review(self):
+        await self.db.deposits.insert_one({
+            "id": "d1", "company_id": "c1", "tenant_id": "t1", "status": "held",
+            "amount": 60, "currency": "SRD",
+        })
+        self.sync.side_effect = RuntimeError("plan sync failed")
+        with patch.object(server, "_next_receipt_number", AsyncMock(return_value="receipt1")):
+            with self.assertRaises(HTTPException) as error:
+                await server.tenant_move_out("t1", server.MoveOutIn(move_out_date="2026-02-01"), {})
+        self.assertEqual(error.exception.status_code, 500)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("tenant_move_out", "t1"))
+        self.assertEqual((await self.db.tenants.find_one({"id": "t1"}))["status"], "archiving")
+        self.assertEqual((await self.db.deposits.find_one({"id": "d1"}))["status"], "held")
+
+    async def test_invalid_move_out_date_releases_guard_without_changes(self):
+        with self.assertRaises(HTTPException) as error:
+            await server.tenant_move_out("t1", server.MoveOutIn(move_out_date="bad"), {})
+        self.assertEqual(error.exception.status_code, 400)
+        self.assertNotEqual((await self.db.tenants.find_one({"id": "t1"})).get("status"), "archiving")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
 
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
