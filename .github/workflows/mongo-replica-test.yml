@@ -354,3 +354,103 @@ jobs:
         run: |
           docker rm -f sms-replica-copy-ci || true
           docker volume rm sms-replica-copy-ci-data sms-replica-copy-ci-config || true
+
+  backup-restore-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      MONGO_ROOT_USERNAME: testuser
+      MONGO_ROOT_PASSWORD: testpassword
+      MONGO_REPLICA_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      JWT_SECRET: test-only-jwt-secret
+      PDF_AES_PASSWORD: test-only-pdf-password
+      ADMIN_EMAIL: admin@example.test
+      ADMIN_PASSWORD: test-only-admin-password
+      SUPERADMIN_EMAIL: superadmin@example.test
+      SUPERADMIN_PASSWORD: test-only-superadmin-password
+      APP_PUBLIC_URL: https://app.example.test
+      CORS_ORIGINS: https://app.example.test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Back up a standalone database and restore to a fresh volume
+        shell: bash
+        run: |
+          set -eu
+          source=(docker compose -p surirent-backup-source -f docker-compose.yml)
+          target=(docker compose -p surirent-backup-target -f docker-compose.yml)
+          "${source[@]}" up -d --wait database
+          "${source[@]}" exec -T database mongosh --quiet --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+            const d = db.getSiblingDB("migration_ci");
+            d.invoices.createIndex({id: 1}, {unique: true});
+            d.invoices.insertOne({id: "invoice-1", amount: 100, paid_amount: 25});
+            d.payments.insertOne({id: "payment-1", amount: 25});
+          '
+          "${source[@]}" exec -T database sh -c '
+            exec mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" \
+              --authenticationDatabase admin --db migration_ci --archive --gzip
+          ' > migration-ci.archive.gz
+          test -s migration-ci.archive.gz
+          "${target[@]}" up -d --wait database
+          "${target[@]}" exec -T database sh -c '
+            exec mongorestore --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" \
+              --authenticationDatabase admin --archive --gzip
+          ' < migration-ci.archive.gz
+          "${target[@]}" stop database
+      - name: Convert only the restored copy and verify it
+        shell: bash
+        run: |
+          set -eu
+          target=(docker compose -p surirent-backup-target -f docker-compose.yml -f docker-compose.replica-test.yml)
+          source=(docker compose -p surirent-backup-source -f docker-compose.yml)
+          "${target[@]}" up -d database replica-init
+          wait_for_initializer() {
+            for i in {1..120}; do
+              container="$("${target[@]}" ps -aq replica-init)"
+              if [ -n "$container" ] && [ "$(docker inspect -f '{{.State.Status}}' "$container")" = "exited" ]; then
+                "${target[@]}" logs replica-init
+                [ "$(docker inspect -f '{{.State.ExitCode}}' "$container")" = "0" ]
+                return
+              fi
+              sleep 1
+            done
+            "${target[@]}" logs database replica-init
+            return 1
+          }
+          verify_copy() {
+            "${target[@]}" exec -T database mongosh --quiet 'mongodb://database:27017/?replicaSet=rs0' --eval '
+              if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+              const d = db.getSiblingDB("migration_ci");
+              if (d.invoices.countDocuments({id: "invoice-1", amount: 100, paid_amount: 25}) !== 1) throw new Error("Invoice missing or changed");
+              if (d.payments.countDocuments({id: "payment-1", amount: 25}) !== 1) throw new Error("Payment missing or changed");
+              if (!d.invoices.getIndexes().some(i => i.unique && i.key.id === 1)) throw new Error("Unique index missing");
+              const session = db.getMongo().startSession();
+              const checks = session.getDatabase("migration_ci").checks;
+              session.startTransaction();
+              checks.insertOne({_id: "commit"});
+              session.commitTransaction();
+              session.startTransaction();
+              checks.insertOne({_id: "abort"});
+              session.abortTransaction();
+              if (checks.countDocuments({_id: "commit"}) !== 1 || checks.countDocuments({_id: "abort"}) !== 0) throw new Error("Transaction failed");
+              checks.deleteMany({});
+              session.endSession();
+            '
+          }
+          wait_for_initializer
+          verify_copy
+          "${target[@]}" restart database
+          "${target[@]}" up -d --force-recreate replica-init
+          wait_for_initializer
+          verify_copy
+          "${source[@]}" exec -T database mongosh --quiet --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+            if (db.hello().setName) throw new Error("Source was unexpectedly converted");
+            const d = db.getSiblingDB("migration_ci");
+            if (d.invoices.countDocuments({id: "invoice-1", amount: 100, paid_amount: 25}) !== 1 || d.payments.countDocuments({id: "payment-1", amount: 25}) !== 1) throw new Error("Source data changed");
+          '
+      - name: Remove isolated containers and volumes
+        if: always()
+        run: |
+          docker compose -p surirent-backup-target -f docker-compose.yml -f docker-compose.replica-test.yml down --volumes --remove-orphans
+          docker compose -p surirent-backup-source -f docker-compose.yml down --volumes --remove-orphans
