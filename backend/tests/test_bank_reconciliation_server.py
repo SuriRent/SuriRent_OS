@@ -779,6 +779,66 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
         self.assertEqual((guard["operation"], guard["operation_id"]), ("invoice_change", "t1"))
 
+    async def _seed_overpayment(self):
+        await self.db.invoices.update_one(
+            {"id": "i1"}, {"$set": {"paid_amount": 125, "status": "paid"}},
+        )
+        await self.db.invoices.insert_one({
+            "id": "i2", "company_id": "c1", "tenant_id": "t1", "currency": "SRD",
+            "amount": 15, "paid_amount": 0, "status": "open",
+        })
+        await self.db.payments.insert_one({
+            "id": "p1", "company_id": "c1", "tenant_id": "t1", "status": "approved",
+            "amount": 130, "currency": "SRD", "invoice_id": "i1", "credit_remaining": 5,
+            "allocations": [{"invoice_id": "i1", "amount": 125}],
+        })
+
+    async def test_overpayment_repair_books_allocations_and_credit_atomically(self):
+        await self._seed_overpayment()
+        with patch.object(server, "client", self.client):
+            result = await server._repair_overpaid_invoice("c1", "t1", "i1")
+        self.assertEqual((result["overflow"], result["leftover_credit"]), (25, 10))
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 100)
+        target = await self.db.invoices.find_one({"id": "i2"})
+        self.assertEqual((target["paid_amount"], target["status"]), (15, "paid"))
+        payment = await self.db.payments.find_one({"id": "p1"})
+        self.assertEqual(payment["credit_remaining"], 15)
+        self.assertEqual([(a["invoice_id"], a["amount"]) for a in payment["allocations"]],
+                         [("i1", 100), ("i2", 15)])
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_overpayment_repair_rejects_ambiguous_booking_and_sms_guard(self):
+        await self._seed_overpayment()
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with patch.object(server, "client", self.client):
+            with self.assertRaises(HTTPException) as conflict:
+                await server._repair_overpaid_invoice("c1", "t1", "i1")
+            self.assertEqual(conflict.exception.status_code, 409)
+            await self.db.tenant_payment_guards.delete_one({"_id": tenant_payment_key("c1", "t1")})
+            await self.db.payments.update_one({"id": "p1"}, {"$set": {"allocations": []}})
+            with self.assertRaises(HTTPException) as ambiguous:
+                await server._repair_overpaid_invoice("c1", "t1", "i1")
+        self.assertEqual(ambiguous.exception.status_code, 409)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 125)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i2"}))["paid_amount"], 0)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_overpayment_repair_rolls_back_on_payment_write_failure(self):
+        await self._seed_overpayment()
+        await self.db.command({
+            "collMod": "payments", "validator": {"$jsonSchema": {"required": ["repair_test_required"]}},
+        })
+        with patch.object(server, "client", self.client):
+            with self.assertRaises(HTTPException) as error:
+                await server._repair_overpaid_invoice("c1", "t1", "i1")
+        self.assertEqual(error.exception.status_code, 500)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 125)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i2"}))["paid_amount"], 0)
+        payment = await self.db.payments.find_one({"id": "p1"})
+        self.assertEqual((payment["credit_remaining"], payment["allocations"][0]["amount"]), (5, 125))
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("credit_reconciliation", "i1"))
+
 
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

@@ -237,8 +237,14 @@ Manual credit application, credit redistribution, historical invoices and
 monthly invoice generation hold a `credit_reconciliation` guard while
 allocating credit. An interrupted or inconsistent operation remains blocked;
 inspect the invoice, payment allocations and credit before manual recovery.
-Rebalancing stops if an overpaid invoice needs review; the separate
-overpayment-repair endpoint is not yet coordinated.
+Rebalancing stops if an overpaid invoice needs review. The overpayment-repair
+endpoint holds the tenant guard and updates invoice balances, allocations and
+credit in one transaction. It applies only when one non-provider payment and its
+full allocation can be proven; provider payments, active plans and ambiguous
+legacy records require manual review. A failed or uncertain transaction keeps
+the guard. The dry run is only an estimate, not proof that repair can run.
+In a batch, earlier invoice repairs can already be committed if a later one
+fails; the error reports this and callers must review before retrying.
 Kiosk invoice fines and invoice deletion also acquire an `invoice_change`
 guard. Interrupted changes retain the guard for investigation; deletion checks
 direct, multi-invoice and allocation payment references before removing an

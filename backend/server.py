@@ -16503,6 +16503,121 @@ class GenerateMonthIn(BaseModel):
     period_year: int
 
 
+async def _repair_overpaid_invoice(cid: str, tenant_id: str, invoice_id: str):
+    from pymongo.read_concern import ReadConcern
+    from pymongo.write_concern import WriteConcern
+    from sms_payment_attempts import PaymentAttemptConflict
+    from sms_payment_booking import _cents
+    from tenant_payment_guard import guarded_credit_change
+
+    async def repair():
+        async def transaction(session):
+            scope = {"company_id": cid, "tenant_id": tenant_id}
+            invoice = await db.invoices.find_one({**scope, "id": invoice_id}, session=session)
+            if not invoice or invoice.get("archived") is True or invoice.get("status") in ("cancelled", "archived"):
+                raise PaymentAttemptConflict("Factuur is niet beschikbaar")
+            amount, paid = _cents(invoice.get("amount")), _cents(invoice.get("paid_amount"))
+            if amount <= 0 or paid <= amount:
+                raise PaymentAttemptConflict("Factuur heeft geen aantoonbare overbetaling")
+            if await db.payment_plans.find_one({**scope, "status": "active"}, session=session):
+                raise PaymentAttemptConflict("Actieve betalingsregeling vereist controle")
+            payments = await db.payments.find({
+                **scope, "status": {"$ne": "rejected"},
+                "$or": [{"invoice_id": invoice_id}, {"invoice_ids": invoice_id}, {"allocations.invoice_id": invoice_id}],
+            }, session=session).to_list(2)
+            if len(payments) != 1 or payments[0].get("status") != "approved":
+                raise PaymentAttemptConflict("Betalingen bij factuur zijn niet eenduidig")
+            payment = payments[0]
+            allocations = payment.get("allocations")
+            linked = payment.get("invoice_ids")
+            if (not isinstance(payment.get("id"), str) or not payment["id"]
+                    or payment.get("invoice_id") != invoice_id
+                    or payment.get("sms_attempt_id")
+                    or payment.get("stripe_payment_intent_id") or payment.get("mope_payment_request_id")
+                    or (linked is not None and linked != [] and linked != [invoice_id])
+                    or not isinstance(allocations, list) or len(allocations) != 1
+                    or not isinstance(allocations[0], dict) or allocations[0].get("invoice_id") != invoice_id
+                    or _cents(allocations[0].get("amount")) != paid):
+                raise PaymentAttemptConflict("Betaalallocatie is niet eenduidig")
+            currency = invoice.get("currency") or "SRD"
+            credit_value = payment.get("credit_remaining")
+            credit = _cents(0 if credit_value is None else credit_value)
+            if (currency not in ("SRD", "USD", "EUR") or (payment.get("currency") or "SRD") != currency
+                    or _cents(payment.get("amount")) != paid + credit):
+                raise PaymentAttemptConflict("Bedrag of valuta van betaling is niet eenduidig")
+            targets = await db.invoices.find({
+                **scope, "id": {"$ne": invoice_id}, "currency": currency,
+                "status": {"$in": ["open", "partial"]}, "archived": {"$ne": True},
+            }, session=session).sort([("period_year", 1), ("period_month", 1), ("id", 1)]).to_list(None)
+            remaining = paid - amount
+            changes = []
+            seen = {invoice_id}
+            for target in targets:
+                target_id = target.get("id")
+                if not isinstance(target_id, str) or not target_id or target_id in seen:
+                    raise PaymentAttemptConflict("Ongeldige doelfactuur")
+                seen.add(target_id)
+                total, current = _cents(target.get("amount")), _cents(target.get("paid_amount"))
+                if current > total:
+                    raise PaymentAttemptConflict("Doelfactuur heeft een ongeldig saldo")
+                chunk = min(total - current, remaining)
+                if chunk:
+                    changes.append((target, total, current, chunk))
+                    remaining -= chunk
+            original = await db.invoices.update_one(
+                {**scope, "_id": invoice["_id"], "amount": invoice["amount"],
+                 "paid_amount": invoice["paid_amount"], "status": invoice["status"]},
+                {"$set": {"paid_amount": amount / 100, "status": "paid"}}, session=session,
+            )
+            if original.matched_count != 1:
+                raise RuntimeError("Bronfactuur is gewijzigd")
+            new_allocations = [{**allocations[0], "amount": amount / 100}]
+            report_allocations = []
+            for target, total, current, chunk in changes:
+                new_paid = current + chunk
+                updated = await db.invoices.update_one(
+                    {**scope, "_id": target["_id"], "amount": target["amount"],
+                     "paid_amount": target["paid_amount"], "status": target["status"]},
+                    {"$set": {"paid_amount": new_paid / 100, "status": "paid" if new_paid == total else "partial"}},
+                    session=session,
+                )
+                if updated.matched_count != 1:
+                    raise RuntimeError("Doelfactuur is gewijzigd")
+                new_allocations.append({"invoice_id": target["id"], "amount": chunk / 100,
+                                        "applied_at": iso(now_utc())})
+                report_allocations.append({
+                    "invoice_id": target["id"], "invoice_number": target.get("invoice_number"),
+                    "period": f"{target.get('period_month')}/{target.get('period_year')}", "applied": chunk / 100,
+                })
+            updated_payment = await db.payments.update_one(
+                {**scope, "_id": payment["_id"], "status": "approved"},
+                {"$set": {"allocations": new_allocations, "invoice_ids": [invoice_id] + [t["id"] for t, _, _, _ in changes],
+                          "credit_remaining": (credit + remaining) / 100, "credit_origin": "migration_repair"}},
+                session=session,
+            )
+            if updated_payment.matched_count != 1:
+                raise RuntimeError("Betaling is gewijzigd")
+            return {
+                "invoice_id": invoice_id, "invoice_number": invoice.get("invoice_number"),
+                "period": f"{invoice.get('period_month')}/{invoice.get('period_year')}",
+                "tenant_id": tenant_id, "amount": amount / 100, "was_paid_amount": paid / 100,
+                "overflow": (paid - amount) / 100, "redistributed_to": report_allocations,
+                "leftover_credit": remaining / 100,
+            }
+
+        try:
+            async with await client.start_session() as session:
+                return await session.with_transaction(
+                    transaction, read_concern=ReadConcern("snapshot"), write_concern=WriteConcern("majority"),
+                )
+        except PaymentAttemptConflict as exc:
+            return HTTPException(status_code=409, detail=f"Overbetaling vereist handmatige controle: {exc}")
+
+    return await guarded_credit_change(
+        db, company_id=cid, tenant_id=tenant_id, operation_id=invoice_id, change=repair,
+    )
+
+
 @api.post("/invoices/repair-overpaid")
 async def repair_overpaid_invoices(
     apply: bool = Query(False, description="false=dry-run, true=apply fixes"),
@@ -16532,6 +16647,26 @@ async def repair_overpaid_invoices(
         {"_id": 0},
     ):
         overpaid.append(inv)
+
+    if apply:
+        for inv in overpaid:
+            if not isinstance(inv.get("tenant_id"), str) or not inv["tenant_id"] or not inv.get("id"):
+                raise HTTPException(status_code=409, detail="Factuur heeft geen geldige huurderskoppeling.")
+            try:
+                repaired = await _repair_overpaid_invoice(cid, inv["tenant_id"], inv["id"])
+            except HTTPException as exc:
+                if repairs:
+                    raise HTTPException(
+                        status_code=exc.status_code,
+                        detail=f"{len(repairs)} eerdere factuurcorrecties zijn al uitgevoerd. {exc.detail}",
+                    ) from exc
+                raise
+            repairs.append(repaired)
+            total_overflow += repaired["overflow"]
+        return {
+            "dry_run": False, "invoices_inspected": len(overpaid), "invoices_repaired": len(repairs),
+            "total_overflow_redistributed": round(total_overflow, 2), "repairs": repairs,
+        }
 
     for inv in overpaid:
         amt = float(inv.get("amount") or 0)
@@ -16584,36 +16719,6 @@ async def repair_overpaid_invoices(
             "redistributed_to": allocations,
             "leftover_credit": leftover_credit,
         })
-
-        if apply:
-            # 1) Corrigeer de overshoot-factuur: paid_amount = amount
-            await db.invoices.update_one(
-                {"id": inv["id"]},
-                {"$set": {"paid_amount": amt, "status": "paid"}},
-            )
-            # 2) Pas allocations toe op andere facturen
-            for a in allocations:
-                target_inv = await db.invoices.find_one({"id": a["invoice_id"]}, {"_id": 0})
-                new_paid = round(float(target_inv.get("paid_amount") or 0) + a["applied"], 2)
-                new_status = "paid" if new_paid >= float(target_inv.get("amount") or 0) else "open"
-                await db.invoices.update_one(
-                    {"id": a["invoice_id"]},
-                    {"$set": {"paid_amount": new_paid, "status": new_status}},
-                )
-            # 3) Resterend overschot → bewaar als krediet op de origineel-betaling
-            #    (zoek de meest recente approved payment van deze huurder op deze factuur)
-            if leftover_credit > 0:
-                pay = await db.payments.find_one(
-                    {"tenant_id": tenant_id, "invoice_id": inv["id"], "status": "approved"},
-                    {"_id": 0, "id": 1},
-                    sort=[("paid_at", -1)],
-                )
-                if pay:
-                    await db.payments.update_one(
-                        {"id": pay["id"]},
-                        {"$set": {"credit_remaining": leftover_credit,
-                                  "credit_origin": "migration_repair"}},
-                    )
 
     return {
         "dry_run": not apply,
