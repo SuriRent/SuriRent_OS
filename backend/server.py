@@ -461,6 +461,17 @@ BACKUP_COMPANY_KEEP = {"id", "slug", "billing_status", "plan_id", "plan", "next_
                        "trial_started_at", "trial_ends_at", "pending_invoice_id"}
 
 
+async def _warn_unlinked_rent_payments(database):
+    if await database.payments.find_one({
+        "category": "huur", "invoice_id": {"$in": [None, ""]},
+        "status": {"$nin": ["rejected", "cancelled", "canceled"]},
+    }, {"_id": 1}):
+        _logging.getLogger("uvicorn.error").warning(
+            "Rent payments without a direct invoice link may require manual review; "
+            "automatic startup linking is disabled"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     superadmin_pin = _validated_superadmin_pin(os.environ.get("SUPERADMIN_PIN"))
@@ -604,53 +615,7 @@ async def lifespan(app: FastAPI):
         if update:
             await db.users.update_one({"email": admin_email}, {"$set": update})
 
-    # --- Backfill: koppel oude payments aan facturen (één keer per server-restart).
-    # Voor elke huur-payment zonder invoice_id: zoek matching open factuur op
-    # tenant + period_month + period_year. Markeer die factuur als 'paid'.
-    try:
-        cur = db.payments.find({
-            "category": "huur",
-            "invoice_id": {"$in": [None, ""]},
-            "period_month": {"$ne": None},
-            "period_year": {"$ne": None},
-        }, {"_id": 0, "id": 1, "tenant_id": 1, "company_id": 1,
-            "period_month": 1, "period_year": 1, "amount": 1,
-            "receipt_number": 1, "paid_at": 1, "method": 1})
-        backfilled = 0
-        async for p in cur:
-            inv = await db.invoices.find_one({
-                "tenant_id": p["tenant_id"],
-                "company_id": p.get("company_id"),
-                "period_month": p["period_month"],
-                "period_year": p["period_year"],
-            }, {"_id": 0})
-            if not inv:
-                continue
-            await db.payments.update_one(
-                {"id": p["id"]},
-                {"$set": {"invoice_id": inv["id"], "invoice_number": inv.get("invoice_number")}}
-            )
-            if inv.get("status") != "paid":
-                try:
-                    paid_pct = float(p.get("amount", 0)) >= float(inv.get("amount", 0)) - 0.005
-                except Exception:
-                    paid_pct = True
-                if paid_pct:
-                    await db.invoices.update_one(
-                        {"id": inv["id"]},
-                        {"$set": {
-                            "status": "paid",
-                            "paid_at": p.get("paid_at"),
-                            "payment_id": p["id"],
-                            "receipt_number": p.get("receipt_number"),
-                            "paid_method": p.get("method"),
-                        }}
-                    )
-            backfilled += 1
-        if backfilled:
-            print(f"[startup] linked {backfilled} legacy payments to invoices")
-    except Exception as e:
-        print(f"[startup] payment↔invoice backfill failed: {e}")
+    await _warn_unlinked_rent_payments(db)
 
     # --- Seed superadmin ---
     super_email = os.environ.get("SUPERADMIN_EMAIL", "super@surirent.sr")

@@ -32,6 +32,15 @@ with patch.dict(sys.modules, mock_modules), patch.dict(os.environ, {
 
 
 class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
+    async def test_startup_warns_without_automatically_relinking_payments(self):
+        payments = SimpleNamespace(find_one=AsyncMock(return_value={"_id": "legacy"}), update_one=AsyncMock())
+        invoices = SimpleNamespace(update_one=AsyncMock())
+        with self.assertLogs("uvicorn.error", level="WARNING") as logs:
+            await server._warn_unlinked_rent_payments(SimpleNamespace(payments=payments, invoices=invoices))
+        self.assertIn("automatic startup linking is disabled", logs.output[0])
+        payments.update_one.assert_not_awaited()
+        invoices.update_one.assert_not_awaited()
+
     async def test_public_start_and_finish_remain_disabled(self):
         requests = (
             lambda response: server.sms_checkout_start(

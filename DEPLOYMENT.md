@@ -225,6 +225,11 @@ clear it or retry the booking without reconciling the payment, invoice,
 installments and statement first; there is no automated recovery UI yet.
 Several other payment paths still do not acquire the guard; this is not yet safe
 interoperation and checkout must remain disabled.
+The old startup task that guessed invoice links and marked invoices paid has
+been disabled. Rent payments without a direct invoice link may need manual
+review; SMS checkout conservatively blocks the affected tenant, including
+payments that have other allocation links, until the records are reconciled.
+Startup logs a warning if such records exist, but does not change them.
 Archived-tenant debt settlement, permanent deletion and reactivation now
 also acquire the tenant guard and recheck the archived tenant while holding it.
 If a change fails after it starts, its `archived_debt`, `tenant_deletion` or

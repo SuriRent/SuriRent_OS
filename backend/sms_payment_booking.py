@@ -270,6 +270,11 @@ async def _booking_context(db, attempt: dict, session) -> dict:
     if pending:
         raise PaymentAttemptConflict("Een andere betaling voor deze huurder wacht op verwerking")
     scope = {"company_id": attempt["company_id"], "tenant_id": attempt["tenant_id"]}
+    if await db.payments.find_one({
+        **scope, "category": "huur", "invoice_id": {"$in": [None, ""]},
+        "status": {"$nin": ["rejected", "cancelled", "canceled"]},
+    }, session=session):
+        raise PaymentAttemptConflict("Een eerdere huurbetaling moet eerst worden gecontroleerd")
     stripe_requests = await db.kiosk_stripe_payments.find(
         {**scope, "status": {"$ne": "canceled"}}, session=session,
     ).to_list(None)

@@ -54,6 +54,26 @@ class SmsPaymentBookingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.db.sms_payment_attempts.find_one({"_id": "key"}))["state"], "booked")
         self.assertEqual((await self.book())["id"], first["id"])
 
+    async def test_unlinked_rent_payment_blocks_booking_for_its_tenant(self):
+        await self.db.payments.insert_one({
+            "id": "legacy1", "company_id": "company1", "tenant_id": "tenant1",
+            "category": "huur", "status": "approved", "amount": 25,
+        })
+        with self.assertRaises(PaymentAttemptConflict):
+            await self.book()
+        self.assertEqual((await self.db.invoices.find_one({"id": "invoice1"}))["paid_amount"], 25)
+        self.assertEqual(await self.db.payments.count_documents({}), 1)
+        self.assertEqual((await self.db.sms_payment_attempts.find_one({"_id": "key"}))["state"], "verified")
+
+    async def test_other_tenant_and_rejected_unlinked_payments_do_not_block(self):
+        await self.db.payments.insert_many([
+            {"id": "legacy1", "company_id": "company1", "tenant_id": "tenant2",
+             "category": "huur", "status": "approved", "receipt_number": "old1"},
+            {"id": "legacy2", "company_id": "company1", "tenant_id": "tenant1",
+             "category": "huur", "status": "rejected", "receipt_number": "old2"},
+        ])
+        self.assertEqual((await self.book())["status"], "approved")
+
     async def test_new_unpaid_invoice_without_paid_amount_can_be_booked(self):
         await self.db.invoices.update_one(
             {"id": "invoice1"}, {"$unset": {"paid_amount": ""}, "$set": {"status": "open"}},
