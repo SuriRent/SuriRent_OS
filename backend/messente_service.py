@@ -67,7 +67,7 @@ def _template(cfg: dict, kind: str, variables: dict | None) -> dict | None:
     return {"name": name, "language": {"code": language}, "components": components}
 
 
-async def _send(cfg: dict, channel: str, to: str, message: dict) -> dict:
+async def _send(cfg: dict, channel: str, to: str, message: dict, *, dlr_url: str | None = None) -> dict:
     if not cfg.get("enabled"):
         raise MessenteError("Messente is niet ingeschakeld")
     username = (cfg.get("api_username") or "").strip()
@@ -78,6 +78,8 @@ async def _send(cfg: dict, channel: str, to: str, message: dict) -> dict:
     if not sender:
         raise MessenteError(f"Messente {channel}-afzender ontbreekt")
     payload = {"to": _validate_number(to), "messages": [{"channel": channel, "sender": sender, **message}]}
+    if dlr_url:
+        payload["dlr_url"] = dlr_url
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(MESSENTE_API, json=payload, auth=(username, password))
@@ -121,7 +123,7 @@ async def send_whatsapp(cfg: dict, to: str, body: str, media_url: str | None = N
     return await _send(cfg, "whatsapp", to, message)
 
 
-async def send_sms(cfg: dict, to: str, body: str) -> dict:
+async def send_sms(cfg: dict, to: str, body: str, *, dlr_url: str | None = None) -> dict:
     if not body:
         raise MessenteError("SMS-bericht is leeg")
-    return await _send(cfg, "sms", to, {"text": body, "autoconvert": "off"})
+    return await _send(cfg, "sms", to, {"text": body, "autoconvert": "off"}, dlr_url=dlr_url)

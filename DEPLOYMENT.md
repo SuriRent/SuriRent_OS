@@ -78,8 +78,15 @@ recovery retain their SMS fallback when WhatsApp is rejected synchronously.
 Obtain the recipient's WhatsApp opt-in before enabling automatic messages.
 Save settings, enter a receiving number with country code, select SMS or
 WhatsApp and optionally a template under **Testbericht**, then test.
-Messente acceptance is not proof of delivery; check the message status in the
-Messente dashboard. Delivery webhooks are not configured by this integration.
+Messente acceptance is not proof of delivery. The kiosk's **SMS-status** page
+shows the last 100 company SMS messages recorded after this feature is deployed.
+When `APP_PUBLIC_URL` is a publicly reachable HTTPS origin, SMS requests include
+a delivery-report callback; reports are authenticated using Messente's HMAC
+signature and the API password used to send the message. Keep the route
+`/api/public/messente/sms-status/` reachable from Messente. If the origin is
+not configured, the overview shows that delivery status is unavailable.
+Messages sent before this feature cannot be reconstructed. Message bodies,
+PINs, and recovery codes are not stored in the overview.
 No automatic request retries are performed: after a network timeout, check
 Messente before resending to avoid duplicates. Switching provider does not
 remove Meta restrictions or the 24-hour window.

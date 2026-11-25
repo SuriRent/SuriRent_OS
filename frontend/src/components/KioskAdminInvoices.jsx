@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { FileSignature, Loader2, ArrowLeft, CreditCard, Users, MapPin, Home, FileText, CalendarClock, Wrench, UserCog, Bell, ShieldCheck, LayoutDashboard, Settings, Zap, Banknote } from 'lucide-react';
+import { FileSignature, Loader2, ArrowLeft, CreditCard, Users, MapPin, Home, FileText, CalendarClock, Wrench, UserCog, Bell, ShieldCheck, LayoutDashboard, Settings, Zap, Banknote, MessageSquare } from 'lucide-react';
 
 // Volledige beheer-pagina's die in de kiosk (hamburgermenu) geopend kunnen worden.
 export const KIOSK_ADMIN_PAGES = {
@@ -15,6 +15,7 @@ export const KIOSK_ADMIN_PAGES = {
   onderhoud: { label: 'Onderhoud', Icon: Wrench, Page: lazy(() => import('../pages/vastgoed/admin/Maintenance')) },
   werknemers: { label: 'Werknemers', Icon: UserCog, Page: lazy(() => import('../pages/vastgoed/admin/Employees')) },
   notificaties: { label: 'Notificaties', Icon: Bell, Page: lazy(() => import('../pages/vastgoed/admin/Notifications')) },
+  sms: { label: 'SMS-status', Icon: MessageSquare, Page: lazy(() => import('../pages/vastgoed/admin/SmsHistory')) },
   borg: { label: 'Borg', Icon: ShieldCheck, Page: lazy(() => import('../pages/vastgoed/admin/Deposits')) },
   stroom: { label: 'Stroom', Icon: Zap, Page: lazy(() => import('../pages/vastgoed/admin/PowerControl')) },
   instellingen: { label: 'Instellingen', Icon: Settings, Page: lazy(() => import('../pages/vastgoed/admin/InstellingenHub')) },
