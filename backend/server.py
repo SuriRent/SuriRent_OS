@@ -11213,7 +11213,8 @@ async def payment_processing_guards(user=Depends(get_current_user)):
         {"company_id": cid, "kind": "legacy",
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
                                 "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
-                                "installment_payment", "payment_plan_change", "payment_deletion"]}},
+                                "installment_payment", "payment_plan_change", "payment_deletion",
+                                "credit_reconciliation"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
@@ -16238,16 +16239,14 @@ async def create_historical_invoice(body: HistoricalInvoiceCreate, user=Depends(
         "is_historical": True,
         "description": body.description.strip(),
     }
-    await db.invoices.insert_one(doc)
-    # Verreken automatisch eventueel openstaand krediet (overflow van een
-    # eerdere betaling die groter was dan de toen-openstaande factuur, of
-    # een expliciete vooruitbetaling). Zonder deze stap zou een historische
-    # factuur die NA een grote betaling wordt aangemaakt "open" blijven
-    # terwijl er tegoed staat — precies wat er misging bij de klant.
-    try:
-        await _apply_tenant_credit_to_invoice(body.tenant_id, doc["id"], cid)
-    except Exception as e:  # noqa: BLE001
-        print(f"[historical-invoice] credit apply failed: {e}")
+    async def create():
+        await db.invoices.insert_one(doc)
+        await _apply_tenant_credit_locked(body.tenant_id, doc["id"], cid)
+
+    from tenant_payment_guard import guarded_credit_change
+    await guarded_credit_change(
+        db, company_id=cid, tenant_id=body.tenant_id, operation_id=doc["id"], change=create,
+    )
     doc = await db.invoices.find_one({"id": doc["id"]}, {"_id": 0}) or doc
     doc.pop("_id", None)
     await _reconcile_power_after_payment(cid)
@@ -16325,11 +16324,8 @@ async def tenant_payment_audit(tenant_id: str, user=Depends(get_current_user)):
 
 @api.post("/tenants/{tenant_id}/rebalance-credits")
 async def rebalance_tenant_credits(tenant_id: str, user=Depends(get_current_user)):
-    """Herverdeelt alle openstaande tegoeden (payments.credit_remaining) FIFO
-    over de openstaande facturen van deze huurder. Ook: als een factuur
-    `paid_amount > amount` heeft (oude overshoot-bug) wordt het overschot
-    eerst terug op de betaling gezet als credit, en daarna FIFO verrekend
-    over volgende openstaande facturen.
+    """Herverdeelt openstaande tegoeden FIFO over facturen van deze huurder.
+    Een te veel betaalde factuur moet eerst handmatig worden gecontroleerd.
 
     Returns: {credit_before, applied, credit_after, invoices_updated}
     """
@@ -16341,40 +16337,21 @@ async def rebalance_tenant_credits(tenant_id: str, user=Depends(get_current_user
     if not t:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
 
-    # STAP 1: Corrigeer eventuele overshoot-facturen. Trek het teveel af,
-    # zet status terug naar 'paid' (op amount), en voeg het overschot toe
-    # aan credit_remaining van de laatst gekoppelde betaling.
-    async for inv in db.invoices.find(
+    from tenant_payment_guard import guarded_credit_change
+    return await guarded_credit_change(
+        db, company_id=cid, tenant_id=tenant_id, operation_id=tenant_id,
+        change=lambda: _rebalance_tenant_credits_locked(tenant_id, cid),
+    )
+
+
+async def _rebalance_tenant_credits_locked(tenant_id: str, cid: str):
+    overpaid = await db.invoices.find_one(
         {"tenant_id": tenant_id, "company_id": cid,
          "$expr": {"$gt": ["$paid_amount", "$amount"]}},
-        {"_id": 0},
-    ):
-        amt = float(inv.get("amount") or 0)
-        paid = float(inv.get("paid_amount") or 0)
-        excess = round(paid - amt, 2)
-        if excess <= 0:
-            continue
-        await db.invoices.update_one(
-            {"id": inv["id"]},
-            {"$set": {"paid_amount": amt, "status": "paid"}},
-        )
-        # Zoek een gekoppelde approved payment om het overschot op te zetten
-        target_pay = await db.payments.find_one(
-            {"tenant_id": tenant_id, "company_id": cid,
-             "status": "approved",
-             "$or": [{"invoice_id": inv["id"]},
-                     {"period_month": inv.get("period_month"),
-                      "period_year": inv.get("period_year")}]},
-            {"_id": 0, "id": 1, "credit_remaining": 1},
-            sort=[("paid_at", -1)],
-        )
-        if target_pay:
-            cur_credit = float(target_pay.get("credit_remaining") or 0)
-            await db.payments.update_one(
-                {"id": target_pay["id"]},
-                {"$set": {"credit_remaining": round(cur_credit + excess, 2),
-                          "credit_origin": target_pay.get("credit_origin") or "rebalance"}},
-            )
+        {"_id": 0, "id": 1},
+    )
+    if overpaid:
+        return HTTPException(status_code=409, detail="Een te veel betaalde factuur moet eerst worden gecontroleerd.")
 
     # STAP 2: Bereken totaal openstaand tegoed VOOR verrekening
     credit_before = 0.0
@@ -16393,7 +16370,7 @@ async def rebalance_tenant_credits(tenant_id: str, user=Depends(get_current_user
          "status": {"$nin": ["paid", "cancelled", "archived"]}},
         {"_id": 0, "id": 1, "invoice_number": 1},
     ).sort([("period_year", 1), ("period_month", 1)]):
-        applied = await _apply_tenant_credit_to_invoice(tenant_id, inv["id"], cid)
+        applied = await _apply_tenant_credit_locked(tenant_id, inv["id"], cid)
         if applied > 0:
             applied_total += applied
             invoices_updated.append({
@@ -16673,6 +16650,14 @@ def _next_month(year: int, month: int) -> tuple[int, int]:
 async def _apply_tenant_credit_to_invoice(
     tenant_id: str, invoice_id: str, company_id: str
 ) -> float:
+    from tenant_payment_guard import guarded_credit_change
+    return await guarded_credit_change(
+        db, company_id=company_id, tenant_id=tenant_id, operation_id=invoice_id,
+        change=lambda: _apply_tenant_credit_locked(tenant_id, invoice_id, company_id),
+    )
+
+
+async def _apply_tenant_credit_locked(tenant_id: str, invoice_id: str, company_id: str) -> float:
     """Verrekent eventueel positief saldo van een huurder met de nieuw
     aangemaakte factuur (FIFO op datum). Returns het toegepaste bedrag.
 
@@ -16682,11 +16667,18 @@ async def _apply_tenant_credit_to_invoice(
     wanneer geen volgende factuur bestond).
     """
     inv = await db.invoices.find_one(
-        {"id": invoice_id}, {"_id": 0, "amount": 1, "paid_amount": 1, "currency": 1}
+        {"id": invoice_id, "company_id": company_id, "tenant_id": tenant_id}, {"_id": 0},
     )
     if not inv:
-        return 0.0
-    open_amt = float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)
+        raise RuntimeError("Factuur voor tegoedverrekening ontbreekt")
+    if inv.get("status") in ("cancelled", "archived") or inv.get("archived") is True:
+        raise RuntimeError("Factuur is niet beschikbaar voor tegoedverrekening")
+    from sms_payment_booking import _cents, _invoice_paid_cents
+    total_cents = _cents(inv.get("amount"))
+    paid_cents = await _invoice_paid_cents(db, inv, None)
+    if paid_cents > total_cents or (inv.get("status") == "paid" and paid_cents != total_cents):
+        raise RuntimeError("Factuursaldo voor tegoedverrekening is ongeldig")
+    open_amt = (total_cents - paid_cents) / 100
     if open_amt <= 0:
         return 0.0
     cur = inv.get("currency") or "SRD"
@@ -16698,30 +16690,35 @@ async def _apply_tenant_credit_to_invoice(
     # tellen mee. Filteren op `credit_remaining > 0` — de categorie doet er
     # niet toe zodra er ongebruikt krediet staat.
     async for credit in db.payments.find(
-        {"tenant_id": tenant_id, "currency": cur,
+        {"company_id": company_id, "tenant_id": tenant_id, "currency": cur,
          "credit_remaining": {"$gt": 0},
          "status": "approved"},
-        {"_id": 0, "id": 1, "credit_remaining": 1, "method": 1, "receipt_number": 1},
+        {"_id": 0, "id": 1, "credit_remaining": 1, "method": 1, "receipt_number": 1, "credit_applied_at": 1},
     ).sort("paid_at", 1):
         if open_amt <= 0:
             break
-        avail = float(credit.get("credit_remaining") or 0)
-        chunk = min(avail, open_amt)
+        avail = _cents(credit.get("credit_remaining")) / 100
+        chunk = round(min(avail, open_amt), 2)
         if chunk <= 0:
             continue
+        if await db.payments.find_one({"id": credit["id"], "allocations.invoice_id": invoice_id}):
+            raise RuntimeError("Tegoed is al aan deze factuur gekoppeld")
         await _apply_payment_to_invoice(
             invoice_id, chunk,
             payment_id=credit["id"], paid_at=iso(now_utc()),
-            method=credit.get("method"), receipt_number=credit.get("receipt_number"),
+            method=credit.get("method"), receipt_number=credit.get("receipt_number"), strict=True,
         )
         new_remaining = round(avail - chunk, 2)
-        await db.payments.update_one(
-            {"id": credit["id"]},
+        updated = await db.payments.update_one(
+            {"id": credit["id"], "company_id": company_id, "tenant_id": tenant_id,
+             "status": "approved", "credit_remaining": credit["credit_remaining"]},
             {"$set": {"credit_remaining": new_remaining,
                       "credit_applied_at": iso(now_utc()) if new_remaining == 0 else credit.get("credit_applied_at")}},
         )
+        if updated.matched_count != 1:
+            raise RuntimeError("Tegoed is tijdens verrekening gewijzigd")
         total_applied += chunk
-        open_amt -= chunk
+        open_amt = round(open_amt - chunk, 2)
     return round(total_applied, 2)
 
 
@@ -16761,29 +16758,37 @@ async def _generate_month_invoices_for_company(
         if t.get("deposit_required") and t.get("deposit_status") != "paid":
             skipped += 1
             continue
-        dup = await db.invoices.find_one({
-            "company_id": company_id, "tenant_id": t["id"],
-            "period_month": period_month, "period_year": period_year,
-        })
-        if dup:
+        inv_id = new_id()
+
+        async def generate():
+            dup = await db.invoices.find_one({
+                "company_id": company_id, "tenant_id": t["id"],
+                "period_month": period_month, "period_year": period_year,
+            })
+            if dup:
+                return None
+            seq = await _next_seq(f"invoice_{period_year}")
+            await db.invoices.insert_one({
+                "id": inv_id,
+                "company_id": company_id,
+                "invoice_number": f"F{period_year}-{seq:05d}",
+                "tenant_id": t["id"], "apartment_id": a["id"],
+                "amount": a["rent_amount"], "currency": a.get("currency", "SRD"),
+                "paid_amount": 0.0,
+                "period_month": period_month, "period_year": period_year,
+                "invoice_date": invoice_date_iso,
+                "due_date": due_date_iso,
+                "status": "open", "created_at": iso(now_utc()),
+            })
+            return await _apply_tenant_credit_locked(t["id"], inv_id, company_id)
+
+        from tenant_payment_guard import guarded_credit_change
+        applied = await guarded_credit_change(
+            db, company_id=company_id, tenant_id=t["id"], operation_id=inv_id, change=generate,
+        )
+        if applied is None:
             skipped += 1
             continue
-        seq = await _next_seq(f"invoice_{period_year}")
-        inv_id = new_id()
-        await db.invoices.insert_one({
-            "id": inv_id,
-            "company_id": company_id,
-            "invoice_number": f"F{period_year}-{seq:05d}",
-            "tenant_id": t["id"], "apartment_id": a["id"],
-            "amount": a["rent_amount"], "currency": a.get("currency", "SRD"),
-            "paid_amount": 0.0,
-            "period_month": period_month, "period_year": period_year,
-            "invoice_date": invoice_date_iso,
-            "due_date": due_date_iso,
-            "status": "open", "created_at": iso(now_utc()),
-        })
-        # Verreken positief saldo van deze huurder met de nieuwe factuur
-        applied = await _apply_tenant_credit_to_invoice(t["id"], inv_id, company_id)
         credit_applied_total += applied
         created += 1
     return {

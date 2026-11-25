@@ -436,6 +436,111 @@ class PaymentDeletionMongoTests(unittest.IsolatedAsyncioTestCase):
         )
 
 
+@unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
+class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.client = AsyncIOMotorClient(os.environ["SMS_BOOKING_MONGO_URL"], serverSelectionTimeoutMS=5000)
+        self.name = f"test_credit_guard_{uuid4().hex}"
+        self.db = self.client[self.name]
+        await self.db.tenants.insert_one({"id": "t1", "company_id": "c1", "apartment_id": "a1"})
+        await self.db.apartments.insert_one({
+            "id": "a1", "company_id": "c1", "tenant_id": "t1", "status": "occupied",
+            "rent_amount": 100, "currency": "SRD",
+        })
+        await self.db.invoices.insert_one({
+            "id": "i1", "company_id": "c1", "tenant_id": "t1",
+            "amount": 100, "paid_amount": 0, "currency": "SRD", "status": "open",
+        })
+        await self.db.payments.insert_one({
+            "id": "credit1", "company_id": "c1", "tenant_id": "t1", "status": "approved",
+            "amount": 75, "currency": "SRD", "method": "contant", "credit_remaining": 75,
+        })
+        self.sync = AsyncMock()
+        for item in (
+            patch.object(server, "db", self.db), patch.object(server, "company_id_of", return_value="c1"),
+            patch.object(server, "scope", return_value={"company_id": "c1"}),
+            patch.object(server, "_sync_plan_installments_with_invoice", self.sync),
+            patch.object(server, "_next_seq", AsyncMock(return_value=1)),
+        ):
+            item.start()
+            self.addCleanup(item.stop)
+
+    async def asyncTearDown(self):
+        await self.client.drop_database(self.name)
+        self.client.close()
+
+    async def test_credit_application_updates_invoice_and_credit_once(self):
+        result = await server.apply_credit_to_invoice("i1", {})
+        self.assertEqual(result["applied"], 75)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 75)
+        payment = await self.db.payments.find_one({"id": "credit1"})
+        self.assertEqual(payment["credit_remaining"], 0)
+        self.assertEqual(payment["allocations"][0]["amount"], 75)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_credit_from_another_company_is_not_used(self):
+        await self.db.payments.update_one({"id": "credit1"}, {"$set": {"company_id": "c2"}})
+        result = await server.apply_credit_to_invoice("i1", {})
+        self.assertEqual(result["applied"], 0)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 0)
+
+    async def test_existing_allocation_does_not_debit_credit(self):
+        await self.db.payments.update_one(
+            {"id": "credit1"}, {"$set": {"allocations": [{"invoice_id": "i1", "amount": 10}]}}
+        )
+        with self.assertRaises(HTTPException):
+            await server.apply_credit_to_invoice("i1", {})
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 0)
+        self.assertEqual((await self.db.payments.find_one({"id": "credit1"}))["credit_remaining"], 75)
+        self.assertIsNotNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_sms_guard_blocks_credit_rebalance_and_monthly_generation(self):
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        for operation in (
+            lambda: server.apply_credit_to_invoice("i1", {}),
+            lambda: server.rebalance_tenant_credits("t1", {}),
+            lambda: server._generate_month_invoices_for_company("c1", 2, 2026),
+        ):
+            with self.assertRaises(HTTPException) as error:
+                await operation()
+            self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(await self.db.invoices.count_documents({"tenant_id": "t1"}), 1)
+        self.assertEqual((await self.db.payments.find_one({"id": "credit1"}))["credit_remaining"], 75)
+
+    async def test_credit_failure_keeps_guard_and_does_not_debit_credit(self):
+        self.sync.side_effect = RuntimeError("plan sync failed")
+        with self.assertRaises(HTTPException) as error:
+            await server.apply_credit_to_invoice("i1", {})
+        self.assertEqual(error.exception.status_code, 500)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("credit_reconciliation", "i1"))
+        self.assertEqual((await self.db.payments.find_one({"id": "credit1"}))["credit_remaining"], 75)
+        with self.assertRaises(PaymentAttemptConflict):
+            await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+
+    async def test_rebalance_applies_credit_once(self):
+        result = await server.rebalance_tenant_credits("t1", {})
+        self.assertEqual((result["credit_before"], result["applied"], result["credit_after"]), (75, 75, 0))
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 75)
+
+    async def test_rebalance_rejects_ambiguous_overpayment_without_mutation(self):
+        await self.db.invoices.update_one({"id": "i1"}, {"$set": {"paid_amount": 120}})
+        with self.assertRaises(HTTPException) as error:
+            await server.rebalance_tenant_credits("t1", {})
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 120)
+        self.assertEqual((await self.db.payments.find_one({"id": "credit1"}))["credit_remaining"], 75)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_monthly_generation_applies_credit_and_skips_duplicate(self):
+        result = await server._generate_month_invoices_for_company("c1", 2, 2026)
+        self.assertEqual((result["created"], result["credit_applied"]), (1, 75))
+        invoice = await self.db.invoices.find_one({"tenant_id": "t1", "period_month": 2})
+        self.assertEqual(invoice["paid_amount"], 75)
+        result = await server._generate_month_invoices_for_company("c1", 2, 2026)
+        self.assertEqual((result["created"], result["skipped"]), (0, 1))
+
+
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = SimpleNamespace(payments=Records(), invoices=Records(), tenant_payment_guards=Guards())

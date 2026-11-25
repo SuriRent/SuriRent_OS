@@ -199,6 +199,12 @@ installments are changed. Failures retain a `payment_deletion` guard for
 review. SMS payments and current plan-installment payments cannot be deleted
 through this endpoint because their linked booking state cannot be safely
 reversed there.
+Manual credit application, credit redistribution, historical invoices and
+monthly invoice generation hold a `credit_reconciliation` guard while
+allocating credit. An interrupted or inconsistent operation remains blocked;
+inspect the invoice, payment allocations and credit before manual recovery.
+Rebalancing stops if an overpaid invoice needs review; the separate
+overpayment-repair endpoint is not yet coordinated.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that
