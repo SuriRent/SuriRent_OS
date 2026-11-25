@@ -49,6 +49,28 @@ production or sandbox data into this test environment. The isolated CI workflow
 checks authentication, transaction commit and rollback, and a database restart;
 it does not verify the deployment database or activate SMS checkout.
 
+The same workflow also rehearses stopping a standalone MongoDB, converting its
+isolated test volume to a replica set, and checking existing data, its unique
+index, transaction commit and rollback, and a restart. This is not a migration
+of a Coolify volume and does not establish that the Coolify setup is compatible.
+
+Before any sandbox migration, the operator must identify the exact Coolify
+resource and MongoDB volume, arrange a maintenance window, and verify a fresh
+MongoDB backup and a restore in a separate private environment. Stop all
+application and background writes before the final backup and conversion.
+Keep the existing credentials and encryption settings; store a new replica key
+securely and retain it across restarts. Rehearse the complete Coolify-specific
+procedure on the restored copy before changing the sandbox. Confirm that the
+volume, indexes and data are preserved, authentication succeeds, transactions
+commit and roll back, and the database and app restart successfully.
+
+Prepare a rollback before starting: preserve the backup and restore it into a
+separate fresh volume if rollback is needed. Do not start a replica-converted
+volume as a standalone database or use the isolated test overlay on the live
+volume without a reviewed migration plan and explicit approval. A single-member
+replica set enables transactions but does not provide high availability. This
+database rehearsal alone is not sufficient to enable SMS checkout.
+
 ## WhatsApp and SMS (Messente)
 
 In Kiosk Beheer, open **Instellingen > WhatsApp & SMS (Messente)**. Each company
