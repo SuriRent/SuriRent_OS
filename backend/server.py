@@ -11214,7 +11214,7 @@ async def payment_processing_guards(user=Depends(get_current_user)):
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
                                 "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
                                 "installment_payment", "payment_plan_change", "payment_deletion",
-                                "credit_reconciliation"]}},
+                                "credit_reconciliation", "invoice_change"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
@@ -12483,7 +12483,19 @@ async def kiosk_create_invoice_fine(
     )
     if not tenant:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    amount = round(body.amount, 2)
+    if amount != body.amount:
+        raise HTTPException(status_code=400, detail="Vul een bedrag met maximaal twee decimalen in.")
 
+    from tenant_payment_guard import guarded_invoice_change
+    return await guarded_invoice_change(
+        db, company_id=cid, tenant_id=tenant_id, operation_id=invoice_id,
+        change=lambda: _kiosk_create_invoice_fine_locked(tenant_id, invoice_id, amount, _session),
+    )
+
+
+async def _kiosk_create_invoice_fine_locked(tenant_id: str, invoice_id: str, amount: float, session: dict):
+    cid = session["company_id"]
     invoice_filter = {
         "id": invoice_id,
         "tenant_id": tenant_id,
@@ -12496,31 +12508,28 @@ async def kiosk_create_invoice_fine(
         {"_id": 0, "amount": 1, "amount_due": 1, "paid_amount": 1, "currency": 1},
     )
     if not invoice:
-        raise HTTPException(status_code=404, detail="Open factuur niet gevonden")
+        return HTTPException(status_code=404, detail="Open factuur niet gevonden")
     invoice_total = invoice.get("amount_due")
     if invoice_total is None:
         invoice_total = invoice.get("amount") or 0
     paid = invoice.get("paid_amount")
     if paid is None:
-        paid = await _invoice_currently_paid(invoice_id)
+        paid = await _invoice_currently_paid(invoice_id, strict=True)
     outstanding = float(invoice_total) - float(paid)
     if outstanding <= 0.005:
-        raise HTTPException(status_code=400, detail="Deze factuur is al betaald")
+        return HTTPException(status_code=400, detail="Deze factuur is al betaald")
     if await db.payment_plans.find_one(
         {"company_id": cid, "invoice_ids": invoice_id, "status": "active"}, {"_id": 1},
     ):
-        raise HTTPException(status_code=409, detail="Deze factuur heeft een actieve betalingsregeling.")
+        return HTTPException(status_code=409, detail="Deze factuur heeft een actieve betalingsregeling.")
 
-    amount = round(body.amount, 2)
-    if amount != body.amount:
-        raise HTTPException(status_code=400, detail="Vul een bedrag met maximaal twee decimalen in.")
     charge = {
         "id": str(uuid.uuid4()),
         "kind": "boete",
         "amount": amount,
         "currency": invoice.get("currency") or "SRD",
         "created_at": iso(now_utc()),
-        "created_by_name": _session.get("employee_name") or _session.get("name") or "",
+        "created_by_name": session.get("employee_name") or session.get("name") or "",
     }
     updated = await db.invoices.update_one(
         {
@@ -12551,7 +12560,7 @@ async def kiosk_create_invoice_fine(
         ],
     )
     if not updated.matched_count:
-        raise HTTPException(status_code=404, detail="Open factuur niet gevonden")
+        return HTTPException(status_code=404, detail="Open factuur niet gevonden")
     return {"ok": True, "charge": charge}
 
 
@@ -17549,15 +17558,30 @@ async def delete_invoice(invoice_id: str, user=Depends(get_current_user)):
     inv = await db.invoices.find_one({"id": invoice_id, **scope(user)}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    cid, tenant_id = inv.get("company_id"), inv.get("tenant_id")
+    if not cid or not tenant_id:
+        raise HTTPException(status_code=409, detail="Factuur heeft geen geldige bedrijfs- en huurderskoppeling.")
+    from tenant_payment_guard import guarded_invoice_change
+    return await guarded_invoice_change(
+        db, company_id=cid, tenant_id=tenant_id, operation_id=invoice_id,
+        change=lambda: _delete_invoice_locked(invoice_id, cid, tenant_id),
+    )
+
+
+async def _delete_invoice_locked(invoice_id: str, company_id: str, tenant_id: str):
+    invoice_filter = {"id": invoice_id, "company_id": company_id, "tenant_id": tenant_id}
+    if not await db.invoices.find_one(invoice_filter, {"_id": 0, "id": 1}):
+        return HTTPException(status_code=404, detail="Factuur niet gevonden")
     # Veiligheid: blokkeer verwijderen wanneer er goedgekeurde betalingen
     # aan hangen — anders raken die betalingen hun context kwijt en klopt
     # het openstaand saldo van de huurder niet meer. Admin moet de betaling
     # eerst verwijderen of de factuur voor 100% als betaald markeren.
     linked_pay = await db.payments.find_one({
-        "invoice_id": invoice_id, "status": {"$ne": "rejected"},
+        "status": {"$ne": "rejected"},
+        "$or": [{"invoice_id": invoice_id}, {"invoice_ids": invoice_id}, {"allocations.invoice_id": invoice_id}],
     }, {"_id": 0, "id": 1})
     if linked_pay:
-        raise HTTPException(
+        return HTTPException(
             status_code=400,
             detail=("Factuur heeft nog gekoppelde betalingen. Verwijder eerst "
                     "de betaling(en) of markeer de factuur op 0 openstaand."),
@@ -17567,12 +17591,14 @@ async def delete_invoice(invoice_id: str, user=Depends(get_current_user)):
         "invoice_ids": invoice_id, "status": {"$ne": "cancelled"},
     }, {"_id": 0, "id": 1})
     if linked_plan:
-        raise HTTPException(
+        return HTTPException(
             status_code=400,
             detail=("Factuur is gekoppeld aan een betalingsregeling. "
                     "Annuleer eerst de regeling."),
         )
-    await db.invoices.delete_one({"id": invoice_id, **scope(user)})
+    deleted = await db.invoices.delete_one(invoice_filter)
+    if deleted.deleted_count != 1:
+        raise RuntimeError("Factuur is tijdens verwijderen gewijzigd")
     return {"ok": True}
 
 

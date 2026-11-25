@@ -205,6 +205,10 @@ allocating credit. An interrupted or inconsistent operation remains blocked;
 inspect the invoice, payment allocations and credit before manual recovery.
 Rebalancing stops if an overpaid invoice needs review; the separate
 overpayment-repair endpoint is not yet coordinated.
+Kiosk invoice fines and invoice deletion also acquire an `invoice_change`
+guard. Interrupted changes retain the guard for investigation; deletion checks
+direct, multi-invoice and allocation payment references before removing an
+invoice. Other invoice and tenant mutations are not yet all coordinated.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

@@ -540,6 +540,72 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         result = await server._generate_month_invoices_for_company("c1", 2, 2026)
         self.assertEqual((result["created"], result["skipped"]), (0, 1))
 
+    async def test_sms_guard_blocks_invoice_fine_and_deletion(self):
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with patch.object(server, "kiosk_scope", return_value={"company_id": "c1"}):
+            for operation in (
+                lambda: server.kiosk_create_invoice_fine(
+                    "t1", "i1", server.KioskInvoiceFineCreate(amount=10), {"company_id": "c1"},
+                ),
+                lambda: server.delete_invoice("i1", {}),
+            ):
+                with self.assertRaises(HTTPException) as error:
+                    await operation()
+                self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["amount"], 100)
+
+    async def test_fine_holds_guard_while_updating_invoice(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+        original = server._kiosk_create_invoice_fine_locked
+
+        async def hold(*args):
+            entered.set()
+            await resume.wait()
+            return await original(*args)
+
+        with patch.object(server, "kiosk_scope", return_value={"company_id": "c1"}), \
+                patch.object(server, "_kiosk_create_invoice_fine_locked", side_effect=hold):
+            task = asyncio.create_task(server.kiosk_create_invoice_fine(
+                "t1", "i1", server.KioskInvoiceFineCreate(amount=10), {"company_id": "c1"},
+            ))
+            await asyncio.wait_for(entered.wait(), 5)
+            try:
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            self.assertTrue((await task)["ok"])
+        invoice = await self.db.invoices.find_one({"id": "i1"})
+        self.assertEqual((invoice["amount"], invoice["charges"][0]["amount"]), (110, 10))
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_invoice_deletion_checks_all_payment_references(self):
+        for field, value in (("invoice_ids", ["i1"]), ("allocations", [{"invoice_id": "i1", "amount": 5}])):
+            await self.db.payments.update_one({"id": "credit1"}, {"$set": {field: value}})
+            with self.assertRaises(HTTPException) as error:
+                await server.delete_invoice("i1", {})
+            self.assertEqual(error.exception.status_code, 400)
+            self.assertIsNotNone(await self.db.invoices.find_one({"id": "i1"}))
+            self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+            await self.db.payments.update_one({"id": "credit1"}, {"$unset": {field: ""}})
+        self.assertTrue((await server.delete_invoice("i1", {}))["ok"])
+        self.assertIsNone(await self.db.invoices.find_one({"id": "i1"}))
+
+    async def test_invoice_change_failure_keeps_guard_for_review(self):
+        async def partially_update(*args):
+            await self.db.invoices.update_one({"id": "i1"}, {"$set": {"amount": 110}})
+            raise RuntimeError("interrupted")
+
+        with patch.object(server, "kiosk_scope", return_value={"company_id": "c1"}), \
+                patch.object(server, "_kiosk_create_invoice_fine_locked", side_effect=partially_update):
+            with self.assertRaises(HTTPException) as error:
+                await server.kiosk_create_invoice_fine(
+                    "t1", "i1", server.KioskInvoiceFineCreate(amount=10), {"company_id": "c1"},
+                )
+        self.assertEqual(error.exception.status_code, 500)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("invoice_change", "i1"))
+
 
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

@@ -123,6 +123,28 @@ async def guarded_credit_change(db, *, company_id: str, tenant_id: str, operatio
     return result
 
 
+async def guarded_invoice_change(db, *, company_id: str, tenant_id: str, operation_id: str, change):
+    owner = secrets.token_urlsafe(24)
+    try:
+        await acquire_payment_guard(
+            db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner,
+            operation="invoice_change", operation_id=operation_id,
+        )
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.") from exc
+    try:
+        result = await change()
+        await release_payment_guard(db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner)
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Invoice change requires review: %s", operation_id)
+        raise HTTPException(
+            status_code=500, detail="De factuur is mogelijk gewijzigd. Controleer dit voordat u opnieuw probeert.",
+        ) from exc
+    if isinstance(result, HTTPException):
+        raise result
+    return result
+
+
 async def guard_reserved_sms_attempt(db, client, *, key: str, attempt_id: str) -> None:
     """Atomically guard a reserved attempt before a provider can be contacted."""
     async def transaction(session):

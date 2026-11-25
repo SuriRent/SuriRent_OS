@@ -7,9 +7,10 @@ from uuid import uuid4
 
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import DuplicateKeyError
+from fastapi import HTTPException
 
 from sms_payment_attempts import PaymentAttemptConflict
-from tenant_payment_guard import acquire_payment_guard, legacy_payment_guard, release_payment_guard
+from tenant_payment_guard import acquire_payment_guard, guarded_invoice_change, legacy_payment_guard, release_payment_guard
 
 
 class Guards:
@@ -86,6 +87,25 @@ class TenantPaymentGuardTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(PaymentAttemptConflict):
                 await acquire_payment_guard(self.db, **self.scope, kind="sms", owner="attempt1")
         await acquire_payment_guard(self.db, **self.scope, kind="sms", owner="attempt1")
+
+    async def test_invoice_change_releases_guard_on_expected_rejection(self):
+        async def change():
+            return HTTPException(status_code=409, detail="Factuur is gewijzigd")
+
+        with self.assertRaises(HTTPException) as error:
+            await guarded_invoice_change(self.db, **self.scope, operation_id="i1", change=change)
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(self.db.tenant_payment_guards.docs, {})
+
+    async def test_invoice_change_preserves_guard_on_uncertain_error(self):
+        async def change():
+            raise RuntimeError("interrupted")
+
+        with self.assertRaises(HTTPException) as error:
+            await guarded_invoice_change(self.db, **self.scope, operation_id="i1", change=change)
+        self.assertEqual(error.exception.status_code, 500)
+        guard = next(iter(self.db.tenant_payment_guards.docs.values()))
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("invoice_change", "i1"))
 
     async def test_provider_reference_is_scoped_to_legacy_operation(self):
         guard = await acquire_payment_guard(
