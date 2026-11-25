@@ -29,6 +29,28 @@ from sms_payment_attempts import PaymentAttemptConflict
 from tenant_payment_guard import acquire_payment_guard, release_payment_guard
 
 
+async def guarded_plan_change(db, *, company_id, tenant_id, plan_id, change):
+    owner = secrets.token_urlsafe(24)
+    try:
+        await acquire_payment_guard(
+            db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner,
+            operation="payment_plan_change", operation_id=plan_id,
+        )
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.") from exc
+    try:
+        result = await change()
+        await release_payment_guard(db, company_id=company_id, tenant_id=tenant_id, kind="legacy", owner=owner)
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Payment plan change requires review: %s", plan_id)
+        raise HTTPException(
+            status_code=500, detail="De regeling is mogelijk gedeeltelijk gewijzigd. Controleer deze voordat u opnieuw probeert.",
+        ) from exc
+    if isinstance(result, HTTPException):
+        raise result
+    return result
+
+
 def make_router(db, helpers):
     """Return APIRouter wired to a Motor DB + helper functions imported
     from server.py. We pass helpers as a dict so we don't depend on
@@ -312,7 +334,14 @@ def make_router(db, helpers):
             "created_by": user.get("id"),
             "created_at": now_iso,
         }
-        await db.payment_plans.insert_one({**plan_doc})
+        async def create():
+            await db.payment_plans.insert_one({**plan_doc})
+            for it in installments:
+                await db.payment_plan_installments.insert_one({
+                    "id": new_id(), "plan_id": plan_id, "company_id": cid, **it,
+                })
+
+        await guarded_plan_change(db, company_id=cid, tenant_id=body.tenant_id, plan_id=plan_id, change=create)
         try:
             from routes import _deps as _pd
             await _pd.notify_kiosk_employees(
@@ -321,15 +350,6 @@ def make_router(db, helpers):
                 {"kind": "payment_plan"}, "plans")
         except Exception as e:  # noqa: BLE001
             print(f"[push] plan employee notify failed: {e}")
-        # Installments
-        for it in installments:
-            await db.payment_plan_installments.insert_one({
-                "id": new_id(),
-                "plan_id": plan_id,
-                "company_id": cid,
-                **it,
-            })
-
         return await _enrich_plan(plan_doc)
 
     @router.get("", response_model=List[PlanOut])
@@ -356,17 +376,31 @@ def make_router(db, helpers):
         p = await db.payment_plans.find_one({"id": plan_id, **scope(user)}, {"_id": 0})
         if not p:
             raise HTTPException(status_code=404, detail="Regeling niet gevonden")
-        if p.get("status") != "active":
-            raise HTTPException(status_code=400, detail="Regeling is niet actief")
-        await db.payment_plans.update_one(
-            {"id": plan_id}, {"$set": {"status": "cancelled", "cancelled_at": iso(now_utc())}}
-        )
-        # Bestaande PENDING termijnen markeren als cancelled
-        await db.payment_plan_installments.update_many(
-            {"plan_id": plan_id, "status": "pending"},
-            {"$set": {"status": "cancelled"}},
-        )
-        p = await db.payment_plans.find_one({"id": plan_id}, {"_id": 0})
+        cid, tenant_id = p.get("company_id"), p.get("tenant_id")
+        if not cid or not tenant_id:
+            raise HTTPException(status_code=409, detail="Regelingsgegevens zijn onvolledig")
+
+        async def cancel():
+            current = await db.payment_plans.find_one(
+                {"id": plan_id, "company_id": cid, "tenant_id": tenant_id}, {"_id": 0},
+            )
+            if not current:
+                return HTTPException(status_code=404, detail="Regeling niet gevonden")
+            if current.get("status") != "active":
+                return HTTPException(status_code=400, detail="Regeling is niet actief")
+            updated = await db.payment_plans.update_one(
+                {"id": plan_id, "company_id": cid, "tenant_id": tenant_id, "status": "active"},
+                {"$set": {"status": "cancelled", "cancelled_at": iso(now_utc())}},
+            )
+            if updated.matched_count != 1:
+                raise RuntimeError("Regeling is tijdens het annuleren gewijzigd")
+            await db.payment_plan_installments.update_many(
+                {"plan_id": plan_id, "company_id": cid, "status": "pending"},
+                {"$set": {"status": "cancelled"}},
+            )
+            return await db.payment_plans.find_one({"id": plan_id, "company_id": cid}, {"_id": 0})
+
+        p = await guarded_plan_change(db, company_id=cid, tenant_id=tenant_id, plan_id=plan_id, change=cancel)
         return await _enrich_plan(p)
 
     # Stand-alone core (gedeeld met tenant-portal & kiosk via server.py)

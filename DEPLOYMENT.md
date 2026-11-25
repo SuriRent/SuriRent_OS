@@ -190,6 +190,9 @@ Kiosk Stripe installment booking requires and consumes a matching completed
 intent for the full installment amount under this guard. Kiosk selections
 containing installments cannot start a Stripe or Mopé checkout with multiple
 items; each installment must be paid separately until combined booking is safe.
+Admin and kiosk plan creation and admin plan cancellation also use the tenant
+guard. A failed change retains a `payment_plan_change` guard and plan ID;
+inspect the plan and all its installments before manual recovery.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

@@ -319,6 +319,19 @@ class InstallmentRouteTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(self.pay.await_args.kwargs["stripe_payment_intent_id"], "pi1")
 
+    async def test_sms_guard_blocks_kiosk_quick_plan_creation(self):
+        self.db.tenants = Records()
+        self.db.tenant_payment_guards = Guards()
+        await self.db.tenants.insert_one({"id": "t1", "company_id": "c1", "name": "Tenant"})
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        body = server.KioskQuickPlanIn(tenant_id="t1", total_amount=50, num_installments=2)
+        with patch.object(server, "get_kiosk_session", AsyncMock(return_value={"company_id": "c1"})):
+            with self.assertRaises(HTTPException) as error:
+                await server.kiosk_quick_payment_plan(body, None)
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(len(self.db.payment_plans.docs), 1)
+        self.assertEqual(len(self.db.payment_plan_installments.docs), 0)
+
 
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

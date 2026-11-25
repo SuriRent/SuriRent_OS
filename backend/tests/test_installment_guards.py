@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from payment_plans import _build_pay_core
+from payment_plans import _build_pay_core, guarded_plan_change, make_router
 from sms_payment_attempts import PaymentAttemptConflict, tenant_payment_key
 from tenant_payment_guard import acquire_payment_guard
 from test_bank_reconciliation_guard import Records
@@ -272,6 +272,90 @@ class InstallmentGuardCases:
         self.assertEqual(guard["provider_reference"], "pi1")
 
 
+class PlanChangeCases:
+    async def prepare_router(self):
+        helpers = {
+            "new_id": lambda: uuid4().hex,
+            "iso": lambda value: value.isoformat(),
+            "now_utc": lambda: datetime(2026, 1, 1, tzinfo=timezone.utc),
+            "next_receipt_number": AsyncMock(return_value="receipt"),
+            "scope": lambda user: {"company_id": user["company_id"]},
+            "company_id_of": lambda user: user["company_id"],
+            "get_current_user": lambda: {},
+            "require_role": lambda _role: lambda: {},
+        }
+        router = make_router(self.db, helpers)
+        self.create = next(r.endpoint for r in router.routes if r.path == "/payment-plans" and "POST" in r.methods)
+        self.cancel = next(r.endpoint for r in router.routes if r.path == "/payment-plans/{plan_id}/cancel")
+        self.body_type = self.create.__annotations__["body"]
+        self.user = {"company_id": "c1", "id": "admin"}
+
+    async def test_sms_guard_blocks_plan_creation_and_cancellation(self):
+        await self.prepare_router()
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        body = self.body_type(tenant_id="t1", total_amount=50, currency="SRD", num_installments=2)
+        with self.assertRaises(HTTPException) as creation:
+            await self.create(body, self.user)
+        self.assertEqual(creation.exception.status_code, 409)
+        with self.assertRaises(HTTPException) as cancellation:
+            await self.cancel("plan1", self.user)
+        self.assertEqual(cancellation.exception.status_code, 409)
+        self.assertEqual(await self.db.payment_plans.count_documents({"tenant_id": "t1"}), 1)
+        self.assertEqual((await self.db.payment_plans.find_one({"id": "plan1"}))["status"], "active")
+
+    async def test_plan_cancellation_finishes_before_guard_is_released(self):
+        await self.prepare_router()
+        result = await self.cancel("plan1", self.user)
+        self.assertEqual(result["status"], "cancelled")
+        self.assertEqual((await self.db.payment_plan_installments.find_one({"id": "inst1"}))["status"], "cancelled")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_plan_creation_inserts_all_installments_and_releases_guard(self):
+        await self.prepare_router()
+        body = self.body_type(tenant_id="t1", total_amount=50, currency="SRD", num_installments=2)
+        with patch.object(_deps, "notify_kiosk_employees", AsyncMock()):
+            result = await self.create(body, self.user)
+        self.assertEqual(result["status"], "active")
+        self.assertEqual(len(result["installments"]), 2)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_failed_plan_change_retains_guard_for_review(self):
+        async def change():
+            await self.db.payment_plans.update_one({"id": "plan1"}, {"$set": {"status": "cancelled"}})
+            raise RuntimeError("installments could not be updated")
+
+        with self.assertRaises(HTTPException) as error:
+            await guarded_plan_change(self.db, company_id="c1", tenant_id="t1", plan_id="plan1", change=change)
+        self.assertEqual(error.exception.status_code, 500)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("payment_plan_change", "plan1"))
+        with self.assertRaises(PaymentAttemptConflict):
+            await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+
+    async def test_plan_change_blocks_sms_until_all_writes_finish(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+
+        async def change():
+            await self.db.payment_plans.update_one({"id": "plan1"}, {"$set": {"status": "cancelled"}})
+            entered.set()
+            await resume.wait()
+            await self.db.payment_plan_installments.update_many(
+                {"plan_id": "plan1"}, {"$set": {"status": "cancelled"}},
+            )
+
+        task = asyncio.create_task(guarded_plan_change(
+            self.db, company_id="c1", tenant_id="t1", plan_id="plan1", change=change,
+        ))
+        try:
+            await asyncio.wait_for(entered.wait(), 5)
+            with self.assertRaises(PaymentAttemptConflict):
+                await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        finally:
+            resume.set()
+        await task
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+
 class InstallmentGuardTests(InstallmentGuardCases, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = SimpleNamespace(
@@ -283,6 +367,17 @@ class InstallmentGuardTests(InstallmentGuardCases, unittest.IsolatedAsyncioTestC
         await self.prepare()
 
 
+class PlanChangeTests(PlanChangeCases, unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = SimpleNamespace(
+            payment_plans=Collection(), payment_plan_installments=Collection(),
+            payments=Collection(), invoices=Collection(), companies=Collection(),
+            tenants=Collection(), apartments=Collection(), tenant_payment_guards=Guards(),
+            kiosk_stripe_payments=FakePayments(),
+        )
+        await InstallmentGuardCases.prepare(self)
+
+
 @unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
 class InstallmentGuardMongoTests(InstallmentGuardCases, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -290,6 +385,19 @@ class InstallmentGuardMongoTests(InstallmentGuardCases, unittest.IsolatedAsyncio
         self.name = f"test_installment_guard_{uuid4().hex}"
         self.db = self.client[self.name]
         await self.prepare()
+
+    async def asyncTearDown(self):
+        await self.client.drop_database(self.name)
+        self.client.close()
+
+
+@unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
+class PlanChangeMongoTests(PlanChangeCases, unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.client = AsyncIOMotorClient(os.environ["SMS_BOOKING_MONGO_URL"], serverSelectionTimeoutMS=5000)
+        self.name = f"test_plan_change_{uuid4().hex}"
+        self.db = self.client[self.name]
+        await InstallmentGuardCases.prepare(self)
 
     async def asyncTearDown(self):
         await self.client.drop_database(self.name)

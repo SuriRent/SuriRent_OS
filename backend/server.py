@@ -11157,7 +11157,7 @@ async def payment_processing_guards(user=Depends(get_current_user)):
         {"company_id": cid, "kind": "legacy",
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
                                 "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
-                                "installment_payment"]}},
+                                "installment_payment", "payment_plan_change"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
@@ -22600,9 +22600,13 @@ async def kiosk_quick_payment_plan(body: KioskQuickPlanIn, request: Request):
         "created_by": "kiosk",
         "created_at": now_iso,
     }
-    await db.payment_plans.insert_one(plan_doc)
-    for inst in installments_docs:
-        await db.payment_plan_installments.insert_one(inst)
+    async def create():
+        await db.payment_plans.insert_one(plan_doc)
+        for inst in installments_docs:
+            await db.payment_plan_installments.insert_one(inst)
+
+    from payment_plans import guarded_plan_change
+    await guarded_plan_change(db, company_id=cid, tenant_id=body.tenant_id, plan_id=plan_id, change=create)
 
     # Stuur admins een notificatie zodat ze weten dat er een regeling is.
     try:
