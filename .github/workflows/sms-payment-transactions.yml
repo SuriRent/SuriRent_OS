@@ -14,6 +14,7 @@ on:
       - 'backend/sms_payment_providers.py'
       - 'backend/sms_payment_reconciliation.py'
       - 'backend/sms_payment_checkout.py'
+      - 'backend/ai_assistant.py'
       - 'backend/tenant_payment_guard.py'
       - 'backend/bank_reconciliation_guard.py'
       - 'backend/routes/company_stripe.py'

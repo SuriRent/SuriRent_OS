@@ -253,31 +253,44 @@ async def dispatch_tool(name: str, args: dict, *, db, user: dict) -> dict:
             apt = await _resolve_apartment(db, cid, args.get("apartment_label"))
             tenant = await _resolve_tenant(db, cid, args.get("tenant_name"))
             if not tenant and apt and apt.get("tenant_id"):
-                tenant = await db.tenants.find_one({"id": apt["tenant_id"]}, {"_id": 0})
+                tenant = await db.tenants.find_one({"id": apt["tenant_id"], "company_id": cid}, {"_id": 0})
             if not tenant:
                 return {"error": "Kan geen huurder vinden. Geef appartement-label of huurder-naam."}
+            method = args.get("method") or "contant"
+            if method not in ("contant", "bank"):
+                return {"error": "De AI-assistent ondersteunt alleen contante en bankbetalingen."}
             # Gebruik de reguliere payment-pipeline zodat receipt_number,
             # invoice-koppeling, allocaties en admin-filters correct werken.
             # Dit voorkomt schema-drift en garandeert dat de betaling in het
             # admin-dashboard verschijnt (zelfde pad als POST /api/payments).
-            from server import _create_payment_doc, _enrich_payment  # lokale import
+            from server import _create_payment_doc, _enrich_payment, _guarded_new_payment  # lokale import
             from models import PaymentIn
             pin = PaymentIn(
                 tenant_id=tenant["id"],
                 apartment_id=(apt["id"] if apt else tenant.get("apartment_id")),
                 amount=float(args["amount"]),
                 currency=(args.get("currency") or "SRD").upper(),
-                method=args.get("method") or "contant",
+                method=method,
                 category="huur",
                 note=(args.get("note") or "Via AI-assistent").strip(),
                 received_by=user.get("name") or user.get("email") or "",
             )
-            doc = await _create_payment_doc(
-                pin, cid, approved_by=user.get("name") or user.get("email"),
-            )
-            # Markeer bron zodat we later AI-registraties kunnen filteren/auditen.
-            await db.payments.update_one(
-                {"id": doc["id"]}, {"$set": {"source": "ai_assistant"}}
+            async def create(payment_id):
+                payment = await _create_payment_doc(
+                    pin, cid, approved_by=user.get("name") or user.get("email"),
+                    strict_financial=True, payment_id=payment_id,
+                )
+                updated = await db.payments.update_one(
+                    {"id": payment_id, "company_id": cid, "tenant_id": tenant["id"]},
+                    {"$set": {"source": "ai_assistant"}},
+                )
+                if updated.matched_count != 1:
+                    raise RuntimeError("Bron van betaling kon niet worden vastgelegd")
+                payment["source"] = "ai_assistant"
+                return payment
+
+            doc = await _guarded_new_payment(
+                cid, tenant["id"], provider=None, provider_reference=None, create=create,
             )
             enriched = await _enrich_payment(doc)
             return {
@@ -294,8 +307,9 @@ async def dispatch_tool(name: str, args: dict, *, db, user: dict) -> dict:
         if name == "create_invoice":
             apt = await _resolve_apartment(db, cid, args.get("apartment_label"))
             tenant = await _resolve_tenant(db, cid, args.get("tenant_name"))
+            tenant_from_apartment = not tenant and apt and apt.get("tenant_id")
             if not tenant and apt and apt.get("tenant_id"):
-                tenant = await db.tenants.find_one({"id": apt["tenant_id"]}, {"_id": 0})
+                tenant = await db.tenants.find_one({"id": apt["tenant_id"], "company_id": cid}, {"_id": 0})
             if not tenant:
                 return {"error": "Kan geen huurder vinden. Geef appartement-label of huurder-naam."}
             from datetime import timedelta
@@ -308,23 +322,47 @@ async def dispatch_tool(name: str, args: dict, *, db, user: dict) -> dict:
             category = (args.get("category") or "huur").lower()
             inv_prefix = "BORG" if category in ("borg", "deposit") else "F"
             inv_no = f"{inv_prefix}-{now_dt.strftime('%Y%m%d')}-{new_id()[:6].upper()}"
-            inv = {
-                "id": new_id(), "company_id": cid,
-                "invoice_number": inv_no,
-                "tenant_id": tenant["id"], "tenant_name": tenant["name"],
-                "apartment_id": apt["id"] if apt else tenant.get("apartment_id"),
-                "apartment_label": apt["label"] if apt else "",
-                "amount": float(args["amount"]),
-                "balance": float(args["amount"]),
-                "currency": (args.get("currency") or "SRD").upper(),
-                "category": category,
-                "period_month": int(args.get("period_month") or now_dt.month),
-                "period_year": int(args.get("period_year") or now_dt.year),
-                "due_date": due, "status": "open",
-                "created_at": iso(now_dt), "created_by": user.get("email"),
-                "source": "ai_assistant",
-            }
-            await db.invoices.insert_one(inv)
+            invoice_id = new_id()
+            amount = float(args["amount"])
+            period_month = int(args.get("period_month") or now_dt.month)
+            period_year = int(args.get("period_year") or now_dt.year)
+
+            async def create():
+                current_tenant = await db.tenants.find_one(
+                    {"id": tenant["id"], "company_id": cid}, {"_id": 0},
+                )
+                if not current_tenant:
+                    return HTTPException(status_code=404, detail="Huurder niet gevonden")
+                current_apt = await db.apartments.find_one(
+                    {"id": apt["id"], "company_id": cid}, {"_id": 0},
+                ) if apt else None
+                if apt and (not current_apt or (
+                    tenant_from_apartment and current_apt.get("tenant_id") != tenant["id"]
+                )):
+                    return HTTPException(status_code=409, detail="Appartement is intussen gewijzigd")
+                invoice = {
+                    "id": invoice_id, "company_id": cid,
+                    "invoice_number": inv_no,
+                    "tenant_id": tenant["id"], "tenant_name": current_tenant["name"],
+                    "apartment_id": current_apt["id"] if current_apt else current_tenant.get("apartment_id"),
+                    "apartment_label": current_apt["label"] if current_apt else "",
+                    "amount": amount,
+                    "balance": amount,
+                    "currency": (args.get("currency") or "SRD").upper(),
+                    "category": category,
+                    "period_month": period_month,
+                    "period_year": period_year,
+                    "due_date": due, "status": "open",
+                    "created_at": iso(now_dt), "created_by": user.get("email"),
+                    "source": "ai_assistant",
+                }
+                await db.invoices.insert_one(invoice)
+                return invoice
+
+            from tenant_payment_guard import guarded_invoice_change
+            inv = await guarded_invoice_change(
+                db, company_id=cid, tenant_id=tenant["id"], operation_id=invoice_id, change=create,
+            )
             inv.pop("_id", None)
             return {"success": True, "invoice_id": inv["id"], "amount": inv["amount"],
                     "currency": inv["currency"], "due_date": inv["due_date"],
@@ -352,6 +390,8 @@ async def dispatch_tool(name: str, args: dict, *, db, user: dict) -> dict:
 
         return {"error": f"Onbekende tool: {name}"}
 
+    except HTTPException as e:
+        return {"error": str(e.detail)}
     except Exception as e:  # noqa: BLE001
         return {"error": str(e)}
 

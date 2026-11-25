@@ -29,6 +29,7 @@ with patch.dict(sys.modules, mock_modules), patch.dict(os.environ, {
     "JWT_SECRET": "isolated-test-only-key-with-adequate-length",
 }):
     import server
+    import ai_assistant
 
 
 class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
@@ -165,7 +166,8 @@ class BankReconciliationServerTests(unittest.IsolatedAsyncioTestCase):
 
 class PaymentCreationServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.db = SimpleNamespace(tenants=Records(), payments=Records(), tenant_payment_guards=Guards())
+        self.db = SimpleNamespace(tenants=Records(), payments=Records(), invoices=Records(),
+                                  tenant_payment_guards=Guards())
         await self.db.tenants.insert_one({"id": "t1", "company_id": "c1", "name": "Tenant"})
         self.user = {"active_company_id": "c1", "name": "Admin"}
         self.tenant = {"id": "t1", "company_id": "c1", "name": "Tenant"}
@@ -261,6 +263,100 @@ class PaymentCreationServerTests(unittest.IsolatedAsyncioTestCase):
             await server.create_payment(body, self.user)
         self.assertEqual(error.exception.status_code, 400)
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_assistant_financial_actions_respect_sms_guard(self):
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with patch.object(ai_assistant, "_resolve_tenant", AsyncMock(return_value=self.tenant)), \
+                patch.object(ai_assistant, "_resolve_apartment", AsyncMock(return_value=None)):
+            for name in ("register_payment", "create_invoice"):
+                result = await ai_assistant.dispatch_tool(
+                    name, {"tenant_name": "Tenant", "amount": 50}, db=self.db, user=self.user,
+                )
+                self.assertIn("andere betaling", result["error"])
+        self.creator.assert_not_awaited()
+        self.assertEqual(self.db.invoices.docs, [])
+
+    async def test_assistant_payment_keeps_guard_through_source_write(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+        update = self.db.payments.update_one
+
+        async def hold_update(*args):
+            entered.set()
+            await resume.wait()
+            return await update(*args)
+
+        with patch.object(ai_assistant, "_resolve_tenant", AsyncMock(return_value=self.tenant)), \
+                patch.object(ai_assistant, "_resolve_apartment", AsyncMock(return_value=None)), \
+                patch.object(self.db.payments, "update_one", side_effect=hold_update):
+            task = asyncio.create_task(ai_assistant.dispatch_tool(
+                "register_payment", {"tenant_name": "Tenant", "amount": 50}, db=self.db, user=self.user,
+            ))
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            result = await task
+        self.assertTrue(result["success"])
+        self.assertEqual(self.db.payments.docs[0]["source"], "ai_assistant")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_assistant_payment_source_failure_retains_guard(self):
+        with patch.object(ai_assistant, "_resolve_tenant", AsyncMock(return_value=self.tenant)), \
+                patch.object(ai_assistant, "_resolve_apartment", AsyncMock(return_value=None)), \
+                patch.object(self.db.payments, "update_one", AsyncMock(side_effect=RuntimeError("write failed"))):
+            result = await ai_assistant.dispatch_tool(
+                "register_payment", {"tenant_name": "Tenant", "amount": 50}, db=self.db, user=self.user,
+            )
+        self.assertIn("gedeeltelijk", result["error"])
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("payment_creation", self.db.payments.docs[0]["id"]))
+
+    async def test_assistant_invoice_rechecks_tenant_and_holds_guard(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+        insert = self.db.invoices.insert_one
+
+        async def hold_insert(invoice):
+            entered.set()
+            await resume.wait()
+            return await insert(invoice)
+
+        with patch.object(ai_assistant, "_resolve_tenant", AsyncMock(return_value=self.tenant)), \
+                patch.object(ai_assistant, "_resolve_apartment", AsyncMock(return_value=None)), \
+                patch.object(self.db.invoices, "insert_one", side_effect=hold_insert):
+            task = asyncio.create_task(ai_assistant.dispatch_tool(
+                "create_invoice", {"tenant_name": "Tenant", "amount": 50}, db=self.db, user=self.user,
+            ))
+            try:
+                await asyncio.wait_for(entered.wait(), 5)
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            result = await task
+        self.assertTrue(result["success"])
+        self.assertEqual(self.db.invoices.docs[0]["source"], "ai_assistant")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+        self.db.tenants.docs.clear()
+        with patch.object(ai_assistant, "_resolve_tenant", AsyncMock(return_value=self.tenant)), \
+                patch.object(ai_assistant, "_resolve_apartment", AsyncMock(return_value=None)):
+            result = await ai_assistant.dispatch_tool(
+                "create_invoice", {"tenant_name": "Tenant", "amount": 50}, db=self.db, user=self.user,
+            )
+        self.assertIn("niet gevonden", result["error"])
+        self.assertEqual(len(self.db.invoices.docs), 1)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_assistant_rejects_unverified_provider_method(self):
+        with patch.object(ai_assistant, "_resolve_tenant", AsyncMock(return_value=self.tenant)), \
+                patch.object(ai_assistant, "_resolve_apartment", AsyncMock(return_value=None)):
+            result = await ai_assistant.dispatch_tool(
+                "register_payment", {"tenant_name": "Tenant", "amount": 50, "method": "mope"},
+                db=self.db, user=self.user,
+            )
+        self.assertIn("alleen contante en bankbetalingen", result["error"])
+        self.creator.assert_not_awaited()
 
     async def test_portal_bank_proof_is_stored_before_unlocking(self):
         self.db.bank_statements = Records()
