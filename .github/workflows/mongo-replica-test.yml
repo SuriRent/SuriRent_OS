@@ -168,3 +168,124 @@ jobs:
       - name: Remove isolated containers and volume
         if: always()
         run: docker compose -f docker-compose.yml -f docker-compose.replica-test.yml down --volumes --remove-orphans
+
+  standalone-copy-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Prepare isolated standalone database and key
+        shell: bash
+        run: |
+          set -eu
+          docker volume create sms-replica-copy-ci-data
+          docker volume create sms-replica-copy-ci-config
+          docker run -d --name sms-replica-copy-ci \
+            -e MONGO_INITDB_ROOT_USERNAME=testuser -e MONGO_INITDB_ROOT_PASSWORD=testpassword \
+            -v sms-replica-copy-ci-data:/data/db -v sms-replica-copy-ci-config:/data/configdb \
+            mongo:7.0.48 --bind_ip_all
+          for i in {1..120}; do
+            if docker exec sms-replica-copy-ci mongosh --quiet --eval '
+                db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD) &&
+                db.adminCommand({ping: 1}).ok
+              ' | grep -qx 1; then
+              break
+            fi
+            if [ "$i" = 120 ]; then exit 1; fi
+            sleep 1
+          done
+          docker exec sms-replica-copy-ci mongosh --quiet --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+            db.getSiblingDB("copy_ci").invoices.insertOne({id: "invoice-1", amount: 100, paid_amount: 25});
+          '
+          docker exec sms-replica-copy-ci bash -c '
+            set -eu
+            key=/data/configdb/replica-test.key
+            test ! -e "$key"
+            umask 077
+            openssl rand -base64 48 > "$key"
+            chown mongodb:mongodb "$key"
+            chmod 0400 "$key"
+          '
+          cat > mongo-copy-test.conf <<'EOF'
+          storage:
+            dbPath: /data/db
+          net:
+            bindIpAll: true
+          security:
+            authorization: enabled
+            keyFile: /data/configdb/replica-test.key
+          replication:
+            replSetName: rs0
+          EOF
+          docker cp mongo-copy-test.conf sms-replica-copy-ci:/data/configdb/mongo-copy-test.conf
+      - name: Convert the isolated copy and verify restart
+        shell: bash
+        run: |
+          set -eu
+          docker stop sms-replica-copy-ci
+          docker rm sms-replica-copy-ci
+          docker run -d --name sms-replica-copy-ci \
+            -e MONGO_INITDB_ROOT_USERNAME=testuser -e MONGO_INITDB_ROOT_PASSWORD=testpassword \
+            -v sms-replica-copy-ci-data:/data/db -v sms-replica-copy-ci-config:/data/configdb \
+            mongo:7.0.48 --config /data/configdb/mongo-copy-test.conf
+          wait_for_ping() {
+            for i in {1..120}; do
+              if docker exec sms-replica-copy-ci mongosh --quiet 'mongodb://127.0.0.1:27017/?directConnection=true' --eval '
+                  db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD) &&
+                  db.adminCommand({ping: 1}).ok
+                ' | grep -qx 1; then
+                return
+              fi
+              sleep 1
+            done
+            docker logs sms-replica-copy-ci
+            return 1
+          }
+          wait_for_primary() {
+            for i in {1..120}; do
+              if docker exec sms-replica-copy-ci mongosh --quiet 'mongodb://127.0.0.1:27017/?directConnection=true' --eval '
+                  db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD) &&
+                  db.hello().isWritablePrimary
+                ' | grep -qx true; then
+                return
+              fi
+              sleep 1
+            done
+            docker logs sms-replica-copy-ci
+            return 1
+          }
+          verify() {
+            docker exec sms-replica-copy-ci mongosh --quiet 'mongodb://127.0.0.1:27017/?directConnection=true&replicaSet=rs0' --eval '
+              if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+              const testDb = db.getSiblingDB("copy_ci");
+              if (testDb.invoices.countDocuments({id: "invoice-1", amount: 100, paid_amount: 25}) !== 1) throw new Error("Original invoice changed");
+              const session = db.getMongo().startSession();
+              const checks = session.getDatabase("copy_ci").checks;
+              session.startTransaction();
+              checks.insertOne({id: "committed"});
+              session.commitTransaction();
+              session.startTransaction();
+              checks.insertOne({id: "aborted"});
+              session.abortTransaction();
+              if (checks.countDocuments({id: "committed"}) !== 1 || checks.countDocuments({id: "aborted"}) !== 0) throw new Error("Transaction failed");
+              checks.deleteMany({});
+              session.endSession();
+            '
+          }
+          wait_for_ping
+          docker exec sms-replica-copy-ci mongosh --quiet 'mongodb://127.0.0.1:27017/?directConnection=true' --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+            const result = rs.initiate({_id: "rs0", members: [{_id: 0, host: "localhost:27017"}]});
+            if (result.ok !== 1) throw new Error("Replica set initialization failed");
+          '
+          wait_for_primary
+          verify
+          docker restart sms-replica-copy-ci
+          wait_for_ping
+          wait_for_primary
+          verify
+      - name: Remove isolated container and volumes
+        if: always()
+        run: |
+          docker rm -f sms-replica-copy-ci || true
+          docker volume rm sms-replica-copy-ci-data sms-replica-copy-ci-config || true
