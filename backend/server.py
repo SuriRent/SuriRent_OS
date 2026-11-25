@@ -11249,7 +11249,8 @@ async def payment_processing_guards(user=Depends(get_current_user)):
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
                                 "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
                                 "installment_payment", "payment_plan_change", "payment_deletion",
-                                "credit_reconciliation", "invoice_change", "tenant_move_out", "tenant_deletion"]}},
+                                "credit_reconciliation", "invoice_change", "tenant_move_out", "tenant_deletion",
+                                "archived_debt", "tenant_reactivation"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
@@ -18530,16 +18531,25 @@ class SettleDebtIn(BaseModel):
 @api.post("/kiosk/tenants/{tenant_id}/settle-debt")
 async def kiosk_settle_archived_debt(tenant_id: str, body: SettleDebtIn, _session=Depends(get_kiosk_session)):
     cid = _session["company_id"]
+    from tenant_payment_guard import guarded_archived_tenant_change
+    return await guarded_archived_tenant_change(
+        db, company_id=cid, tenant_id=tenant_id, operation="archived_debt",
+        change=lambda: _settle_archived_debt_locked(tenant_id, cid, body),
+    )
+
+
+async def _settle_archived_debt_locked(tenant_id: str, cid: str, body: SettleDebtIn):
     t = await db.tenants.find_one({"id": tenant_id, "company_id": cid, "status": "archived"}, {"_id": 0})
     if not t:
-        raise HTTPException(status_code=404, detail="Gearchiveerde huurder niet gevonden")
+        return HTTPException(status_code=404, detail="Gearchiveerde huurder niet gevonden")
     due = round(float(t.get("outstanding_after_move_out") or 0), 2)
     if due <= 0:
-        raise HTTPException(status_code=400, detail="Geen restschuld openstaand")
-    claim = await db.tenants.update_one({"id": tenant_id, "outstanding_after_move_out": t.get("outstanding_after_move_out")},
+        return HTTPException(status_code=400, detail="Geen restschuld openstaand")
+    claim = await db.tenants.update_one({"id": tenant_id, "company_id": cid, "status": "archived",
+                                         "outstanding_after_move_out": t.get("outstanding_after_move_out")},
                                         {"$set": {"outstanding_after_move_out": 0, "debt_settled_at": iso(now_utc())}})
     if not claim.modified_count:
-        raise HTTPException(status_code=409, detail="Restschuld is al betaald")
+        return HTTPException(status_code=409, detail="Restschuld is al betaald")
     cur = t.get("currency_at_move_out") or "SRD"
     pid, rno, paid_at = new_id(), await _next_receipt_number(), iso(now_utc())
     await db.payments.insert_one({
@@ -18583,7 +18593,20 @@ async def delete_archived_tenant(tenant_id: str, user=Depends(require_role("admi
     t = await db.tenants.find_one({"id": tenant_id, **scope(user), "status": "archived"}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Alleen gearchiveerde huurders kunnen permanent verwijderd worden")
-    cid = t["company_id"]
+    cid = t.get("company_id")
+    if not isinstance(cid, str) or not cid:
+        raise HTTPException(status_code=409, detail="Huurder heeft geen geldige bedrijfscontext")
+    from tenant_payment_guard import guarded_tenant_deletion
+    return await guarded_tenant_deletion(
+        db, company_id=cid, tenant_id=tenant_id,
+        change=lambda: _delete_archived_tenant_locked(tenant_id, cid),
+    )
+
+
+async def _delete_archived_tenant_locked(tenant_id: str, cid: str):
+    t = await db.tenants.find_one({"id": tenant_id, "company_id": cid, "status": "archived"}, {"_id": 0})
+    if not t:
+        return HTTPException(status_code=404, detail="Alleen gearchiveerde huurders kunnen permanent verwijderd worden")
     q = {"company_id": cid, "tenant_id": tenant_id}
     asset_ids = [u.rsplit("/", 1)[-1] for u in (t.get("id_photo_url"), t.get("avatar_url"))
                  if isinstance(u, str) and "/landing/asset/" in u]
@@ -18594,7 +18617,9 @@ async def delete_archived_tenant(tenant_id: str, user=Depends(require_role("admi
     # Ontvangen betalingen blijven (kasgeld/rapporten), maar zonder koppeling naar de huurder.
     await db.payments.update_many(q, {"$set": {"tenant_id": "", "tenant_deleted": True,
                                                "invoice_id": None, "invoice_ids": []}})
-    await db.tenants.delete_one({"id": tenant_id, "company_id": cid})
+    deleted = await db.tenants.delete_one({"id": tenant_id, "company_id": cid, "status": "archived"})
+    if deleted.deleted_count != 1:
+        raise RuntimeError("Gearchiveerde huurder is tijdens verwijderen gewijzigd")
     return {"ok": True}
 
 
@@ -18607,6 +18632,20 @@ async def tenant_reactivate(tenant_id: str, body: ReactivateIn, user=Depends(req
     t = await db.tenants.find_one({"id": tenant_id, **scope(user), "status": "archived"}, {"_id": 0})
     if not t:
         raise HTTPException(status_code=404, detail="Gearchiveerde huurder niet gevonden")
+    cid = t.get("company_id")
+    if not isinstance(cid, str) or not cid:
+        raise HTTPException(status_code=409, detail="Huurder heeft geen geldige bedrijfscontext")
+    from tenant_payment_guard import guarded_archived_tenant_change
+    return await guarded_archived_tenant_change(
+        db, company_id=cid, tenant_id=tenant_id, operation="tenant_reactivation",
+        change=lambda: _reactivate_tenant_locked(tenant_id, cid, body),
+    )
+
+
+async def _reactivate_tenant_locked(tenant_id: str, cid: str, body: ReactivateIn):
+    t = await db.tenants.find_one({"id": tenant_id, "company_id": cid, "status": "archived"}, {"_id": 0})
+    if not t:
+        return HTTPException(status_code=404, detail="Gearchiveerde huurder niet gevonden")
     aid = body.apartment_id if "apartment_id" in body.model_fields_set else t.get("archived_apartment_id")
     if aid:
         res = await db.apartments.update_one(
@@ -18614,11 +18653,13 @@ async def tenant_reactivate(tenant_id: str, body: ReactivateIn, user=Depends(req
              "$or": [{"tenant_id": None}, {"tenant_id": {"$exists": False}}]},
             {"$set": {"tenant_id": tenant_id, "status": "occupied"}})
         if not res.modified_count:
-            raise HTTPException(status_code=409, detail="Appartement is niet meer beschikbaar")
-    await db.tenants.update_one({"id": tenant_id}, {"$set": {
+            return HTTPException(status_code=409, detail="Appartement is niet meer beschikbaar")
+    res = await db.tenants.update_one({"id": tenant_id, "company_id": cid, "status": "archived"}, {"$set": {
         "status": "active", "apartment_id": aid, "deposit_required": True, "deposit_status": "pending",
         "reactivated_at": iso(now_utc())}, "$unset": {"deposit_id": ""}})
-    return await _enrich_tenant(await db.tenants.find_one({"id": tenant_id}, {"_id": 0}))
+    if res.matched_count != 1:
+        raise RuntimeError("Gearchiveerde huurder is tijdens heractivering gewijzigd")
+    return await _enrich_tenant(await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0}))
 
 
 @api.delete("/deposits/{did}")

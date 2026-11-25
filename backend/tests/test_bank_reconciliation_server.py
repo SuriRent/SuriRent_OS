@@ -744,6 +744,90 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
         self.assertEqual((guard["operation"], guard["operation_id"]), ("tenant_deletion", "t1"))
 
+    async def test_archived_debt_blocks_deletion_reactivation_and_sms(self):
+        await self.db.tenants.update_one(
+            {"id": "t1"}, {"$set": {"status": "archived", "outstanding_after_move_out": 40}},
+        )
+        await self.db.invoices.update_one(
+            {"id": "i1"}, {"$set": {"status": "archived", "archived": True}},
+        )
+        entered, resume = asyncio.Event(), asyncio.Event()
+        original = server._settle_archived_debt_locked
+
+        async def hold(*args):
+            entered.set()
+            await resume.wait()
+            return await original(*args)
+
+        with patch.object(server, "_settle_archived_debt_locked", side_effect=hold), \
+                patch.object(server, "_next_receipt_number", AsyncMock(return_value="receipt1")):
+            task = asyncio.create_task(server.kiosk_settle_archived_debt(
+                "t1", server.SettleDebtIn(method="contant"), {"company_id": "c1"},
+            ))
+            await asyncio.wait_for(entered.wait(), 5)
+            try:
+                for action in (
+                    lambda: server.delete_archived_tenant("t1", {}),
+                    lambda: server.tenant_reactivate("t1", server.ReactivateIn(), {}),
+                ):
+                    with self.assertRaises(HTTPException) as conflict:
+                        await action()
+                    self.assertEqual(conflict.exception.status_code, 409)
+                with self.assertRaises(PaymentAttemptConflict):
+                    await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+            finally:
+                resume.set()
+            result = await task
+        self.assertEqual(result["amount"], 40)
+        self.assertEqual((await self.db.invoices.find_one({"id": "i1"}))["paid_amount"], 40)
+        self.assertEqual(await self.db.payments.count_documents({"kind": "restschuld"}), 1)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_archived_debt_failure_retains_guard(self):
+        await self.db.tenants.update_one(
+            {"id": "t1"}, {"$set": {"status": "archived", "outstanding_after_move_out": 40}},
+        )
+        payments = self.db.payments
+        database = SimpleNamespace(tenants=self.db.tenants, payments=payments,
+                                   tenant_payment_guards=self.db.tenant_payment_guards)
+        with patch.object(server, "db", database), \
+                patch.object(payments, "insert_one", AsyncMock(side_effect=RuntimeError("failed"))), \
+                patch.object(server, "_next_receipt_number", AsyncMock(return_value="receipt1")):
+            with self.assertRaises(HTTPException) as error:
+                await server.kiosk_settle_archived_debt(
+                    "t1", server.SettleDebtIn(method="contant"), {"company_id": "c1"},
+                )
+        self.assertEqual(error.exception.status_code, 500)
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual((guard["operation"], guard["operation_id"]), ("archived_debt", "t1"))
+
+    async def test_archived_deletion_is_guarded_and_preserves_payments(self):
+        await self.db.tenants.update_one({"id": "t1"}, {"$set": {"status": "archived"}})
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with self.assertRaises(HTTPException) as conflict:
+            await server.delete_archived_tenant("t1", {})
+        self.assertEqual(conflict.exception.status_code, 409)
+        self.assertIsNotNone(await self.db.invoices.find_one({"id": "i1"}))
+        await self.db.tenant_payment_guards.delete_one({"_id": tenant_payment_key("c1", "t1")})
+        result = await server.delete_archived_tenant("t1", {})
+        self.assertTrue(result["ok"])
+        self.assertIsNone(await self.db.tenants.find_one({"id": "t1"}))
+        self.assertIsNone(await self.db.invoices.find_one({"id": "i1"}))
+        self.assertEqual((await self.db.payments.find_one({"id": "credit1"}))["tenant_id"], "")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_reactivation_rechecks_tenant_and_releases_guard(self):
+        await self.db.tenants.update_one({"id": "t1"}, {"$set": {"status": "archived"}})
+        await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
+        with self.assertRaises(HTTPException) as conflict:
+            await server.tenant_reactivate("t1", server.ReactivateIn(), {})
+        self.assertEqual(conflict.exception.status_code, 409)
+        await self.db.tenant_payment_guards.delete_one({"_id": tenant_payment_key("c1", "t1")})
+        with patch.object(server, "_enrich_tenant", AsyncMock(side_effect=lambda tenant: tenant)):
+            result = await server.tenant_reactivate("t1", server.ReactivateIn(), {})
+        self.assertEqual(result["status"], "active")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
     async def test_sms_guard_blocks_invoice_recomputation(self):
         await acquire_payment_guard(self.db, company_id="c1", tenant_id="t1", kind="sms", owner="sms1")
         with self.assertRaises(HTTPException) as error:
