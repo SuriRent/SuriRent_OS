@@ -16232,47 +16232,53 @@ async def create_invoice(body: InvoiceCreate, user=Depends(get_current_user)):
     cid = company_id_of(user)
     if not cid:
         raise HTTPException(status_code=400, detail="Geen actief bedrijf geselecteerd")
-    t = await db.tenants.find_one({"id": body.tenant_id, **scope(user)}, {"_id": 0})
-    if not t:
-        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
-    apt_id = t.get("apartment_id")
-    apt = await db.apartments.find_one({"id": apt_id, **scope(user)}, {"_id": 0}) if apt_id else None
-    if not apt:
-        raise HTTPException(status_code=400, detail="Huurder heeft geen appartement")
-    # Prevent duplicate invoice for same tenant + period
-    dup = await db.invoices.find_one({
-        **scope(user),
-        "tenant_id": body.tenant_id, "period_month": body.period_month,
-        "period_year": body.period_year,
-    })
-    if dup:
-        raise HTTPException(status_code=400, detail="Factuur voor deze periode bestaat al")
-    year = body.period_year
-    seq = await _next_seq(f"invoice_{year}")
-    # invoice_date + due_date afleiden uit invoicing-settings zodat de PDF
-    # en bucket-logica consistent zijn met wat de admin ziet in Instellingen.
-    cs = await db.company_settings.find_one(
-        {"company_id": cid}, {"_id": 0, "invoicing": 1},
-    ) or {}
-    inv_date_iso, due_date_iso = _compute_invoice_dates(
-        body.period_month, body.period_year, cs.get("invoicing") or {},
+    invoice_id = new_id()
+
+    async def create():
+        t = await db.tenants.find_one({"id": body.tenant_id, **scope(user)}, {"_id": 0})
+        if not t:
+            return HTTPException(status_code=404, detail="Huurder niet gevonden")
+        apt_id = t.get("apartment_id")
+        apt = await db.apartments.find_one({"id": apt_id, **scope(user)}, {"_id": 0}) if apt_id else None
+        if not apt:
+            return HTTPException(status_code=400, detail="Huurder heeft geen appartement")
+        dup = await db.invoices.find_one({
+            **scope(user),
+            "tenant_id": body.tenant_id, "period_month": body.period_month,
+            "period_year": body.period_year,
+        })
+        if dup:
+            return HTTPException(status_code=400, detail="Factuur voor deze periode bestaat al")
+        year = body.period_year
+        seq = await _next_seq(f"invoice_{year}")
+        cs = await db.company_settings.find_one(
+            {"company_id": cid}, {"_id": 0, "invoicing": 1},
+        ) or {}
+        inv_date_iso, due_date_iso = _compute_invoice_dates(
+            body.period_month, body.period_year, cs.get("invoicing") or {},
+        )
+        doc = {
+            "id": invoice_id,
+            "company_id": cid,
+            "invoice_number": f"F{year}-{seq:05d}",
+            "tenant_id": body.tenant_id,
+            "apartment_id": apt_id,
+            "amount": apt["rent_amount"],
+            "currency": apt.get("currency", "SRD"),
+            "period_month": body.period_month,
+            "period_year": body.period_year,
+            "invoice_date": inv_date_iso,
+            "due_date": due_date_iso,
+            "status": "open",
+            "created_at": iso(now_utc()),
+        }
+        await db.invoices.insert_one(doc)
+        return doc
+
+    from tenant_payment_guard import guarded_invoice_change
+    doc = await guarded_invoice_change(
+        db, company_id=cid, tenant_id=body.tenant_id, operation_id=invoice_id, change=create,
     )
-    doc = {
-        "id": new_id(),
-        "company_id": cid,
-        "invoice_number": f"F{year}-{seq:05d}",
-        "tenant_id": body.tenant_id,
-        "apartment_id": apt_id,
-        "amount": apt["rent_amount"],
-        "currency": apt.get("currency", "SRD"),
-        "period_month": body.period_month,
-        "period_year": body.period_year,
-        "invoice_date": inv_date_iso,
-        "due_date": due_date_iso,
-        "status": "open",
-        "created_at": iso(now_utc()),
-    }
-    await db.invoices.insert_one(doc)
     doc.pop("_id", None)
     await _reconcile_power_after_payment(cid)
     return await _enrich_invoice(doc)

@@ -528,12 +528,48 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
             lambda: server.apply_credit_to_invoice("i1", {}),
             lambda: server.rebalance_tenant_credits("t1", {}),
             lambda: server._generate_month_invoices_for_company("c1", 2, 2026),
+            lambda: server.create_invoice(server.InvoiceCreate(tenant_id="t1", period_month=2, period_year=2026), {}),
         ):
             with self.assertRaises(HTTPException) as error:
                 await operation()
             self.assertEqual(error.exception.status_code, 409)
         self.assertEqual(await self.db.invoices.count_documents({"tenant_id": "t1"}), 1)
         self.assertEqual((await self.db.payments.find_one({"id": "credit1"}))["credit_remaining"], 75)
+
+    async def test_manual_invoice_serializes_with_monthly_generation(self):
+        entered, resume = asyncio.Event(), asyncio.Event()
+
+        async def hold_sequence(*args):
+            entered.set()
+            await resume.wait()
+            return 1
+
+        body = server.InvoiceCreate(tenant_id="t1", period_month=2, period_year=2026)
+        with patch.object(server, "_next_seq", side_effect=hold_sequence), \
+                patch.object(server, "_reconcile_power_after_payment", AsyncMock()), \
+                patch.object(server, "_enrich_invoice", AsyncMock(side_effect=lambda doc: doc)):
+            task = asyncio.create_task(server.create_invoice(body, {}))
+            try:
+                await asyncio.wait_for(entered.wait(), timeout=5)
+                with self.assertRaises(HTTPException) as conflict:
+                    await server._generate_month_invoices_for_company("c1", 2, 2026)
+                self.assertEqual(conflict.exception.status_code, 409)
+            finally:
+                resume.set()
+            invoice = await task
+            self.assertEqual(invoice["amount"], 100)
+            with self.assertRaises(HTTPException) as duplicate:
+                await server.create_invoice(body, {})
+            self.assertEqual(duplicate.exception.status_code, 400)
+        self.assertEqual(await self.db.invoices.count_documents({"tenant_id": "t1", "period_month": 2}), 1)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_manual_invoice_validation_releases_guard(self):
+        body = server.InvoiceCreate(tenant_id="missing", period_month=2, period_year=2026)
+        with self.assertRaises(HTTPException) as error:
+            await server.create_invoice(body, {})
+        self.assertEqual(error.exception.status_code, 404)
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "missing")}))
 
     async def test_credit_failure_keeps_guard_and_does_not_debit_credit(self):
         self.sync.side_effect = RuntimeError("plan sync failed")
