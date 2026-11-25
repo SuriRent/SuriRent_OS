@@ -136,10 +136,21 @@ jobs:
           }
           verify_from_app
           "${compose[@]}" restart database
-          if ! "${compose[@]}" up -d --force-recreate --wait --wait-timeout 180 replica-init; then
+          "${compose[@]}" up -d --force-recreate replica-init
+          wait_for_initializer() {
+            for i in {1..120}; do
+              container="$("${compose[@]}" ps -aq replica-init)"
+              if [ -n "$container" ] && [ "$(docker inspect -f '{{.State.Status}}' "$container")" = "exited" ]; then
+                "${compose[@]}" logs replica-init
+                [ "$(docker inspect -f '{{.State.ExitCode}}' "$container")" = "0" ]
+                return
+              fi
+              sleep 1
+            done
             "${compose[@]}" logs database replica-init
-            exit 1
-          fi
+            return 1
+          }
+          wait_for_initializer
           verify_from_app
           "${compose[@]}" restart app
           if ! "${compose[@]}" up -d --wait --wait-timeout 180 app; then
