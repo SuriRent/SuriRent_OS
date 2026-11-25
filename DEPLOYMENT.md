@@ -25,6 +25,28 @@ Use the Coolify resource to redeploy, inspect logs, and restart services. Back u
 
 The public health endpoint is `https://<your-domain>/api/health`.
 
+### Isolated MongoDB transaction test
+
+`docker-compose.replica-test.yml` is an opt-in overlay for a **new, isolated
+test database**, not an automatic migration of the Coolify database. It starts
+a single-member authenticated replica set; this supports transactions but is
+not highly available. Never apply it to an existing volume without a separately
+planned backup, restore test and migration.
+
+Set all required variables from `.env.example`, including a stable, private
+`MONGO_REPLICA_KEY` generated with `openssl rand -base64 48`. Use test-only
+credentials and a unique Compose project name so its volume is isolated:
+
+```sh
+docker compose -p surirent-replica-test -f docker-compose.yml -f docker-compose.replica-test.yml up -d database replica-init
+docker compose -p surirent-replica-test -f docker-compose.yml -f docker-compose.replica-test.yml logs replica-init
+```
+
+The initializer must finish successfully and report `Replica set is ready`.
+The app's overlay configuration waits for initialization and uses the replica
+set URI. Preserve the same key and credentials across restarts. Do not copy
+production or sandbox data into this test environment.
+
 ## WhatsApp and SMS (Messente)
 
 In Kiosk Beheer, open **Instellingen > WhatsApp & SMS (Messente)**. Each company

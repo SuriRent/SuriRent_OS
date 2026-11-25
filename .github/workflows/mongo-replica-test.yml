@@ -1,0 +1,77 @@
+name: MongoDB replica deployment test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - 'docker-compose.replica-test.yml'
+      - 'deploy/mongo-replica/**'
+      - '.github/workflows/mongo-replica-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  replica-deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COMPOSE_PROJECT_NAME: surirent-replica-ci
+      COMPOSE_FILE: docker-compose.yml:docker-compose.replica-test.yml
+      MONGO_ROOT_USERNAME: testuser
+      MONGO_ROOT_PASSWORD: testpassword
+      MONGO_REPLICA_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      JWT_SECRET: test-only-jwt-secret
+      PDF_AES_PASSWORD: test-only-pdf-password
+      ADMIN_EMAIL: admin@example.test
+      ADMIN_PASSWORD: test-only-admin-password
+      SUPERADMIN_EMAIL: superadmin@example.test
+      SUPERADMIN_PASSWORD: test-only-superadmin-password
+      APP_PUBLIC_URL: https://app.example.test
+      CORS_ORIGINS: https://app.example.test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Start replica set
+        run: docker compose up -d database replica-init
+      - name: Verify transactions and restart
+        shell: bash
+        run: |
+          set -eu
+          wait_for_initializer() {
+            for i in {1..120}; do
+              container="$(docker compose ps -aq replica-init)"
+              if [ -n "$container" ] && [ "$(docker inspect -f '{{.State.Status}}' "$container")" = "exited" ]; then
+                docker compose logs replica-init
+                [ "$(docker inspect -f '{{.State.ExitCode}}' "$container")" = "0" ]
+                return
+              fi
+              sleep 1
+            done
+            docker compose logs database replica-init
+            return 1
+          }
+          verify_transaction() {
+            docker compose exec -T database mongosh --quiet 'mongodb://database:27017/?replicaSet=rs0' --eval '
+              if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+              const session = db.getMongo().startSession();
+              const testDb = session.getDatabase("replica_ci");
+              session.startTransaction();
+              testDb.checks.insertOne({value: 1});
+              session.commitTransaction();
+              if (testDb.checks.countDocuments({value: 1}) !== 1) throw new Error("Transaction not committed");
+              testDb.checks.deleteMany({});
+              session.endSession();
+            '
+          }
+          wait_for_initializer
+          verify_transaction
+          docker compose restart database
+          docker compose up -d --force-recreate replica-init
+          wait_for_initializer
+          verify_transaction
+      - name: Remove isolated containers and volume
+        if: always()
+        run: docker compose down --volumes --remove-orphans

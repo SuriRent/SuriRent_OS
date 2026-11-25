@@ -1,0 +1,28 @@
+services:
+  app:
+    environment:
+      MONGO_URL: mongodb://${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}@database:27017/${DB_NAME:-vastgoed_kiosk}?authSource=admin&replicaSet=rs0
+    depends_on:
+      replica-init:
+        condition: service_completed_successfully
+
+  database:
+    entrypoint: ["bash", "/etc/mongo-replica/entrypoint.sh"]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/run/mongo-replica/key"]
+    environment:
+      MONGO_REPLICA_KEY: ${MONGO_REPLICA_KEY:?Set MONGO_REPLICA_KEY}
+    volumes:
+      - ./deploy/mongo-replica/entrypoint.sh:/etc/mongo-replica/entrypoint.sh:ro
+
+  replica-init:
+    image: mongo:7.0
+    restart: "no"
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+    volumes:
+      - ./deploy/mongo-replica/init.js:/etc/mongo-replica/init.js:ro
+    entrypoint: ["mongosh", "--quiet", "mongodb://database:27017/?directConnection=true", "--file", "/etc/mongo-replica/init.js"]
