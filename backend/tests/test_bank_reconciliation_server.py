@@ -33,6 +33,32 @@ with patch.dict(sys.modules, mock_modules), patch.dict(os.environ, {
 
 
 class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
+    async def test_sms_payment_info_hides_mope_for_first_release(self):
+        import sms_payment_links
+
+        grant = {"company_id": "c1", "tenant_id": "t1", "invoice_ids": ["i1"], "installments": []}
+        database = SimpleNamespace(
+            sms_payment_links=object(),
+            tenants=SimpleNamespace(find_one=AsyncMock(return_value={"id": "t1"})),
+            companies=SimpleNamespace(find_one=AsyncMock(return_value={"name": "Bedrijf"})),
+            invoices=SimpleNamespace(find=lambda *_args: SimpleNamespace(to_list=AsyncMock(return_value=[]))),
+        )
+        stripe = SimpleNamespace(
+            _active=lambda _: {"enabled": True, "methods": ["card"]},
+            _cfg_doc=AsyncMock(return_value={"stripe_config": {}}),
+        )
+        mope_config = AsyncMock(return_value={"enabled": True})
+        mope = SimpleNamespace(_active=lambda _: True, _config=mope_config)
+        with patch.object(server, "db", database), \
+                patch.object(server, "_enrich_invoices_batch", AsyncMock(return_value=[])), \
+                patch.object(server, "_company_has_plan_feature", AsyncMock(return_value=True)), \
+                patch.object(sms_payment_links, "get_payment_grant", AsyncMock(return_value=grant)), \
+                patch.dict(sys.modules, {"routes.company_stripe": stripe, "routes.company_mope": mope}):
+            result = await server.sms_payment_info(server.Response(), "token")
+        self.assertEqual([method["id"] for method in result["online_methods"]], ["card"])
+        self.assertFalse(result["online_payment_available"])
+        mope_config.assert_not_awaited()
+
     async def test_startup_warns_without_automatically_relinking_payments(self):
         payments = SimpleNamespace(find_one=AsyncMock(return_value={"_id": "legacy"}), update_one=AsyncMock())
         invoices = SimpleNamespace(update_one=AsyncMock())

@@ -125,6 +125,14 @@ class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
         guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
         self.assertEqual(guard["owner"], "other")
 
+    async def test_mope_is_unavailable_without_creating_attempt(self):
+        with patch("sms_payment_checkout.create_sms_mope_request", new_callable=AsyncMock) as create:
+            with self.assertRaises(PaymentAttemptConflict) as error:
+                await start_sms_checkout(self.db, self.client, token=self.token, item=self.item, method="mope")
+        self.assertIn("nog niet beschikbaar", str(error.exception))
+        create.assert_not_awaited()
+        self.assertEqual(await self.db.sms_payment_attempts.count_documents({}), 0)
+
     async def test_finish_cannot_read_other_attempt(self):
         with self.assertRaises(PaymentAttemptConflict):
             await finish_sms_checkout(self.db, self.client, token=self.token, item=self.item, attempt_id="other")
@@ -150,7 +158,8 @@ class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
             _active=lambda _: True, _config=AsyncMock(return_value={"api_token": "test-token"}),
             _request_api=request, _response_payload=lambda response: response.payload, _provider_error=Mock(),
         )
-        with patch.dict(sys.modules, {"routes.company_mope": fake_mope}):
+        with patch.dict(sys.modules, {"routes.company_mope": fake_mope}), \
+                patch("sms_payment_checkout.SMS_MOPE_READY", True):
             started = await start_sms_checkout(self.db, self.client, token=token, item=item, method="mope")
             provider_response.payload = {
                 "id": "m1", "status": "paid", "amount": 7500, "currency": {"code": "EUR"},

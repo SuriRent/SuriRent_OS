@@ -12,6 +12,9 @@ from sms_payment_providers import create_sms_mope_request, create_sms_stripe_int
 from sms_payment_reconciliation import reconcile_sms_payment
 
 
+SMS_MOPE_READY = False
+
+
 async def _authorized_grant(db, token: str, item: dict) -> dict:
     grant = await get_payment_grant(db.sms_payment_links, token)
     if not grant:
@@ -85,6 +88,8 @@ async def start_sms_checkout(db, client, *, token: str, item: dict, method: str)
     grant = await _authorized_grant(db, token, item)
     if method not in ("card", "ideal", "mope"):
         raise PaymentAttemptConflict("Ongeldige betaalmethode")
+    if method == "mope" and not SMS_MOPE_READY:
+        raise PaymentAttemptConflict("Mopé is voor deze betaallink nog niet beschikbaar")
     amount, currency = await _current_amount(db, grant, item)
     from routes import _deps
 

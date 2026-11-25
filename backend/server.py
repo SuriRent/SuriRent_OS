@@ -21607,6 +21607,7 @@ def _receipt_template(cfg: dict, payment_id: Optional[str], name: str, company: 
 async def sms_payment_info(response: Response, token: str = Header(default="", alias="X-Sms-Payment-Token")):
     from routes.company_mope import _active as mope_active, _config as mope_config
     from routes.company_stripe import _active as stripe_active, _cfg_doc as stripe_config
+    from sms_payment_checkout import SMS_MOPE_READY
     from sms_payment_links import get_payment_grant, payment_items
 
     headers = {
@@ -21640,7 +21641,7 @@ async def sms_payment_info(response: Response, token: str = Header(default="", a
         if stripe["enabled"]:
             methods.extend({"id": method, "label": "Creditcard" if method == "card" else "iDEAL"}
                            for method in stripe["methods"])
-    if await _company_has_plan_feature(cid, "allow_mope") and mope_active(await mope_config(cid)):
+    if SMS_MOPE_READY and await _company_has_plan_feature(cid, "allow_mope") and mope_active(await mope_config(cid)):
         methods.append({"id": "mope", "label": "Mopé"})
     banks = [{"country": label, "account": company[key]} for key, label in (
         ("bank_account_sr", "Suriname"), ("bank_account_nl", "Nederland"),

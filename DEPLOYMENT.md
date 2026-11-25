@@ -149,6 +149,9 @@ remove Meta restrictions or the 24-hour window.
 The experimental payment-link checkout is not connected to reminder sending
 and remains disabled. Do not send these links to customers until all payment
 paths, database transactions and real provider flows are verified end to end.
+The first planned release is Stripe only. Mopé is separately disabled for SMS
+checkout even when enabled elsewhere; a later release requires its own real
+provider test and review.
 
 The in-development attempt journal reserves at most one SMS checkout per
 company and tenant and leaves uncertain provider requests blocked for

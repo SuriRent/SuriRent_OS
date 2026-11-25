@@ -76,6 +76,6 @@ def test_link_returns_only_scoped_open_items_and_enabled_methods(monkeypatch):
     assert find_calls[0][0] == {"id": {"$in": ["i1"]}, "company_id": "c1", "tenant_id": "t1"}
     body = response.json()
     assert [item["kind"] for item in body["items"]] == ["invoice", "installment"]
-    assert [item["id"] for item in body["online_methods"]] == ["card", "mope"]
+    assert [item["id"] for item in body["online_methods"]] == ["card"]
     assert body["online_payment_available"] is False
     assert body["bank_accounts"] == [{"country": "Suriname", "account": "123"}]
