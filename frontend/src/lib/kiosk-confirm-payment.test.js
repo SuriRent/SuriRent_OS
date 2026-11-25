@@ -1,4 +1,12 @@
-import { buildConfirmPayment, canChangeConfirmAmount, parseConfirmAmount } from './kiosk-confirm-payment';
+import { buildConfirmPayment, canChangeConfirmAmount, canUseOnlineProvider, parseConfirmAmount } from './kiosk-confirm-payment';
+
+test('online provider accepts a single installment but not a mixed or multiple selection', () => {
+  expect(canUseOnlineProvider({ amount: 50, plan_items: [], plain_amount: 50 })).toBe(true);
+  expect(canUseOnlineProvider({ amount: 50, plan_items: [{ amount: 50 }], plain_amount: 0 })).toBe(true);
+  expect(canUseOnlineProvider({ amount: 75, plan_items: [{ amount: 50 }], plain_amount: 25 })).toBe(false);
+  expect(canUseOnlineProvider({ amount: 50, plan_items: [{ amount: 25 }, { amount: 25 }], plain_amount: 0 })).toBe(false);
+  expect(canUseOnlineProvider({ amount: 50, plan_items: [{ amount: 40 }], plain_amount: 0 })).toBe(false);
+});
 
 const cash = { method: 'contant', amount: 125, plain_amount: 125, currency: 'SRD', invoice_ids: ['first', 'second'] };
 

@@ -296,6 +296,29 @@ class InstallmentRouteTests(unittest.IsolatedAsyncioTestCase):
         self.mope.assert_awaited_once_with("mp1", company_id="c1", tenant_id="t1", amount=35, currency="USD")
         self.assertEqual(self.pay.await_args.kwargs["mope_payment_request_id"], "mp1")
 
+    async def test_kiosk_stripe_requires_reference_and_valid_method(self):
+        for body in (
+            server._KioskPayInstallmentIn(method="creditcard", amount=50),
+            server._KioskPayInstallmentIn(method="ideal", amount=50),
+            server._KioskPayInstallmentIn(method="contant", amount=50, stripe_payment_intent_id="pi1"),
+        ):
+            with self.subTest(method=body.method), self.assertRaises(HTTPException) as error:
+                await server.kiosk_pay_installment("plan1", 1, body, {"company_id": "c1"})
+            self.assertEqual(error.exception.status_code, 400)
+        self.pay.assert_not_awaited()
+
+    async def test_kiosk_stripe_consumed_inside_core_with_current_amount_and_currency(self):
+        module = types.ModuleType("routes.company_stripe")
+        module.consume_kiosk_stripe_payment = AsyncMock()
+        with patch.dict(sys.modules, {"routes.company_stripe": module}):
+            for method, provider_method in (("creditcard", "card"), ("ideal", "ideal")):
+                body = server._KioskPayInstallmentIn(method=method, amount=50, stripe_payment_intent_id="pi1")
+                await server.kiosk_pay_installment("plan1", 1, body, {"company_id": "c1"})
+                module.consume_kiosk_stripe_payment.assert_awaited_with(
+                    "c1", "pi1", tenant_id="t1", amount=35, currency="USD", method=provider_method,
+                )
+                self.assertEqual(self.pay.await_args.kwargs["stripe_payment_intent_id"], "pi1")
+
 
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

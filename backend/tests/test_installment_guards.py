@@ -4,7 +4,7 @@ import os
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -14,8 +14,10 @@ from payment_plans import _build_pay_core
 from sms_payment_attempts import PaymentAttemptConflict, tenant_payment_key
 from tenant_payment_guard import acquire_payment_guard
 from test_bank_reconciliation_guard import Records
-from test_company_stripe_consumption import matches
+from test_company_stripe_consumption import FakePayments, matches
 from test_tenant_payment_guard import Guards
+from routes import _deps
+from routes.company_stripe import consume_kiosk_stripe_payment
 
 
 class Cursor:
@@ -228,6 +230,47 @@ class InstallmentGuardCases:
         self.assertEqual(result["status"], "completed")
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
 
+    async def test_kiosk_stripe_claim_and_installment_are_recorded_once(self):
+        await self.db.kiosk_stripe_payments.insert_one({
+            "payment_intent_id": "pi1", "company_id": "c1", "tenant_id": "t1",
+            "status": "paid", "consumed": False, "amount": 50.0, "currency": "SRD", "method": "card",
+        })
+
+        async def consume(amount, currency):
+            await consume_kiosk_stripe_payment(
+                "c1", "pi1", tenant_id="t1", amount=amount, currency=currency, method="card",
+            )
+
+        with patch.object(_deps, "db", self.db):
+            await self.pay(method="creditcard", stripe_payment_intent_id="pi1", consume_provider=consume)
+            tx = await self.db.kiosk_stripe_payments.find_one({"payment_intent_id": "pi1"})
+            self.assertTrue(tx["consumed"])
+            self.assertEqual((await self.db.payments.find_one({"id": "payment1"}))["stripe_payment_intent_id"], "pi1")
+            with self.assertRaises(HTTPException):
+                await self.pay(method="creditcard", stripe_payment_intent_id="pi1", consume_provider=consume)
+            with self.assertRaises(HTTPException):
+                await consume(50, "SRD")
+        self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
+
+    async def test_kiosk_stripe_rejects_partial_intent_and_retains_guard(self):
+        await self.db.kiosk_stripe_payments.insert_one({
+            "payment_intent_id": "pi1", "company_id": "c1", "tenant_id": "t1",
+            "status": "paid", "consumed": False, "amount": 75.0, "currency": "SRD", "method": "ideal",
+        })
+
+        async def consume(amount, currency):
+            await consume_kiosk_stripe_payment(
+                "c1", "pi1", tenant_id="t1", amount=amount, currency=currency, method="ideal",
+            )
+
+        with patch.object(_deps, "db", self.db), self.assertRaises(HTTPException):
+            await self.pay(method="ideal", stripe_payment_intent_id="pi1", consume_provider=consume)
+        self.assertIsNone(await self.db.payments.find_one({"id": "payment1"}))
+        tx = await self.db.kiosk_stripe_payments.find_one({"payment_intent_id": "pi1"})
+        self.assertFalse(tx["consumed"])
+        guard = await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")})
+        self.assertEqual(guard["provider_reference"], "pi1")
+
 
 class InstallmentGuardTests(InstallmentGuardCases, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -235,6 +278,7 @@ class InstallmentGuardTests(InstallmentGuardCases, unittest.IsolatedAsyncioTestC
             payment_plans=Collection(), payment_plan_installments=Collection(),
             payments=Collection(), invoices=Collection(), companies=Collection(),
             tenants=Collection(), apartments=Collection(), tenant_payment_guards=Guards(),
+            kiosk_stripe_payments=FakePayments(),
         )
         await self.prepare()
 

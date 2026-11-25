@@ -68,7 +68,7 @@ import ImpersonationBanner from '../../components/ImpersonationBanner';
 import CompanySupportNotice from '../../components/CompanySupportNotice';
 import { emitNfc, subscribeNfc } from '../../lib/nfc-bus';
 import { buildNfcPayment } from '../../lib/kiosk-nfc-payment';
-import { buildConfirmPayment, canChangeConfirmAmount, parseConfirmAmount } from '../../lib/kiosk-confirm-payment';
+import { buildConfirmPayment, canChangeConfirmAmount, canUseOnlineProvider, parseConfirmAmount } from '../../lib/kiosk-confirm-payment';
 import { readKioskSelectCache, fetchKioskSelect, clearKioskSelectCache, prefetchKioskSelect, invalidateKioskSelect } from '../../lib/kiosk-cache';
 import { useAuth } from '../../lib/auth';
 const noop = () => {};
@@ -3365,7 +3365,13 @@ function MethodSelect({ payload, overview, onBack, onConfirm, posLayout = false 
   const [stripeMethod, setStripeMethod] = useState(null);
   const [mopeOpen, setMopeOpen] = useState(false);
   const [bankOpen, setBankOpen] = useState(false);
+  const [methodError, setMethodError] = useState('');
   const pick = (m) => {
+    if ((m.stripe || m.v === 'mope') && !canUseOnlineProvider(payload)) {
+      setMethodError('Betaal termijnen afzonderlijk met creditcard, iDEAL of Mopé. Selecteer één termijn zonder andere bedragen.');
+      return;
+    }
+    setMethodError('');
     if (m.stripe) setStripeMethod(m.stripe);
     else if (m.v === 'mope') setMopeOpen(true);
     else if (m.v === 'bank') setBankOpen(true);
@@ -3424,6 +3430,7 @@ function MethodSelect({ payload, overview, onBack, onConfirm, posLayout = false 
                 <h2>{tenant.name}</h2>
                 <span>Appartement {apt.number}</span>
               </div>
+              {methodError && <p role="alert" className="mx-4 mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{methodError}</p>}
               <div className="kiosk-pos-stage-actions">
                 <div className="kiosk-pos-stage-total">
                   <span>Te betalen</span>
@@ -3636,6 +3643,7 @@ function PaymentConfirm({ payload, overview, onBack, onSuccess, posLayout = fals
         const pr = await api.post(withKioskEmployee(`/kiosk/payment-plans/${pi.plan_id}/installments/${pi.seq}/pay`), {
           method: confirmPayload.method,
           amount: pi.amount,
+          stripe_payment_intent_id: confirmPayload.stripe_payment_intent_id,
           mope_payment_request_id: confirmPayload.mope_payment_request_id,
           note: `Operator Kiosk — termijn ${pi.seq}`,
         });

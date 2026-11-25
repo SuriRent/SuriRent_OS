@@ -22413,6 +22413,7 @@ class _KioskPayInstallmentIn(BaseModel):
     amount: Optional[float] = None
     employee_id: Optional[str] = None
     employee_pin: Optional[str] = None
+    stripe_payment_intent_id: Optional[str] = None
     mope_payment_request_id: Optional[str] = None
 
 
@@ -22431,6 +22432,11 @@ async def kiosk_pay_installment(
     if not plan:
         raise HTTPException(status_code=404, detail="Regeling niet gevonden")
 
+    if body.method in ("creditcard", "ideal"):
+        if not body.stripe_payment_intent_id or not body.amount:
+            raise HTTPException(status_code=400, detail="Creditcard/iDEAL vereist een voltooide Stripe-betaling")
+    elif body.stripe_payment_intent_id:
+        raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Stripe-betaling")
     if body.method == "mope":
         if not body.mope_payment_request_id:
             raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
@@ -22452,23 +22458,31 @@ async def kiosk_pay_installment(
         kiosk_emp_id, kiosk_emp_name = emp["id"], emp.get("name", "")
 
     async def consume_provider(amount, currency):
-        from routes.company_mope import consume_mope_payment
-        await consume_mope_payment(
-            body.mope_payment_request_id, company_id=cid, tenant_id=plan["tenant_id"],
-            amount=amount, currency=currency,
-        )
+        if body.method in ("creditcard", "ideal"):
+            from routes.company_stripe import consume_kiosk_stripe_payment
+            await consume_kiosk_stripe_payment(
+                cid, body.stripe_payment_intent_id, tenant_id=plan["tenant_id"],
+                amount=amount, currency=currency, method="card" if body.method == "creditcard" else "ideal",
+            )
+        else:
+            from routes.company_mope import consume_mope_payment
+            await consume_mope_payment(
+                body.mope_payment_request_id, company_id=cid, tenant_id=plan["tenant_id"],
+                amount=amount, currency=currency,
+            )
         body.amount = amount
 
     out = await _plan_core["pay_installment_for"](
         plan, seq,
         method=body.method, amount=body.amount, note=body.note or "",
+        stripe_payment_intent_id=body.stripe_payment_intent_id,
         mope_payment_request_id=body.mope_payment_request_id,
         received_by=kiosk_emp_name or "Operator Kiosk",
         approved_by_label=kiosk_emp_name or "Operator Kiosk",
         status=status,
         kiosk_employee_id=kiosk_emp_id,
         kiosk_employee_name=kiosk_emp_name,
-        consume_provider=consume_provider if body.method == "mope" else None,
+        consume_provider=consume_provider if body.method in ("creditcard", "ideal", "mope") else None,
     )
     # Betaling meegeven zodat de kiosk direct de kwitantie kan tonen/printen.
     inst = await db.payment_plan_installments.find_one({"plan_id": plan_id, "sequence": seq}, {"_id": 0, "payment_id": 1})

@@ -25,3 +25,10 @@ export function buildConfirmPayment(payload, amount) {
     note: `Gedeeltelijke betaling — ${fmtMoney(amount, payload.currency || 'SRD')}`,
   };
 }
+
+export function canUseOnlineProvider(payload) {
+  const plans = payload.plan_items || [];
+  if (!plans.length) return true;
+  return plans.length === 1 && Number(payload.plain_amount || 0) === 0
+    && Number(payload.amount) > 0 && Number(payload.amount) === Number(plans[0].amount);
+}
