@@ -731,7 +731,11 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
 
     async def test_tenant_deletion_failure_retains_guard(self):
-        with patch.object(self.db.tenants, "delete_one", AsyncMock(side_effect=RuntimeError("failed"))):
+        tenants = self.db.tenants
+        database = SimpleNamespace(tenants=tenants, apartments=self.db.apartments,
+                                   tenant_payment_guards=self.db.tenant_payment_guards)
+        with patch.object(server, "db", database), \
+                patch.object(tenants, "delete_one", AsyncMock(side_effect=RuntimeError("failed"))):
             with self.assertRaises(HTTPException) as error:
                 await server.delete_tenant("t1", {})
         self.assertEqual(error.exception.status_code, 500)
