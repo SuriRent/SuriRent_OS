@@ -19,6 +19,7 @@ on:
       - 'backend/tests/test_sms_payment_attempts.py'
       - 'backend/tests/test_sms_payment_providers.py'
       - 'backend/tests/test_sms_payment_checkout.py'
+      - 'backend/tests/test_sms_payment_stripe_testmode.py'
       - 'backend/tests/test_tenant_payment_guard.py'
       - 'backend/tests/test_bank_reconciliation_guard.py'
       - 'backend/tests/test_bank_reconciliation_server.py'
@@ -74,6 +75,7 @@ jobs:
           python -m unittest discover -s backend/tests -p 'test_sms_payment_attempts.py' -v
           python -m unittest discover -s backend/tests -p 'test_sms_payment_providers.py' -v
           python -m unittest discover -s backend/tests -p 'test_sms_payment_checkout.py' -v
+          python -m unittest discover -s backend/tests -p 'test_sms_payment_stripe_testmode.py' -v
           python -m unittest discover -s backend/tests -p 'test_tenant_payment_guard.py' -v
           python -m unittest discover -s backend/tests -p 'test_bank_reconciliation_guard.py' -v
           python -m unittest discover -s backend/tests -p 'test_bank_reconciliation_server.py' -v
