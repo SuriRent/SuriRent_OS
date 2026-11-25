@@ -132,6 +132,13 @@ attempts for manual investigation. It is not scheduled or exposed; closing the
 browser does not yet trigger recovery. Any future caller must authorize the
 exact attempt and run recovery independently of the link's expiry.
 
+The experimental checkout orchestrator accepts only an item authorized by an
+unexpired SMS grant, derives its amount from the database, and checks the
+provider before booking. Its public start and finish endpoints are hard-disabled;
+there is no checkout UI or automatic recovery yet. Stripe currently accepts EUR
+or SRD with a current configured rate; USD and amounts below the Stripe minimum
+are rejected, not silently converted or increased.
+
 The in-development booking code supports individual invoices without an active
 plan and specific installments on consistent plans. Inconsistent balances,
 pending installment payments, or overlapping plans require manual review.

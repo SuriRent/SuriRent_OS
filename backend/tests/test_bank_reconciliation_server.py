@@ -31,6 +31,25 @@ with patch.dict(sys.modules, mock_modules), patch.dict(os.environ, {
     import server
 
 
+class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
+    async def test_public_start_and_finish_remain_disabled(self):
+        requests = (
+            lambda response: server.sms_checkout_start(
+                server.SmsCheckoutStartIn(item={"kind": "invoice", "id": "i1"}, method="card"), response, "token",
+            ),
+            lambda response: server.sms_checkout_finish(
+                server.SmsCheckoutFinishIn(item={"kind": "invoice", "id": "i1"}, attempt_id="attempt"),
+                response, "token",
+            ),
+        )
+        for request in requests:
+            response = server.Response()
+            with self.assertRaises(HTTPException) as error:
+                await request(response)
+            self.assertEqual(error.exception.status_code, 503)
+            self.assertEqual(error.exception.headers["Cache-Control"], "private, no-store")
+
+
 class BankReconciliationServerTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def tearDownClass(cls):

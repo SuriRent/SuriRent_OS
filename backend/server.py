@@ -21350,6 +21350,56 @@ async def sms_payment_info(response: Response, token: str = Header(default="", a
     }
 
 
+_SMS_CHECKOUT_READY = False
+_SMS_PAYMENT_HEADERS = {
+    "Cache-Control": "private, no-store",
+    "Referrer-Policy": "no-referrer",
+    "X-Robots-Tag": "noindex, nofollow",
+}
+
+
+class SmsCheckoutStartIn(BaseModel):
+    item: dict
+    method: str
+
+
+class SmsCheckoutFinishIn(BaseModel):
+    item: dict
+    attempt_id: str
+
+
+@api.post("/public/sms-payment/start")
+async def sms_checkout_start(
+    body: SmsCheckoutStartIn, response: Response, token: str = Header(default="", alias="X-Sms-Payment-Token"),
+):
+    response.headers.update(_SMS_PAYMENT_HEADERS)
+    if not _SMS_CHECKOUT_READY:
+        raise HTTPException(status_code=503, detail="Online betalen is nog niet beschikbaar.", headers=_SMS_PAYMENT_HEADERS)
+    from sms_payment_attempts import PaymentAttemptConflict
+    from sms_payment_checkout import start_sms_checkout
+
+    try:
+        return await start_sms_checkout(db, client, token=token, item=body.item, method=body.method)
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc), headers=_SMS_PAYMENT_HEADERS) from exc
+
+
+@api.post("/public/sms-payment/finish")
+async def sms_checkout_finish(
+    body: SmsCheckoutFinishIn, response: Response, token: str = Header(default="", alias="X-Sms-Payment-Token"),
+):
+    response.headers.update(_SMS_PAYMENT_HEADERS)
+    if not _SMS_CHECKOUT_READY:
+        raise HTTPException(status_code=503, detail="Online betalen is nog niet beschikbaar.", headers=_SMS_PAYMENT_HEADERS)
+    from sms_payment_attempts import PaymentAttemptConflict
+    from sms_payment_checkout import finish_sms_checkout
+
+    try:
+        return await finish_sms_checkout(db, client, token=token, item=body.item, attempt_id=body.attempt_id)
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc), headers=_SMS_PAYMENT_HEADERS) from exc
+
+
 async def _send_company_sms(company_id: str, cfg: dict, to: str, body: str, purpose: str):
     from urllib.parse import urlsplit
     from messente_service import send_sms, _validate_number
