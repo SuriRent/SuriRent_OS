@@ -11802,7 +11802,7 @@ async def _recompute_tenant_invoices_locked(tenant_id: str, cid: str):
     from sms_payment_attempts import PaymentAttemptConflict
     from sms_payment_booking import _cents
 
-    tenant = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0, "name": 1})
+    tenant = await db.tenants.find_one({"id": tenant_id, "company_id": cid}, {"_id": 0, "id": 1, "name": 1})
     if not tenant:
         return HTTPException(status_code=404, detail="Huurder niet gevonden")
     if await db.payment_plans.find_one({"company_id": cid, "tenant_id": tenant_id, "status": "active"}):
