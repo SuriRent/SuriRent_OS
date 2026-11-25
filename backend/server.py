@@ -11156,7 +11156,8 @@ async def payment_processing_guards(user=Depends(get_current_user)):
     docs = await db.tenant_payment_guards.find(
         {"company_id": cid, "kind": "legacy",
          "operation": {"$in": ["bank_reconciliation", "payment_approval", "payment_rejection",
-                                "payment_reassignment", "payment_creation", "stripe_request", "mope_request"]}},
+                                "payment_reassignment", "payment_creation", "stripe_request", "mope_request",
+                                "installment_payment"]}},
         {"_id": 0, "tenant_id": 1, "operation": 1, "operation_id": 1, "created_at": 1},
     ).sort("created_at", -1).to_list(200)
     return [{
@@ -22321,35 +22322,6 @@ async def pwa_manifest(request: Request, role: str = "beheer", slug: str | None 
 _plan_core = _build_plan_pay_core(db, _pp_helpers)
 
 
-async def _mope_installment_amount(plan: dict, seq: int, requested_amount: Optional[float]) -> float:
-    if plan.get("status") != "active":
-        raise HTTPException(status_code=400, detail="Regeling is niet actief")
-    installment = await db.payment_plan_installments.find_one(
-        {"plan_id": plan["id"], "sequence": seq}, {"_id": 0, "amount": 1, "status": 1},
-    )
-    if not installment:
-        raise HTTPException(status_code=404, detail="Termijn niet gevonden")
-    if installment.get("status") == "paid":
-        raise HTTPException(status_code=400, detail="Termijn is al betaald")
-    try:
-        amount = round(float(requested_amount if requested_amount is not None else installment["amount"]), 2)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Ongeldig termijnbedrag")
-    if not math.isfinite(amount) or amount <= 0:
-        raise HTTPException(status_code=400, detail="Ongeldig termijnbedrag")
-    if plan.get("invoice_ids"):
-        invoice_open = 0.0
-        async for invoice in db.invoices.find(
-            {"id": {"$in": plan["invoice_ids"]}, "company_id": plan["company_id"]},
-            {"_id": 0, "amount": 1, "paid_amount": 1},
-        ):
-            invoice_open += max(0.0, float(invoice.get("amount") or 0) - float(invoice.get("paid_amount") or 0))
-        if invoice_open <= 0.01:
-            raise HTTPException(status_code=400, detail="Gekoppelde factuur is al volledig betaald")
-        amount = round(min(amount, invoice_open), 2)
-    return amount
-
-
 # ---------- Tenant Kiosk — Betalingsregelingen ----------
 @app.get("/api/tenant-portal/payment-plans")
 async def tenant_portal_payment_plans(tenant=Depends(get_tenant_session)):
@@ -22384,23 +22356,25 @@ async def tenant_portal_pay_installment(
     if body.method == "creditcard":
         if not body.stripe_payment_intent_id or not body.amount:
             raise HTTPException(status_code=400, detail="Creditcard vereist een voltooide Stripe-betaling")
-        amount = await _mope_installment_amount(plan, seq, body.amount)
-        await _tenant_consume_stripe(
-            tenant, body.stripe_payment_intent_id, amount, plan.get("currency") or "SRD",
-        )
-        body.amount = amount
     elif body.stripe_payment_intent_id:
         raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Stripe-betaling")
     if body.method == "mope":
         if not body.mope_payment_request_id:
             raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
-        amount = await _mope_installment_amount(plan, seq, body.amount)
-        from routes.company_mope import consume_mope_payment
-        await consume_mope_payment(
-            body.mope_payment_request_id, company_id=tenant["company_id"], tenant_id=tenant["id"],
-            amount=amount, currency=plan.get("currency") or "SRD",
-        )
+
+    async def consume_provider(amount, currency):
+        if body.method == "creditcard":
+            await _tenant_consume_stripe(
+                tenant, body.stripe_payment_intent_id, amount, currency,
+            )
+        elif body.method == "mope":
+            from routes.company_mope import consume_mope_payment
+            await consume_mope_payment(
+                body.mope_payment_request_id, company_id=tenant["company_id"], tenant_id=tenant["id"],
+                amount=amount, currency=currency,
+            )
         body.amount = amount
+
     out = await _plan_core["pay_installment_for"](
         plan, seq,
         method=body.method, amount=body.amount, note=body.note or "",
@@ -22409,6 +22383,7 @@ async def tenant_portal_pay_installment(
         received_by=tenant.get("name") or "Huurder Kiosk",
         approved_by_label=tenant.get("name") or "Huurder Kiosk",
         status="pending_approval" if body.method == "pin" else "approved",
+        consume_provider=consume_provider if body.method in ("creditcard", "mope") else None,
     )
     # Notify admins (zelfde flow als bij /tenant-portal/payments)
     try:
@@ -22459,13 +22434,6 @@ async def kiosk_pay_installment(
     if body.method == "mope":
         if not body.mope_payment_request_id:
             raise HTTPException(status_code=400, detail="Mopé vereist een voltooid betaalverzoek")
-        amount = await _mope_installment_amount(plan, seq, body.amount)
-        from routes.company_mope import consume_mope_payment
-        await consume_mope_payment(
-            body.mope_payment_request_id, company_id=cid, tenant_id=plan["tenant_id"],
-            amount=amount, currency=plan.get("currency") or "SRD",
-        )
-        body.amount = amount
     elif body.mope_payment_request_id:
         raise HTTPException(status_code=400, detail="Ongeldige combinatie van methode en Mopé-betaling")
 
@@ -22483,6 +22451,14 @@ async def kiosk_pay_installment(
             raise HTTPException(status_code=401, detail="Ongeldige PIN")
         kiosk_emp_id, kiosk_emp_name = emp["id"], emp.get("name", "")
 
+    async def consume_provider(amount, currency):
+        from routes.company_mope import consume_mope_payment
+        await consume_mope_payment(
+            body.mope_payment_request_id, company_id=cid, tenant_id=plan["tenant_id"],
+            amount=amount, currency=currency,
+        )
+        body.amount = amount
+
     out = await _plan_core["pay_installment_for"](
         plan, seq,
         method=body.method, amount=body.amount, note=body.note or "",
@@ -22492,6 +22468,7 @@ async def kiosk_pay_installment(
         status=status,
         kiosk_employee_id=kiosk_emp_id,
         kiosk_employee_name=kiosk_emp_name,
+        consume_provider=consume_provider if body.method == "mope" else None,
     )
     # Betaling meegeven zodat de kiosk direct de kwitantie kan tonen/printen.
     inst = await db.payment_plan_installments.find_one({"plan_id": plan_id, "sequence": seq}, {"_id": 0, "payment_id": 1})

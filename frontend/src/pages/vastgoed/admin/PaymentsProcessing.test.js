@@ -61,6 +61,7 @@ test('toont een achtergebleven betaalregistratie', () => {
 test.each([
   ['stripe_request', 'Stripe-betaalverzoek'],
   ['mope_request', 'Mopé-betaalverzoek'],
+  ['installment_payment', 'Termijnbetaling'],
 ])('toont een achtergebleven providerverzoek: %s', (operation, label) => {
   const html = renderToStaticMarkup(<ProcessingPayments
     payments={[]}

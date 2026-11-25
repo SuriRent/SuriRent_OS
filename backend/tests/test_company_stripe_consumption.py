@@ -12,6 +12,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from routes import _deps
 from payment_plans import _build_pay_core
+from test_tenant_payment_guard import Guards
 
 with patch.object(_deps, "get_current_user", lambda: {}), \
         patch.object(_deps, "get_kiosk_session", lambda: {}), \
@@ -166,8 +167,10 @@ class InstallmentStripeReferenceTests(unittest.IsolatedAsyncioTestCase):
                        "status": "pending", "due_date": "2027-01-01"}
         cursor = SimpleNamespace(sort=lambda *_args: SimpleNamespace(to_list=AsyncMock(return_value=[installment])))
         db = SimpleNamespace(
+            tenant_payment_guards=Guards(),
             payment_plan_installments=SimpleNamespace(
-                find_one=AsyncMock(return_value=installment), update_one=AsyncMock(),
+                find_one=AsyncMock(return_value=installment),
+                update_one=AsyncMock(return_value=SimpleNamespace(matched_count=1)),
                 count_documents=AsyncMock(return_value=1), find=lambda *_args: cursor,
             ),
             payments=SimpleNamespace(insert_one=AsyncMock()),

@@ -181,6 +181,11 @@ request is recorded. An uncertain request retains a `stripe_request` or
 `mope_request` guard with the local request ID. Stripe uses that ID as an
 idempotency key and metadata; Mopé includes it as its order ID. Check the
 provider and local records before manual recovery.
+Admin, kiosk and tenant-portal installment payments hold the tenant guard
+before consuming a provider payment and through allocation and plan updates.
+Failed or interrupted payments retain an `installment_payment` guard with the
+planned payment ID. Review the provider, installment, payment and linked
+invoices before any manual repair; there is no automatic unlock.
 
 The link is a bearer credential valid for 30 days. Nginx disables access
 logging for `/b/` and sends no-store, no-referrer and noindex headers for that

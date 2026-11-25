@@ -257,6 +257,46 @@ class PaymentCreationServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await self.db.tenant_payment_guards.find_one({"_id": tenant_payment_key("c1", "t1")}))
 
 
+class InstallmentRouteTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = SimpleNamespace(payment_plans=Records(), payments=Records(), payment_plan_installments=Records())
+        await self.db.payment_plans.insert_one({
+            "id": "plan1", "company_id": "c1", "tenant_id": "t1", "currency": "SRD", "status": "active",
+        })
+        self.stripe = AsyncMock()
+        self.mope = AsyncMock()
+        module = types.ModuleType("routes.company_mope")
+        module.consume_mope_payment = self.mope
+
+        async def pay(plan, seq, **kwargs):
+            self.assertEqual((plan["id"], seq), ("plan1", 1))
+            await kwargs["consume_provider"](35, "USD")
+            return {"id": plan["id"]}
+
+        self.pay = AsyncMock(side_effect=pay)
+        for item in (
+            patch.object(server, "db", self.db),
+            patch.object(server, "_plan_core", {"pay_installment_for": self.pay}),
+            patch.object(server, "_tenant_consume_stripe", self.stripe),
+            patch.object(server, "_notify_company_admins", AsyncMock()),
+            patch.dict(sys.modules, {"routes.company_mope": module}),
+        ):
+            item.start()
+            self.addCleanup(item.stop)
+
+    async def test_tenant_provider_consumption_runs_inside_core_with_current_currency(self):
+        body = server._TenantPayInstallmentIn(method="creditcard", amount=50, stripe_payment_intent_id="pi1")
+        await server.tenant_portal_pay_installment("plan1", 1, body, {"id": "t1", "company_id": "c1"})
+        self.stripe.assert_awaited_once_with({"id": "t1", "company_id": "c1"}, "pi1", 35, "USD")
+        self.assertEqual(self.pay.await_args.kwargs["stripe_payment_intent_id"], "pi1")
+
+    async def test_kiosk_provider_consumption_runs_inside_core_with_current_currency(self):
+        body = server._KioskPayInstallmentIn(method="mope", amount=50, mope_payment_request_id="mp1")
+        await server.kiosk_pay_installment("plan1", 1, body, {"company_id": "c1"})
+        self.mope.assert_awaited_once_with("mp1", company_id="c1", tenant_id="t1", amount=35, currency="USD")
+        self.assertEqual(self.pay.await_args.kwargs["mope_payment_request_id"], "mp1")
+
+
 class PaymentReassignmentServerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = SimpleNamespace(payments=Records(), invoices=Records(), tenant_payment_guards=Guards())

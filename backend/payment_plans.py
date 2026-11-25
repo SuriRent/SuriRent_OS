@@ -18,10 +18,15 @@ Termijn-betaling registreert een normale Payment doc met category=
 'betalingsregeling' + metadata.plan_id + metadata.installment_seq.
 """
 import asyncio
+import logging
+import math
+import secrets
 from typing import List, Optional, Literal
 from datetime import datetime, date as date_t, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sms_payment_attempts import PaymentAttemptConflict
+from tenant_payment_guard import acquire_payment_guard, release_payment_guard
 
 
 def make_router(db, helpers):
@@ -504,45 +509,128 @@ def _build_pay_core(db, helpers):
         mope_payment_request_id: Optional[str] = None,
         received_by: str = "", approved_by_label: str = "",
         status: str = "approved", kiosk_employee_id=None, kiosk_employee_name=None,
+        consume_provider=None,
     ) -> dict:
+        cid, tenant_id = plan.get("company_id"), plan.get("tenant_id")
+        if not all(isinstance(value, str) and value for value in (cid, tenant_id, plan.get("id"))):
+            raise HTTPException(status_code=409, detail="Regelingsgegevens zijn onvolledig; controleer de regeling.")
+        provider = "stripe" if stripe_payment_intent_id else ("mope" if mope_payment_request_id else None)
+        reference = stripe_payment_intent_id or mope_payment_request_id or None
+        payment_id, owner = new_id(), secrets.token_urlsafe(24)
+        try:
+            await acquire_payment_guard(
+                db, company_id=cid, tenant_id=tenant_id, kind="legacy", owner=owner,
+                operation="installment_payment", operation_id=payment_id,
+                provider=provider, provider_reference=reference,
+            )
+        except PaymentAttemptConflict as exc:
+            raise HTTPException(status_code=409, detail="Een andere betaling voor deze huurder wordt verwerkt.") from exc
+        try:
+            result = await _pay_installment_locked(
+                plan["id"], cid, tenant_id, seq, payment_id=payment_id,
+                method=method, amount=amount, note=note,
+                stripe_payment_intent_id=stripe_payment_intent_id,
+                mope_payment_request_id=mope_payment_request_id,
+                received_by=received_by, approved_by_label=approved_by_label, status=status,
+                kiosk_employee_id=kiosk_employee_id, kiosk_employee_name=kiosk_employee_name,
+                consume_provider=consume_provider,
+            )
+            await release_payment_guard(db, company_id=cid, tenant_id=tenant_id, kind="legacy", owner=owner)
+        except Exception as exc:
+            logging.getLogger(__name__).exception("Installment payment requires review: %s", payment_id)
+            raise HTTPException(
+                status_code=500,
+                detail="De termijnbetaling is mogelijk gedeeltelijk verwerkt. Controleer deze voordat u opnieuw boekt.",
+            ) from exc
+        if isinstance(result, HTTPException):
+            raise result
+        if status == "approved" and notify_tenant_paid:
+            asyncio.create_task(notify_tenant_paid(plan["id"], seq))
+        return result
+
+    async def _pay_installment_locked(
+        plan_id: str, cid: str, tenant_id: str, seq: int, *, payment_id: str,
+        method: str, amount, note: str, stripe_payment_intent_id: Optional[str],
+        mope_payment_request_id: Optional[str], received_by: str, approved_by_label: str,
+        status: str, kiosk_employee_id, kiosk_employee_name, consume_provider,
+    ):
+        plan = await db.payment_plans.find_one(
+            {"id": plan_id, "company_id": cid, "tenant_id": tenant_id}, {"_id": 0},
+        )
+        if not plan:
+            return HTTPException(status_code=404, detail="Regeling niet gevonden")
         if plan.get("status") != "active":
-            from fastapi import HTTPException
-            raise HTTPException(status_code=400, detail="Regeling is niet actief")
+            return HTTPException(status_code=400, detail="Regeling is niet actief")
         inst = await db.payment_plan_installments.find_one(
-            {"plan_id": plan["id"], "sequence": seq}, {"_id": 0}
+            {"plan_id": plan_id, "company_id": cid, "sequence": seq}, {"_id": 0}
         )
         if not inst:
-            from fastapi import HTTPException
-            raise HTTPException(status_code=404, detail="Termijn niet gevonden")
-        if inst.get("status") == "paid":
-            from fastapi import HTTPException
-            raise HTTPException(status_code=400, detail="Termijn is al betaald")
+            return HTTPException(status_code=404, detail="Termijn niet gevonden")
+        if inst.get("status") != "pending":
+            return HTTPException(status_code=409, detail="Termijn is al betaald of wordt verwerkt")
 
         # Cap het bedrag aan wat er nog ECHT openstaat op de gekoppelde
         # facturen. Voorkomt over-betaling wanneer buiten de regeling om al
         # een deelbetaling is gedaan.
-        raw_amt = _round2(amount if amount is not None else inst["amount"])
+        try:
+            raw_amt = _round2(amount if amount is not None else inst["amount"])
+        except (TypeError, ValueError, OverflowError):
+            return HTTPException(status_code=400, detail="Ongeldig termijnbedrag")
+        if not math.isfinite(raw_amt) or raw_amt <= 0:
+            return HTTPException(status_code=400, detail="Ongeldig termijnbedrag")
         invoice_open = 0.0
         if plan.get("invoice_ids"):
-            invoice_open = await _linked_invoice_open_sum(plan.get("invoice_ids") or [])
+            ids = plan["invoice_ids"]
+            if not isinstance(ids, list) or not all(isinstance(i, str) and i for i in ids) or len(set(ids)) != len(ids):
+                return HTTPException(status_code=409, detail="Facturen in de regeling zijn ongeldig")
+            invoices = await db.invoices.find(
+                {"id": {"$in": ids}, "company_id": cid, "tenant_id": tenant_id}, {"_id": 0},
+            ).to_list(None)
+            if len(invoices) != len(ids) or any(
+                inv.get("status") in ("cancelled", "archived") or inv.get("archived") is True
+                or (inv.get("currency") or "SRD") != (plan.get("currency") or "SRD")
+                for inv in invoices
+            ):
+                return HTTPException(status_code=409, detail="Gekoppelde facturen moeten eerst worden gecontroleerd")
+            if not allocate_to_invoices:
+                return HTTPException(status_code=409, detail="Factuurallocatie is niet beschikbaar")
+            invoice_open = 0.0
+            for inv in invoices:
+                paid_value = inv.get("paid_amount")
+                if paid_value is None:
+                    if inv.get("status") != "open":
+                        return HTTPException(status_code=409, detail="Factuursaldo moet eerst worden gecontroleerd")
+                    for field in ("invoice_id", "invoice_ids", "allocations.invoice_id"):
+                        if await db.payments.find_one({"status": "approved", field: inv["id"]}, {"_id": 0, "id": 1}):
+                            return HTTPException(status_code=409, detail="Factuursaldo moet eerst worden gecontroleerd")
+                    paid_value = 0
+                try:
+                    total, paid = float(inv["amount"]), float(paid_value)
+                except (KeyError, TypeError, ValueError, OverflowError):
+                    return HTTPException(status_code=409, detail="Factuursaldo moet eerst worden gecontroleerd")
+                if (not math.isfinite(total) or not math.isfinite(paid) or total < 0 or paid < 0
+                        or paid > total or (inv.get("status") == "paid" and paid != total)):
+                    return HTTPException(status_code=409, detail="Factuursaldo moet eerst worden gecontroleerd")
+                invoice_open += total - paid
+            invoice_open = round(invoice_open, 2)
             if invoice_open <= 0.01:
-                from fastapi import HTTPException
-                raise HTTPException(
+                return HTTPException(
                     status_code=400,
                     detail="Gekoppelde factuur is al volledig betaald — regeling wordt afgesloten.",
                 )
             amt = _round2(min(raw_amt, invoice_open))
         else:
             amt = raw_amt
+        if consume_provider:
+            await consume_provider(amt, plan.get("currency") or "SRD")
         receipt = await next_receipt_number()
-        cid = plan.get("company_id")
         company = await db.companies.find_one({"id": cid}, {"_id": 0, "name": 1}) or {}
         tenant = await db.tenants.find_one(
             {"id": plan["tenant_id"]}, {"_id": 0, "name": 1, "apartment_id": 1}
         ) or {}
         now_iso = iso(now_utc())
         payment_doc = {
-            "id": new_id(),
+            "id": payment_id,
             "company_id": cid,
             "tenant_id": plan["tenant_id"],
             "apartment_id": tenant.get("apartment_id"),
@@ -583,22 +671,23 @@ def _build_pay_core(db, helpers):
             inst_update["amount"] = amt
             if inst.get("original_amount") is None:
                 inst_update["original_amount"] = _round2(inst.get("amount") or 0)
-        await db.payment_plan_installments.update_one(
-            {"plan_id": plan["id"], "sequence": seq},
+        claimed = await db.payment_plan_installments.update_one(
+            {"plan_id": plan["id"], "company_id": cid, "sequence": seq, "status": "pending"},
             {"$set": inst_update},
         )
+        if claimed.matched_count != 1:
+            raise RuntimeError("Termijn is tijdens de betaling gewijzigd")
 
         if status == "approved":
             # Termijnbetaling alloceren op de gelinkte facturen (FIFO).
             if allocate_to_invoices and plan.get("invoice_ids"):
-                try:
-                    await allocate_to_invoices(
-                        plan.get("invoice_ids") or [], amt,
-                        payment_id=payment_doc["id"], paid_at=now_iso,
-                        method=method, receipt_number=receipt,
-                    )
-                except Exception as e:  # noqa: BLE001
-                    print(f"[plan] allocate-to-invoices failed: {e}")
+                allocated = await allocate_to_invoices(
+                    plan.get("invoice_ids") or [], amt,
+                    payment_id=payment_doc["id"], paid_at=now_iso,
+                    method=method, receipt_number=receipt, strict=True,
+                )
+                if abs(allocated - amt) > 0.005:
+                    raise RuntimeError("Termijnbetaling is niet volledig aan facturen toegewezen")
             # Als de factuur na deze betaling volledig gedekt is, cancel
             # eventuele nog openstaande termijnen — anders blijft de UI
             # "Markeer betaald" tonen terwijl er niets meer verschuldigd is.
@@ -617,16 +706,16 @@ def _build_pay_core(db, helpers):
                 {"plan_id": plan["id"], "status": {"$in": ["pending"]}}
             )
             if remaining_pending == 0:
-                await db.payment_plans.update_one(
-                    {"id": plan["id"]},
+                completed = await db.payment_plans.update_one(
+                    {"id": plan["id"], "company_id": cid, "tenant_id": tenant_id, "status": "active"},
                     {"$set": {"status": "completed", "completed_at": now_iso}},
                 )
-            # WhatsApp/SMS bevestiging naar huurder (alleen approved).
-            # FIRE-AND-FORGET — Messente + SMTP + PDF render kunnen meerdere
-            # seconden duren; de operator/huurder UI mag daar niet op wachten.
-            if notify_tenant_paid:
-                import asyncio
-                asyncio.create_task(notify_tenant_paid(plan["id"], seq))
+                if completed.matched_count != 1:
+                    already_completed = await db.payment_plans.find_one({
+                        "id": plan["id"], "company_id": cid, "tenant_id": tenant_id, "status": "completed",
+                    })
+                    if not already_completed:
+                        raise RuntimeError("Regeling kon niet worden afgerond")
 
         p = await db.payment_plans.find_one({"id": plan["id"]}, {"_id": 0})
         return await enrich_plan(p)

@@ -22,6 +22,7 @@ on:
       - 'backend/tests/test_bank_reconciliation_server.py'
       - 'backend/tests/test_company_stripe_consumption.py'
       - 'backend/tests/test_provider_request_guards.py'
+      - 'backend/tests/test_installment_guards.py'
       - '.github/workflows/sms-payment-transactions.yml'
 
 permissions:
@@ -75,6 +76,7 @@ jobs:
           python -m unittest discover -s backend/tests -p 'test_bank_reconciliation_server.py' -v
           python -m unittest discover -s backend/tests -p 'test_company_stripe_consumption.py' -v
           python -m unittest discover -s backend/tests -p 'test_provider_request_guards.py' -v
+          python -m unittest discover -s backend/tests -p 'test_installment_guards.py' -v
       - name: Stop isolated MongoDB
         if: always()
         run: docker stop sms-payment-test-mongo || true
