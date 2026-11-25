@@ -5,7 +5,7 @@ import { api, formatError } from '../../../lib/api';
 function ForgotPasswordModal({ initialEmail, onClose }) {
   const [stage, setStage] = useState('request');  // 'request' | 'verify' | 'done'
   const [email, setEmail] = useState(initialEmail || '');
-  const [channel, setChannel] = useState('email');  // 'email' | 'whatsapp'
+  const [channel, setChannel] = useState('email');  // 'email' | 'sms'
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -18,7 +18,7 @@ function ForgotPasswordModal({ initialEmail, onClose }) {
     setLoading(true); setErr(''); setInfo('');
     try {
       const { data } = await api.post('/auth/forgot-password', { email, channel });
-      setInfo(data?.message || `Code verzonden via ${channel === 'email' ? 'e-mail' : 'WhatsApp'}.`);
+      setInfo(data?.message || `Code verzonden via ${channel === 'email' ? 'e-mail' : 'SMS'}.`);
       setStage('verify');
     } catch (e) {
       setErr(formatError(e, 'Kon code niet versturen'));
@@ -61,7 +61,7 @@ function ForgotPasswordModal({ initialEmail, onClose }) {
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Verstuur code via</label>
               <div className="grid grid-cols-2 gap-2">
-                {[{ id: 'email', label: 'E-mail' }, { id: 'whatsapp', label: 'WhatsApp' }].map((c) => (
+                {[{ id: 'email', label: 'E-mail' }, { id: 'sms', label: 'SMS' }].map((c) => (
                   <button key={c.id} type="button" onClick={() => setChannel(c.id)}
                     data-testid={`forgot-channel-${c.id}`}
                     className={`py-3 rounded-xl font-bold text-sm transition ${

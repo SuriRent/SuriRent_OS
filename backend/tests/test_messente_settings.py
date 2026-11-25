@@ -389,17 +389,145 @@ def test_settings_test_can_select_sms_when_whatsapp_is_configured(monkeypatch):
     wa.assert_not_awaited()
 
 
-def test_password_reset_uses_company_messente_authentication_template(monkeypatch):
+def test_password_reset_uses_company_messente_sms(monkeypatch):
     import server
     import messente_service
 
     send = AsyncMock()
-    config = AsyncMock(return_value={"enabled": True, "authentication_template": "otp"})
+    config = AsyncMock(return_value={"enabled": True, "sms_from": "Bedrijf"})
     monkeypatch.setattr(server, "get_company_section", config)
-    monkeypatch.setattr(messente_service, "send_whatsapp", send)
-    asyncio.run(server._send_password_reset_whatsapp("+5971234567", "Huurder", "123456", "company-1"))
+    monkeypatch.setattr(messente_service, "send_sms", send)
+    asyncio.run(server._send_password_reset_sms("+5971234567", "Huurder", "123456", "company-1"))
     config.assert_awaited_once_with("company-1", "messente")
-    assert send.await_args.kwargs == {"template_kind": "authentication", "variables": {"1": "123456"}}
+    assert send.await_args.args[0]["sms_from"] == "Bedrijf"
+    assert send.await_args.args[1] == "+5971234567"
+    assert "123456" in send.await_args.args[2]
+    assert send.await_args.kwargs == {}
+
+
+@pytest.mark.parametrize("company_id", [None, "company-1"])
+def test_password_reset_uses_encrypted_platform_account_when_no_enabled_company_config(monkeypatch, company_id):
+    import server
+    import messente_service
+    from settings_service import merge_section
+
+    send = AsyncMock()
+    platform = merge_section("messente", {}, {
+        "enabled": True, "api_username": "platform-user", "api_password": "platform-secret", "sms_from": "SuriRent",
+    })
+    monkeypatch.setattr(server, "get_company_section", AsyncMock(return_value={"enabled": False}))
+    monkeypatch.setattr(server, "db", SimpleNamespace(
+        saas_settings=SimpleNamespace(find_one=AsyncMock(return_value={"messente": platform})),
+    ))
+    monkeypatch.setattr(messente_service, "send_sms", send)
+    asyncio.run(server._send_password_reset_sms("+5971234567", "Huurder", "123456", company_id))
+    assert send.await_args.args[0]["api_password"] == "platform-secret"
+    assert send.await_args.args[0]["api_username"] == "platform-user"
+
+
+def test_password_reset_does_not_retry_rejected_company_send_using_platform(monkeypatch):
+    import server
+    import messente_service
+
+    send = AsyncMock(side_effect=messente_service.MessenteError("Rejected"))
+    lookup = AsyncMock()
+    monkeypatch.setattr(server, "get_company_section", AsyncMock(return_value={"enabled": True}))
+    monkeypatch.setattr(server, "db", SimpleNamespace(saas_settings=SimpleNamespace(find_one=lookup)))
+    monkeypatch.setattr(messente_service, "send_sms", send)
+    with pytest.raises(messente_service.MessenteError):
+        asyncio.run(server._send_password_reset_sms("+5971234567", "Huurder", "123456", "company-1"))
+    lookup.assert_not_awaited()
+    send.assert_awaited_once()
+
+
+def test_platform_messente_save_masks_credentials_and_preserves_existing_secrets(monkeypatch):
+    import server
+    from settings_service import MASK, decrypt, merge_section
+
+    stored = merge_section("messente", {}, {"api_password": "original"})
+    update = AsyncMock()
+    monkeypatch.setattr(server, "db", SimpleNamespace(saas_settings=SimpleNamespace(
+        find_one=AsyncMock(return_value={"messente": stored}), update_one=update,
+    )))
+    result = asyncio.run(server.update_saas_messente(
+        {"api_username": "platform-user", "api_password": MASK, "sms_from": "SuriRent", "enabled": True},
+        user={"role": "superadmin", "email": "admin@example.com"},
+    ))
+    assert result["data"]["api_username"] == result["data"]["api_password"] == MASK
+    persisted = update.await_args.args[1]["$set"]["messente"]
+    assert decrypt(persisted["api_username"]) == "platform-user"
+    assert decrypt(persisted["api_password"]) == "original"
+    assert update.await_args.args[0] == {"id": server.SAAS_SETTINGS_ID}
+
+
+@pytest.mark.parametrize("role,expected", [("admin", 403), ("superadmin", 200)])
+def test_platform_messente_endpoints_require_superadmin(monkeypatch, role, expected):
+    import server
+    import messente_service
+    from settings_service import merge_section, MASK
+
+    cfg = merge_section("messente", {}, {
+        "enabled": True, "api_username": "platform-user", "api_password": "platform-secret", "sms_from": "SuriRent",
+    })
+    doc = {"messente": cfg}
+    monkeypatch.setattr(server, "db", SimpleNamespace(saas_settings=SimpleNamespace(
+        find_one=AsyncMock(return_value=doc), update_one=AsyncMock(),
+    )))
+    send = AsyncMock()
+    monkeypatch.setattr(messente_service, "send_sms", send)
+    monkeypatch.setitem(server.app.dependency_overrides, server.get_current_user, lambda: {"id": "test", "role": role})
+
+    async def request():
+        async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+            return [
+                await client.get("/api/superadmin/settings"),
+                await client.put("/api/superadmin/settings/messente", json={"sms_from": "SuriRent"}),
+                await client.post("/api/superadmin/settings/messente/test", json={"to": "+5971234567", "channel": "sms"}),
+            ]
+
+    results = asyncio.run(request())
+    assert [response.status_code for response in results] == [expected] * 3
+    if role == "superadmin":
+        assert results[0].json()["messente"]["api_password"] == MASK
+        assert results[1].json()["data"]["api_username"] == MASK
+        assert results[2].json()["ok"]
+        assert send.await_args.args[0]["api_password"] == "platform-secret"
+    else:
+        send.assert_not_awaited()
+
+
+@pytest.mark.parametrize("exists", [False, True])
+def test_forgot_password_sms_route_is_generic_and_uses_stored_contact(monkeypatch, exists):
+    import server
+
+    send_sms, send_email = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(server, "_send_password_reset_sms", send_sms)
+    monkeypatch.setattr(server, "_send_password_reset_email", send_email)
+    monkeypatch.setattr(server, "db", SimpleNamespace(
+        users=SimpleNamespace(find_one=AsyncMock(return_value={
+            "email": "user@example.com", "name": "Gebruiker", "company_id": "company-1",
+        } if exists else None)),
+        companies=SimpleNamespace(find_one=AsyncMock(return_value={"contact_phone": "+5971234567"})),
+        password_reset_tokens=SimpleNamespace(update_one=AsyncMock()),
+    ))
+
+    async def request():
+        async with AsyncClient(transport=ASGITransport(app=server.app), base_url="http://test") as client:
+            sms = await client.post("/api/auth/forgot-password", json={"email": "user@example.com", "channel": "sms"})
+            old_channel = await client.post("/api/auth/forgot-password", json={"email": "user@example.com", "channel": "whatsapp"})
+            return sms, old_channel
+
+    result, old_channel = asyncio.run(request())
+    assert result.status_code == 200 and result.json() == {
+        "ok": True, "message": "Als dit account bestaat, is een herstelcode verzonden via SMS.",
+    }
+    assert old_channel.status_code == 422
+    send_email.assert_not_awaited()
+    if exists:
+        assert send_sms.await_args.args[0] == "+5971234567"
+        assert send_sms.await_args.args[3] == "company-1"
+    else:
+        send_sms.assert_not_awaited()
 
 
 @pytest.mark.parametrize("channel", ["whatsapp", "sms"])

@@ -109,12 +109,27 @@ not revoke previously shared URLs.
 The signed URL is a bearer link: anyone holding it can access the image while
 it is valid, including anyone with access to proxy or server access logs.
 
-### PIN and password recovery
+### Platform configuration and password recovery
+
+Superadmin **Instellingen > WhatsApp & SMS (Messente)** provides an independent
+platform account with encrypted credentials and its own Save and Test buttons.
+Only superadmins can read, save or test this configuration. Company messaging
+continues to use company credentials, not the platform account.
+
+The kiosk's **Wachtwoord vergeten** offers **E-mail** or **SMS**. SMS recovery
+uses the enabled company Messente account, otherwise the platform Messente
+account. An enabled company account that rejects a send is not retried through
+the platform account. The recipient is the account's stored phone number, or
+the company contact phone when the account has none. Accounts without a company
+must have their own stored phone number. Missing/failed delivery is logged
+without exposing recovery codes; the public response stays generic to avoid
+account enumeration. SMS recovery does not require a WhatsApp template.
+
+### Tenant PIN recovery
 
 Optionally configure an approved **authentication** template with the code as
 the single body variable `{{1}}` and a **copy-code** button at index 0. SuriRent
 sends the code both in the body and the button's URL parameter as required by
-WhatsApp authentication templates. This template is used for tenant PIN and
-company user password recovery. Without it, WhatsApp recovery requires an open
-service window. Password recovery uses only the user's company configuration;
-there is no cross-company or mock sending fallback.
+WhatsApp authentication templates. This template is used for tenant PIN
+recovery. Without it, WhatsApp PIN recovery requires an open service window.
+Tenant PIN recovery retains the company's SMS fallback.

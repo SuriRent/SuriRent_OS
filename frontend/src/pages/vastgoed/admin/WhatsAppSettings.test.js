@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { api } from '../../../lib/api';
 import { availableInstellingenSections } from './instellingenSections';
 import { RENDER } from './InstellingenHub';
+import { MessenteForm } from './Settings';
 
 jest.mock('react-router-dom', () => ({
   useLocation: jest.fn(),
@@ -29,6 +30,7 @@ test('WhatsApp-instellingen zijn bereikbaar en testen een opgegeven ontvanger', 
       whatsapp_receipt_media_url: 'https://example.com/api/public/whatsapp-receipts/sample.jpg',
     },
   });
+
   api.post.mockResolvedValue({ data: { ok: true, detail: 'Testbericht verzonden' } });
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -92,6 +94,31 @@ test('WhatsApp-instellingen zijn bereikbaar en testen een opgegeven ontvanger', 
   } finally {
     await act(async () => root.unmount());
     host.remove();
+    globalThis.IS_REACT_ACT_ENVIRONMENT = previous;
+  }
+});
+
+test('superadmin bewaart en test de aparte platformkoppeling via SMS', async () => {
+  api.put.mockResolvedValue({ data: { data: { enabled: true, sms_from: 'SuriRent' } } });
+  api.post.mockResolvedValue({ data: { ok: true, detail: 'Geaccepteerd' } });
+  const host = document.createElement('div');
+  const root = createRoot(host);
+  const previous = globalThis.IS_REACT_ACT_ENVIRONMENT;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  try {
+    await act(async () => root.render(<MessenteForm initial={{ enabled: true, sms_from: 'SuriRent' }} platform />));
+    expect(host.querySelector('[data-testid="messente-test-channel"]').value).toBe('sms');
+    await act(async () => host.querySelector('[data-testid="settings-save"]').click());
+    expect(api.put).toHaveBeenLastCalledWith('/superadmin/settings/messente', { enabled: true, sms_from: 'SuriRent' });
+    await act(async () => {
+      const input = host.querySelector('[data-testid="messente-test-number"]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '+5971234567');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => host.querySelector('[data-testid="settings-test"]').click());
+    expect(api.post).toHaveBeenLastCalledWith('/superadmin/settings/messente/test', { to: '+5971234567', channel: 'sms' });
+  } finally {
+    await act(async () => root.unmount());
     globalThis.IS_REACT_ACT_ENVIRONMENT = previous;
   }
 });
