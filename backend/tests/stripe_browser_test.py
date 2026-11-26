@@ -1,13 +1,16 @@
 """Opt-in browser test: synthetic tenant, local MongoDB and Stripe test mode only."""
 
 import asyncio
+import json
 import os
+import re
 import sys
 import types
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
+import httpx
 from motor.motor_asyncio import AsyncIOMotorClient
 from playwright.async_api import async_playwright
 from starlette.responses import FileResponse
@@ -15,7 +18,7 @@ from starlette.staticfiles import StaticFiles
 import uvicorn
 
 from sms_payment_attempts import tenant_payment_key
-from sms_payment_links import create_payment_link
+from sms_payment_links import get_payment_grant
 from test_sms_payment_stripe_testmode import _test_configuration
 
 
@@ -33,6 +36,7 @@ async def main():
     os.environ.update({
         "MONGO_URL": mongo_url, "DB_NAME": "stripe_browser_unused",
         "JWT_SECRET": "isolated-browser-test-only-key-with-adequate-length",
+        "APP_PUBLIC_URL": "https://example.test",
     })
     for name in ("emergentintegrations", "emergentintegrations.llm",
                  "emergentintegrations.llm.chat", "emergentintegrations.llm.openai"):
@@ -43,6 +47,7 @@ async def main():
         setattr(sys.modules["emergentintegrations.llm.openai"], name, type(name, (), {}))
 
     import server
+    import messente_service
     from routes import _deps, company_stripe
 
     client = AsyncIOMotorClient(mongo_url, serverSelectionTimeoutMS=5000)
@@ -55,24 +60,73 @@ async def main():
         hello = await client.admin.command("hello")
         if hello.get("setName") != "rs0" or not hello.get("isWritablePrimary"):
             raise RuntimeError("The isolated test replica is not ready")
-        await database.tenants.insert_one({"id": "test-tenant", "company_id": "test-company", "status": "active"})
+        await database.tenants.insert_one({
+            "id": "test-tenant", "company_id": "test-company", "status": "active", "phone": "+5971234567",
+        })
         await database.companies.insert_one({"id": "test-company", "name": "Testbedrijf"})
         await database.invoices.insert_one({
             "id": "test-invoice", "company_id": "test-company", "tenant_id": "test-tenant",
             "invoice_number": "TEST-1", "amount": 1, "paid_amount": 0, "currency": "EUR", "status": "open",
+            "period_month": 1, "period_year": 2026,
         })
-        link = await create_payment_link(
-            database.sms_payment_links, "https://example.test", "test-company", "test-tenant", ["test-invoice"], [],
-        )
-        token = link.rsplit("/", 1)[1]
         server.db, server.client = database, client
         server._SMS_CHECKOUT_READY = True
+        server._SMS_PAYMENT_REMINDERS_READY = True
         server._company_has_plan_feature = AsyncMock(return_value=True)
         _deps.require_plan_feature = AsyncMock()
         config = {"enabled": True, "mode": "test", "methods": ["card"],
                   "secret_key": secret, "publishable_key": public}
         company_stripe._active = lambda _: config
         company_stripe._cfg_doc = AsyncMock(return_value={"stripe_config": {"test": {"secret_key": secret}}})
+
+        requests = []
+
+        def fake_messente(request):
+            requests.append(request)
+            return httpx.Response(201, json={
+                "omnimessage_id": "synthetic-omni",
+                "messages": [{"channel": "sms", "message_id": "synthetic-message"}],
+            })
+
+        messente_cfg = {
+            "enabled": True, "api_username": "synthetic-user", "api_password": "synthetic-password",
+            "sms_from": "Testbedrijf",
+        }
+        server.app.dependency_overrides[server.get_current_user] = lambda: {
+            "role": "admin", "active_company_id": "test-company",
+        }
+        original_async_client = httpx.AsyncClient
+        async with original_async_client(
+            transport=httpx.ASGITransport(app=server.app), base_url="http://test",
+        ) as api_client:
+            with patch.object(server, "_messente_or_400", AsyncMock(return_value=messente_cfg)), \
+                    patch.object(messente_service.httpx, "AsyncClient",
+                                 side_effect=lambda **_: original_async_client(transport=httpx.MockTransport(fake_messente))):
+                response = await api_client.post(
+                    "/api/tenants/test-tenant/reminder", json={"channel": "sms", "tone": "urgent"},
+                )
+        if response.status_code != 200 or len(requests) != 1:
+            raise AssertionError("The synthetic SMS reminder was not accepted once")
+        payload = json.loads(requests[0].content)
+        if (str(requests[0].url) != messente_service.MESSENTE_API or payload.get("to") != "+5971234567"
+                or len(payload.get("messages", [])) != 1):
+            raise AssertionError("The synthetic SMS request has an unexpected recipient or endpoint")
+        sms = payload["messages"][0]
+        text = sms.get("text", "")
+        link = re.search(r"https://example\.test/b/([A-Za-z0-9_-]{22})", text)
+        if (sms.get("channel") != "sms" or sms.get("autoconvert") != "off"
+                or len(text) != 160 or not text.startswith("Dringende herinnering") or not link):
+            raise AssertionError("The synthetic SMS did not contain the expected scoped reminder")
+        token = link.group(1)
+        grant = await get_payment_grant(database.sms_payment_links, token)
+        if (not grant or grant.get("company_id") != "test-company" or grant.get("tenant_id") != "test-tenant"
+                or grant.get("invoice_ids") != ["test-invoice"] or grant.get("installments") != []):
+            raise AssertionError("The synthetic SMS grant is not scoped to the test invoice")
+        history = await database.sms_history.find_one({"company_id": "test-company"})
+        if (not history or history.get("status") != "accepted" or token in repr(history)
+                or "text" in history or "body" in history
+                or not payload.get("dlr_url", "").startswith("https://example.test/api/public/messente/sms-status/")):
+            raise AssertionError("The synthetic SMS history or delivery callback is incorrect")
 
         async def enrich(invoices):
             return [{**invoice, "remaining_amount": invoice["amount"] - invoice["paid_amount"]}
@@ -141,7 +195,7 @@ async def main():
                 raise AssertionError("The completed browser attempt was not cleared")
             await browser.close()
             browser = None
-        print("Isolated browser Stripe test-mode payment booked exactly once")
+        print("Synthetic SMS request and isolated browser Stripe test-mode payment booked exactly once")
     finally:
         if browser is not None:
             await browser.close()

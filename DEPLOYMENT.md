@@ -224,7 +224,10 @@ For the separate opt-in browser test, set the environment variable
 same GitHub Actions environment. On a trusted branch, run the workflow with
 `run_stripe_browser_test` enabled. The browser test uses synthetic records,
 a disposable local replica set and a EUR 1.00 Stripe test-mode payment. It
-does not send an SMS or exercise the Coolify deployment, and it does not
+starts with a manual reminder request and checks the generated 160-character
+SMS and scoped link, but intercepts the Messente HTTP request locally: no
+actual SMS is sent. The browser opens the link's token on the local test server,
+not the public domain. The test does not exercise the Coolify deployment or
 enable checkout for customers.
 The manual invoice-reminder SMS integration is prepared behind both
 `_SMS_CHECKOUT_READY` and the separate `_SMS_PAYMENT_REMINDERS_READY` gate,
