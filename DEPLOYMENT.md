@@ -230,7 +230,11 @@ The manual invoice-reminder SMS integration is prepared behind both
 `_SMS_CHECKOUT_READY` and the separate `_SMS_PAYMENT_REMINDERS_READY` gate,
 which remain false. When enabled, it checks the tenant and each invoice,
 creates a scoped payment grant and sends the selected 160-character tone.
-Existing reminders continue unchanged while the gates are off. Automatic
+Existing reminders continue unchanged while the gates are off. The upcoming
+invoice SMS reminder is also prepared behind these gates: it claims the
+existing unique invoice/day marker before sending, so a crash or uncertain
+send is not automatically retried. A claimed or unconfirmed marker requires
+manual investigation; acceptance is not proof of delivery. Installment
 reminders and other manual reminder routes are not yet connected; an actual
 Messente delivery has not been verified. Do not enable either gate solely on
 the basis of the isolated browser test.

@@ -23254,20 +23254,41 @@ async def _send_upcoming_invoice_reminders():
             # 1) WhatsApp / SMS
             messente_cfg = await get_company_section(cid, "messente")
             wa_ok = False
+            payment_sms_claimed = False
+            payment_sms_state = None
             if messente_cfg.get("enabled") and phone:
+                channel = "whatsapp" if messente_cfg.get("whatsapp_from") else "sms"
+                payment_sms = channel == "sms" and _SMS_CHECKOUT_READY and _SMS_PAYMENT_REMINDERS_READY
+                if payment_sms:
+                    try:
+                        await db.sent_upcoming_invoice_reminders.insert_one({
+                            "invoice_id": inv["id"], "company_id": cid, "tenant_id": tenant["id"],
+                            "days_bucket": days_until, "due_date": due_iso,
+                            "claimed_at": iso(now_utc()), "sms_payment_state": "claimed",
+                        })
+                    except DuplicateKeyError:
+                        continue
+                    payment_sms_claimed = True
                 try:
-                    channel = "whatsapp" if messente_cfg.get("whatsapp_from") else "sms"
-                    await _messente_send(
-                        messente_cfg, channel, phone, wa_msg, template_kind="reminder", company_id=cid,
-                        purpose="Betalingsherinnering",
-                        variables=whatsapp_variables(
-                            tenant.get("name") or "Huurder", brand, f"{currency} {remaining:.2f}",
-                            inv.get("invoice_number") or inv["id"],
-                            _public_url(f"/api/invoices/{inv['id']}/image"),
-                        ),
-                    )
+                    if payment_sms:
+                        await _send_sms_payment_reminder(
+                            cid, tenant["id"], [inv["id"]], "friendly", brand, messente_cfg, phone,
+                        )
+                        payment_sms_state = "accepted"
+                    else:
+                        await _messente_send(
+                            messente_cfg, channel, phone, wa_msg, template_kind="reminder", company_id=cid,
+                            purpose="Betalingsherinnering",
+                            variables=whatsapp_variables(
+                                tenant.get("name") or "Huurder", brand, f"{currency} {remaining:.2f}",
+                                inv.get("invoice_number") or inv["id"],
+                                _public_url(f"/api/invoices/{inv['id']}/image"),
+                            ),
+                        )
                     wa_ok = True
                 except Exception as e:  # noqa: BLE001
+                    if payment_sms:
+                        payment_sms_state = "unconfirmed"
                     print(f"[reminder-upcoming] messente fail inv={inv['id'][:8]}: {e}")
 
             # 2) Email
@@ -23310,7 +23331,7 @@ async def _send_upcoming_invoice_reminders():
 
             # Marker altijd wegschrijven — ook bij deel-fouten — om
             # dubbele bezorging te voorkomen bij een volgende poging vandaag.
-            await db.sent_upcoming_invoice_reminders.insert_one({
+            marker_data = {
                 "invoice_id": inv["id"],
                 "company_id": cid,
                 "tenant_id": tenant.get("id"),
@@ -23319,7 +23340,15 @@ async def _send_upcoming_invoice_reminders():
                 "sent_at": iso(now_utc()),
                 "wa_ok": wa_ok,
                 "email_ok": email_ok,
-            })
+            }
+            if payment_sms_claimed:
+                marker_data["sms_payment_state"] = payment_sms_state
+                await db.sent_upcoming_invoice_reminders.update_one(
+                    {"invoice_id": inv["id"], "company_id": cid, "days_bucket": days_until},
+                    {"$set": marker_data},
+                )
+            else:
+                await db.sent_upcoming_invoice_reminders.insert_one(marker_data)
 
 
 async def _upcoming_invoice_reminder_loop():

@@ -3,6 +3,7 @@ import os
 import sys
 import types
 import unittest
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -168,6 +169,72 @@ class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
                 await request(response)
             self.assertEqual(error.exception.status_code, 503)
             self.assertEqual(error.exception.headers["Cache-Control"], "private, no-store")
+
+
+@unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
+class UpcomingPaymentSmsMongoTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.client = AsyncIOMotorClient(os.environ["SMS_BOOKING_MONGO_URL"], serverSelectionTimeoutMS=5000)
+        self.name = f"test_upcoming_sms_{uuid4().hex}"
+        self.db = self.client[self.name]
+        await self.db.sent_upcoming_invoice_reminders.create_index(
+            [("invoice_id", 1), ("days_bucket", 1)], unique=True,
+        )
+        await self.db.company_settings.insert_one({"company_id": "c1", "invoicing": {"reminder_days_before": 2}})
+        await self.db.tenants.insert_one({"id": "t1", "company_id": "c1", "phone": "+5971234567"})
+        await self.db.companies.insert_one({"id": "c1", "name": "Bedrijf"})
+        await self.db.invoices.insert_one({
+            "id": "i1", "company_id": "c1", "tenant_id": "t1", "status": "open",
+            "amount": 100, "paid_amount": 0, "currency": "SRD",
+            "due_date": (date.today() + timedelta(days=1)).isoformat(),
+        })
+        self.send = AsyncMock()
+        self.patches = [
+            patch.object(server, "db", self.db),
+            patch.object(server, "_SMS_CHECKOUT_READY", True),
+            patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True),
+            patch.object(server, "_send_sms_payment_reminder", self.send),
+            patch.object(server, "get_company_section", AsyncMock(
+                side_effect=lambda _cid, section: {"enabled": True, "sms_from": "Bedrijf"} if section == "messente" else {},
+            )),
+            patch.object(server, "_notify_tenant", AsyncMock()),
+            patch.object(server, "_notify_company_admins", AsyncMock()),
+        ]
+        for item in self.patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    async def asyncTearDown(self):
+        await self.client.drop_database(self.name)
+        self.client.close()
+
+    async def test_concurrent_runs_send_once_with_invoice_scope(self):
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def hold(*_args):
+            entered.set()
+            await release.wait()
+
+        self.send.side_effect = hold
+        first = asyncio.create_task(server._send_upcoming_invoice_reminders())
+        await asyncio.wait_for(entered.wait(), 5)
+        try:
+            await server._send_upcoming_invoice_reminders()
+        finally:
+            release.set()
+            await first
+        self.assertEqual(self.send.await_count, 1)
+        self.assertEqual(self.send.await_args.args[:5], ("c1", "t1", ["i1"], "friendly", "Bedrijf"))
+        marker = await self.db.sent_upcoming_invoice_reminders.find_one({"invoice_id": "i1"})
+        self.assertEqual(marker["sms_payment_state"], "accepted")
+
+    async def test_unconfirmed_sms_is_not_retried(self):
+        self.send.side_effect = RuntimeError("unconfirmed test send")
+        await server._send_upcoming_invoice_reminders()
+        await server._send_upcoming_invoice_reminders()
+        self.assertEqual(self.send.await_count, 1)
+        marker = await self.db.sent_upcoming_invoice_reminders.find_one({"invoice_id": "i1"})
+        self.assertEqual(marker["sms_payment_state"], "unconfirmed")
 
 
 class BankReconciliationServerTests(unittest.IsolatedAsyncioTestCase):
