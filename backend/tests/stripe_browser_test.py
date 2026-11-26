@@ -106,7 +106,7 @@ async def main():
             await page.goto(f"http://127.0.0.1:8123/b/{token}", wait_until="domcontentloaded")
             await page.get_by_text("Factuur TEST-1").first.wait_for()
             await page.get_by_role("button", name="Verder met betalen").click()
-            card = page.frame_locator('iframe[title="Secure payment input frame"]')
+            card = page.frame_locator('iframe[title="Secure payment input frame"][src*="elements-inner-easel"]')
             await card.locator('input[name="number"]').fill("4242424242424242")
             await card.locator('input[name="expiry"]').fill("1234")
             await card.locator('input[name="cvc"]').fill("123")
