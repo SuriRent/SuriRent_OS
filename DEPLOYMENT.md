@@ -115,8 +115,13 @@ test credentials; it must never be applied to an existing Coolify resource or
 volume. It is not an approved sandbox migration configuration.
 
 1. Agree on a maintenance window, inventory every writer and integration, and
-   stop them. Keep SMS checkout and payment reminders disabled. Verify that
-   no writes can reach the source while the final backup is made.
+   stop them. Check Coolify's auto-deploy and queued or running deployments:
+   a push to the tracked branch can redeploy the app and resume writes. With
+   explicit operator approval, prevent automatic and manual deployments
+   during the window and verify no deployment is in flight. Record the
+   original setting so it can be restored afterwards. Keep SMS checkout and
+   payment reminders disabled. Verify that no writes can reach the source
+   while the final backup is made.
 2. Make a fresh consistent application-database backup and verify a restore
    privately. Preserve the source volume, database credentials, encryption
    settings and the replica key separately and securely; an application-only
