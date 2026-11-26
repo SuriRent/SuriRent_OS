@@ -6,6 +6,7 @@ on:
     paths:
       - 'docker-compose.yml'
       - 'docker-compose.replica-test.yml'
+      - 'docker-compose.sandbox-cutover.yml'
       - 'deploy/mongo-replica/**'
       - 'deploy/coolify-replica-test.yml'
       - 'deploy/coolify-cutover-rehearsal.yml'
@@ -191,7 +192,11 @@ jobs:
   same-stack-cutover-rehearsal:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      matrix:
+        variant: [rehearsal, candidate]
     env:
+      CUTOVER_VARIANT: ${{ matrix.variant }}
       MONGO_ROOT_USERNAME: testuser
       MONGO_ROOT_PASSWORD: testpassword
       MONGO_REPLICA_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
@@ -223,7 +228,15 @@ jobs:
                 DISABLE_INSTALLMENT_REMINDERS: "1"
           EOF
           base=(docker compose -p surirent-cutover-ci -f docker-compose.yml -f cutover-ci-only.yml)
-          target=(docker compose -p surirent-cutover-ci -f docker-compose.yml -f cutover-ci-only.yml -f deploy/coolify-cutover-rehearsal.yml)
+          if [ "$CUTOVER_VARIANT" = candidate ]; then
+            candidate=(docker compose -p surirent-cutover-ci -f docker-compose.sandbox-cutover.yml -f cutover-ci-only.yml)
+            target=(env CUTOVER_DATABASE_HOST=replica-database CUTOVER_DATABASE_QUERY='&replicaSet=rs0' docker compose -p surirent-cutover-ci -f docker-compose.sandbox-cutover.yml -f cutover-ci-only.yml)
+            "${base[@]}" config --format json | jq -S '.services | {app: (.app | del(.depends_on."replica-init")), web, database}' > cutover-base.json
+            "${candidate[@]}" config --format json | jq -S '.services | {app: (.app | del(.depends_on."replica-init")), web, database}' > cutover-candidate.json
+            diff -u cutover-base.json cutover-candidate.json
+          else
+            target=(docker compose -p surirent-cutover-ci -f docker-compose.yml -f cutover-ci-only.yml -f deploy/coolify-cutover-rehearsal.yml)
+          fi
           "${target[@]}" config --quiet
           "${base[@]}" up -d --wait --wait-timeout 180 database
           "${base[@]}" exec -T database mongosh --quiet --eval '
@@ -319,7 +332,13 @@ jobs:
           verify_app no "${base[@]}"
       - name: Remove isolated containers and volumes
         if: always()
-        run: docker compose -p surirent-cutover-ci -f docker-compose.yml -f deploy/coolify-cutover-rehearsal.yml down --volumes --remove-orphans
+        shell: bash
+        run: |
+          if [ "$CUTOVER_VARIANT" = candidate ]; then
+            docker compose -p surirent-cutover-ci -f docker-compose.sandbox-cutover.yml down --volumes --remove-orphans
+          else
+            docker compose -p surirent-cutover-ci -f docker-compose.yml -f deploy/coolify-cutover-rehearsal.yml down --volumes --remove-orphans
+          fi
 
   replica-deployment:
     runs-on: ubuntu-latest

@@ -1,0 +1,183 @@
+# Candidate sandbox cutover configuration. Do not deploy before review,
+# verification and explicit approval. The existing database remains the
+# default; the replica always uses a separate volume.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}@${CUTOVER_DATABASE_HOST:-database}:27017/${DB_NAME:-vastgoed_kiosk}?authSource=admin${CUTOVER_DATABASE_QUERY:-}
+      DB_NAME: ${DB_NAME:-vastgoed_kiosk}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+      PDF_AES_PASSWORD: ${PDF_AES_PASSWORD:?Set PDF_AES_PASSWORD}
+      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:?Set SUPERADMIN_EMAIL}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?Set SUPERADMIN_PASSWORD}
+      SUPERADMIN_PIN: ${SUPERADMIN_PIN:-}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:?Set APP_PUBLIC_URL}
+      APP_PUBLIC_HOST: ${APP_PUBLIC_HOST:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS}
+      COOKIE_SECURE: "1"
+      RESEED_DEMO_TENANT_PIN: "0"
+      DISABLE_DEMO_RESET: "1"
+      EMERGENT_LLM_KEY: ${EMERGENT_LLM_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      INTEGRATION_PROXY_URL: ${INTEGRATION_PROXY_URL:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY_B64: ${VAPID_PRIVATE_KEY_B64:-}
+      VAPID_CONTACT: ${VAPID_CONTACT:-}
+      PLATFORM_SMTP_HOST: ${PLATFORM_SMTP_HOST:-}
+      PLATFORM_SMTP_PORT: ${PLATFORM_SMTP_PORT:-587}
+      PLATFORM_SMTP_USERNAME: ${PLATFORM_SMTP_USERNAME:-}
+      PLATFORM_SMTP_PASSWORD: ${PLATFORM_SMTP_PASSWORD:-}
+      PLATFORM_SMTP_TLS: ${PLATFORM_SMTP_TLS:-true}
+      PLATFORM_FROM_NAME: ${PLATFORM_FROM_NAME:-SuriRent}
+      PLATFORM_FROM_EMAIL: ${PLATFORM_FROM_EMAIL:-}
+    expose:
+      - "8000"
+    depends_on:
+      database:
+        condition: service_healthy
+      replica-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-}
+        REACT_APP_MARKETING_HOST: ${REACT_APP_MARKETING_HOST:-}
+        REACT_APP_APP_URL: ${REACT_APP_APP_URL:-}
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  database:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mongosh --quiet --username "$${MONGO_INITDB_ROOT_USERNAME}" --password "$${MONGO_INITDB_ROOT_PASSWORD}" --authenticationDatabase admin --eval "db.adminCommand('ping').ok"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  replica-database:
+    image: mongo:7.0.48
+    restart: unless-stopped
+    entrypoint:
+      - bash
+      - -ec
+      - |
+        key="$${MONGO_REPLICA_KEY:?Replica key is required}"
+        if [ "$${#key}" -lt 32 ] || [ "$${#key}" -gt 1024 ]; then
+          echo "Replica key must contain 32 to 1024 base64 characters" >&2
+          exit 1
+        fi
+        case "$$key" in
+          *[!A-Za-z0-9+/=]*) echo "Replica key must contain only base64 characters" >&2; exit 1 ;;
+        esac
+        install -d -m 0700 -o mongodb -g mongodb /run/mongo-replica
+        umask 077
+        printf '%s' "$$key" > /run/mongo-replica/key
+        chown mongodb:mongodb /run/mongo-replica/key
+        chmod 0400 /run/mongo-replica/key
+        unset key MONGO_REPLICA_KEY
+        exec /usr/local/bin/docker-entrypoint.sh mongod --replSet rs0 --bind_ip_all --keyFile /run/mongo-replica/key
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+      MONGO_REPLICA_KEY: ${MONGO_REPLICA_KEY:?Set MONGO_REPLICA_KEY}
+    volumes:
+      - replica_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet 'mongodb://127.0.0.1:27017/?directConnection=true' --eval 'quit(db.adminCommand({ping: 1}).ok === 1 ? 0 : 1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  replica-init:
+    image: mongo:7.0.48
+    restart: "no"
+    depends_on:
+      replica-database:
+        condition: service_healthy
+    environment:
+      MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set MONGO_ROOT_USERNAME}
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD}
+    entrypoint:
+      - mongosh
+      - --quiet
+      - mongodb://replica-database:27017/?directConnection=true
+      - --eval
+      - |
+        const admin = db.getSiblingDB("admin");
+        if (!admin.auth(process.env.MONGO_ROOT_USERNAME, process.env.MONGO_ROOT_PASSWORD)) throw new Error("Authentication failed");
+        const expected = { _id: "rs0", members: [{ _id: 0, host: "replica-database:27017" }] };
+        let status;
+        try {
+          status = admin.runCommand({ replSetGetStatus: 1 });
+        } catch (error) {
+          if (error.code !== 94) throw error;
+          status = { ok: 0, code: error.code };
+        }
+        if (status.ok !== 1 && status.code === 94) {
+          const result = admin.runCommand({ replSetInitiate: expected });
+          if (result.ok !== 1) throw new Error("Replica initialization failed");
+        } else if (status.ok !== 1) {
+          throw new Error("Replica status failed");
+        }
+        const config = admin.runCommand({ replSetGetConfig: 1 });
+        if (config.ok !== 1 || config.config._id !== "rs0"
+            || config.config.members.length !== 1 || config.config.members[0]._id !== 0
+            || config.config.members[0].host !== "replica-database:27017") {
+          throw new Error("Unexpected replica configuration; manual review required");
+        }
+        for (let i = 0; i < 120; i++) {
+          if (admin.runCommand({ hello: 1 }).isWritablePrimary) {
+            print("Replica set is ready");
+            quit(0);
+          }
+          sleep(1000);
+        }
+        throw new Error("Replica did not elect a primary");
+
+volumes:
+  mongo_data:
+  replica_data:

@@ -76,13 +76,15 @@ Coolify migration.
 
 Before any sandbox migration, the operator must identify the exact Coolify
 resource and MongoDB volume, arrange a maintenance window, and verify a fresh
-MongoDB backup and a restore in a separate private environment. Stop all
-application and background writes before the final backup and conversion.
+MongoDB backup and its restore into a separate private target volume. The target
+may be the intended sandbox replica; no additional test restore is required if
+the target is checked against the stopped source before any app uses it. Stop
+all application and background writes before the final backup and conversion.
 Keep the existing credentials and encryption settings; store a new replica key
-securely and retain it across restarts. Rehearse the complete Coolify-specific
-procedure on the restored copy before changing the sandbox. Confirm that the
-volume, indexes and data are preserved, authentication succeeds, transactions
-commit and roll back, and the database and app restart successfully.
+securely and retain it across restarts. Rehearse the Coolify-specific procedure
+with synthetic data before changing the sandbox. Confirm that the volume,
+indexes and data are preserved, authentication succeeds, transactions commit
+and roll back, and the database and app restart successfully.
 
 Prepare a rollback before starting: preserve the backup and restore it into a
 separate fresh volume if rollback is needed. Do not start a replica-converted
@@ -114,6 +116,18 @@ testing this same-stack topology with a separate `replica_data` volume and
 test credentials and does not bind replica scripts from the temporary build
 directory; it must never be applied to an existing Coolify resource or volume.
 It is not an approved sandbox migration configuration.
+
+`docker-compose.sandbox-cutover.yml` is a separate **candidate** Git-based
+Compose configuration, not an instruction to deploy. It preserves the
+`database` service and `mongo_data` volume, adds a separate replica volume,
+and defaults the app to the original database. Its replica requires a retained,
+secret `MONGO_REPLICA_KEY`. The app uses the replica only when both
+`CUTOVER_DATABASE_HOST=replica-database` and
+`CUTOVER_DATABASE_QUERY=&replicaSet=rs0` are set. Neither setting, a deployment,
+nor customer payments are enabled automatically. Verify the Coolify-generated
+Compose, volume names and persisted key before any approved deployment. The
+candidate starts an app by default, so block traffic and stop writers as needed;
+never deploy the target settings before the target restore is verified.
 
 1. Agree on a maintenance window, inventory every writer and integration, and
    stop them. Check Coolify's auto-deploy and queued or running deployments:
