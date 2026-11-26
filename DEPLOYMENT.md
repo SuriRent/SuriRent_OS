@@ -91,6 +91,39 @@ volume without a reviewed migration plan and explicit approval. A single-member
 replica set enables transactions but does not provide high availability. This
 database rehearsal alone is not sufficient to enable SMS checkout.
 
+#### Sandbox cutover design (not an execution procedure)
+
+The current Compose stack addresses its standalone database as `database` and
+stores it in `mongo_data`. The intended cutover keeps that service and volume
+unchanged and creates an authenticated replica on a **different, new** volume
+and a distinct Compose service hostname. The replica must advertise that
+hostname, not `localhost`; the app's MongoDB URI must use that hostname and
+`replicaSet=rs0`. The existing test template is not the sandbox configuration.
+The exact Coolify configuration and cutover sequence still need to be reviewed
+and rehearsed before use.
+
+1. Agree on a maintenance window, inventory every writer and integration, and
+   stop them. Keep SMS checkout and payment reminders disabled. Verify that
+   no writes can reach the source while the final backup is made.
+2. Make a fresh consistent application-database backup and verify a restore
+   privately. Preserve the source volume, database credentials, encryption
+   settings and the replica key separately and securely; an application-only
+   dump does not contain MongoDB users or server configuration.
+3. Initialize the new replica with the intended credentials and restore only
+   into its confirmed empty database. Before starting an app against it,
+   compare data and indexes, verify authentication, commit and abort
+   transactions, and check restart and network reachability. Keep real
+   integrations and background jobs from sending while verifying.
+4. With users still blocked, point the app to the new replica and check its
+   database connection and restart. Startup itself can write data. Do not
+   enable customer payments or SMS reminders until the complete payment flow
+   has been verified and separately approved.
+5. Before any writes that must be retained, rollback means stopping the target
+   app and pointing the original configuration back to the untouched source.
+   Preserve both volumes and the backup. Once any such writes or provider
+   requests exist on the new side, do not switch back to the older source
+   without reconciling and preserving them first.
+
 ## WhatsApp and SMS (Messente)
 
 In Kiosk Beheer, open **Instellingen > WhatsApp & SMS (Messente)**. Each company
