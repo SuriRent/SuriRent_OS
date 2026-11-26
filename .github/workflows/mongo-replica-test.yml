@@ -20,6 +20,11 @@ jobs:
     env:
       SERVICE_PASSWORD_MONGOTEST: ci-test-only-password
       SERVICE_BASE64_64_REPLICA: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      SERVICE_PASSWORD_JWTTEST: ci-only-jwt-secret
+      SERVICE_PASSWORD_PDFTEST: ci-only-pdf-password
+      SERVICE_PASSWORD_ADMINTEST: ci-only-admin-password
+      SERVICE_PASSWORD_SUPERTEST: ci-only-super-password
+      TEST_APP_IMAGE: surirent-coolify-app-ci:local
     steps:
       - uses: actions/checkout@v4
       - name: Check isolated Compose template
@@ -67,6 +72,44 @@ jobs:
           "${compose[@]}" up -d --force-recreate replica-init
           wait_for_initializer
           verify_from_probe
+      - name: Verify the app against the isolated replica
+        shell: bash
+        run: |
+          set -eu
+          docker build --quiet --target app -t "$TEST_APP_IMAGE" .
+          compose=(docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml)
+          if ! "${compose[@]}" up -d --no-deps --wait --wait-timeout 180 app-test; then
+            "${compose[@]}" logs app-test
+            exit 1
+          fi
+          "${compose[@]}" exec -T app-test python - <<'PY'
+          import asyncio
+          import os
+          from motor.motor_asyncio import AsyncIOMotorClient
+
+          async def main():
+              client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=10000)
+              try:
+                  hello = await client.admin.command("hello")
+                  if hello.get("setName") != "rs0" or not hello.get("isWritablePrimary"):
+                      raise RuntimeError("The test app did not reach the writable replica")
+                  checks = client[os.environ["DB_NAME"]]["app_connection_checks"]
+                  async with await client.start_session() as session:
+                      session.start_transaction()
+                      await checks.insert_one({"_id": "committed"}, session=session)
+                      await session.commit_transaction()
+                      session.start_transaction()
+                      await checks.insert_one({"_id": "aborted"}, session=session)
+                      await session.abort_transaction()
+                  if await checks.count_documents({"_id": "committed"}) != 1 or await checks.count_documents({"_id": "aborted"}) != 0:
+                      raise RuntimeError("The test app transaction check failed")
+                  await checks.delete_one({"_id": "committed"})
+              finally:
+                  client.close()
+
+          asyncio.run(main())
+          print("Test app connection and transactions passed")
+          PY
       - name: Remove isolated containers and volume
         if: always()
         run: docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml down --volumes --remove-orphans

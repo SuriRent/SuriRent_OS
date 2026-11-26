@@ -81,5 +81,37 @@ services:
       MONGO_ROOT_USERNAME: testuser
       MONGO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}
 
+  app-test:
+    image: ${TEST_APP_IMAGE:?Set the local test app image}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://testuser:${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}@database:27017/synthetic_app?authSource=admin&replicaSet=rs0
+      DB_NAME: synthetic_app
+      JWT_SECRET: ${SERVICE_PASSWORD_JWTTEST:?Set a test-only secret}
+      PDF_AES_PASSWORD: ${SERVICE_PASSWORD_PDFTEST:?Set a test-only password}
+      ADMIN_EMAIL: admin@example.test
+      ADMIN_PASSWORD: ${SERVICE_PASSWORD_ADMINTEST:?Set a test-only password}
+      SUPERADMIN_EMAIL: superadmin@example.test
+      SUPERADMIN_PASSWORD: ${SERVICE_PASSWORD_SUPERTEST:?Set a test-only password}
+      APP_PUBLIC_URL: https://app.example.test
+      CORS_ORIGINS: https://app.example.test
+      RESEED_DEMO_TENANT_PIN: "0"
+      DISABLE_DEMO_RESET: "1"
+      DISABLE_TRIAL_REMINDERS: "1"
+      DISABLE_OVERDUE_PUSH: "1"
+      DISABLE_AUTO_INVOICE: "1"
+      DISABLE_BILLING_CRON: "1"
+      DISABLE_INSTALLMENT_REMINDERS: "1"
+    depends_on:
+      replica-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 volumes:
   test_data:
