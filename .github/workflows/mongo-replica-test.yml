@@ -368,7 +368,7 @@ jobs:
 
   backup-restore-rehearsal:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     env:
       MONGO_ROOT_USERNAME: testuser
       MONGO_ROOT_PASSWORD: testpassword
@@ -459,6 +459,72 @@ jobs:
             if (db.hello().setName) throw new Error("Source was unexpectedly converted");
             const d = db.getSiblingDB("migration_ci");
             if (d.invoices.countDocuments({id: "invoice-1", amount: 100, paid_amount: 25}) !== 1 || d.payments.countDocuments({id: "payment-1", amount: 25}) !== 1) throw new Error("Source data changed");
+          '
+      - name: Verify app on restored replica and rollback before customer writes
+        shell: bash
+        run: |
+          set -eu
+          cat > migration-ci-app.yml <<'EOF'
+          services:
+            app:
+              environment:
+                DISABLE_TRIAL_REMINDERS: "1"
+                DISABLE_OVERDUE_PUSH: "1"
+                DISABLE_AUTO_INVOICE: "1"
+                DISABLE_BILLING_CRON: "1"
+                DISABLE_INSTALLMENT_REMINDERS: "1"
+          EOF
+          source=(docker compose -p surirent-backup-source -f docker-compose.yml -f migration-ci-app.yml)
+          target=(docker compose -p surirent-backup-target -f docker-compose.yml -f docker-compose.replica-test.yml -f migration-ci-app.yml)
+          source_volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data/db"}}{{.Name}}{{end}}{{end}}' "$("${source[@]}" ps -q database)")"
+          target_volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data/db"}}{{.Name}}{{end}}{{end}}' "$("${target[@]}" ps -q database)")"
+          if [ -z "$source_volume" ] || [ -z "$target_volume" ] || [ "$source_volume" = "$target_volume" ]; then
+            echo "Source and restored database volumes must be distinct" >&2
+            exit 1
+          fi
+          verify_app() {
+            expected="$1"
+            shift
+            "$@" exec -T -e EXPECTED_REPLICA="$expected" app python - <<'PY'
+          import asyncio
+          import os
+          from motor.motor_asyncio import AsyncIOMotorClient
+
+          async def main():
+              client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=10000)
+              try:
+                  hello = await client.admin.command("hello")
+                  expected = os.environ["EXPECTED_REPLICA"]
+                  if expected == "yes" and (hello.get("setName") != "rs0" or not hello.get("isWritablePrimary")):
+                      raise RuntimeError("The app did not connect to the writable restored replica")
+                  if expected == "no" and hello.get("setName"):
+                      raise RuntimeError("The rollback app did not connect to the standalone source")
+                  db = client["migration_ci"]
+                  if await db.invoices.count_documents({"id": "invoice-1", "amount": 100, "paid_amount": 25}) != 1:
+                      raise RuntimeError("The app cannot read the restored invoice")
+                  if await db.payments.count_documents({"id": "payment-1", "amount": 25}) != 1:
+                      raise RuntimeError("The app cannot read the restored payment")
+              finally:
+                  client.close()
+
+          asyncio.run(main())
+          print("Application database connection verified")
+          PY
+          }
+          if ! "${target[@]}" up -d --build --wait --wait-timeout 180 app; then
+            "${target[@]}" logs app database replica-init
+            exit 1
+          fi
+          verify_app yes "${target[@]}"
+          "${target[@]}" stop app
+          if ! "${source[@]}" up -d --build --wait --wait-timeout 180 app; then
+            "${source[@]}" logs app database
+            exit 1
+          fi
+          verify_app no "${source[@]}"
+          "${target[@]}" exec -T database mongosh --quiet 'mongodb://database:27017/?replicaSet=rs0' --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+            if (db.getSiblingDB("migration_ci").invoices.countDocuments({id: "invoice-1", paid_amount: 25}) !== 1) throw new Error("Restored copy changed during rollback");
           '
       - name: Remove isolated containers and volumes
         if: always()

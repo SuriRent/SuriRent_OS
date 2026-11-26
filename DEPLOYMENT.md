@@ -58,8 +58,13 @@ index, transaction commit and rollback, and a restart. This is not a migration
 of a Coolify volume and does not establish that the Coolify setup is compatible.
 Another isolated rehearsal dumps a synthetic application database, restores it
 to a fresh volume, and converts only the restored copy while checking that the
-standalone source remains unchanged. It does not back up database users or prove
-the safety of a Coolify migration.
+standalone source remains unchanged. It starts the app against the restored
+replica, then stops it and starts an app against the original standalone source.
+This models a rollback before customer writes, not a way to recover changes
+made after cutover: switching to an older source would lose those changes.
+The test uses synthetic data and separate volumes, and the app itself may create
+startup records. It does not back up database users or prove the safety of a
+Coolify migration.
 
 Before any sandbox migration, the operator must identify the exact Coolify
 resource and MongoDB volume, arrange a maintenance window, and verify a fresh
