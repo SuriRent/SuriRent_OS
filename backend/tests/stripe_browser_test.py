@@ -107,9 +107,9 @@ async def main():
             await page.get_by_text("Factuur TEST-1").first.wait_for()
             await page.get_by_role("button", name="Verder met betalen").click()
             card = page.frame_locator('iframe[title="Secure payment input frame"][src*="elements-inner-easel"]')
-            await card.locator('input[name="number"]').fill("4242424242424242")
-            await card.locator('input[name="expiry"]').fill("1234")
-            await card.locator('input[name="cvc"]').fill("123")
+            await card.locator('input[name="cardNumber"]').fill("4242424242424242")
+            await card.locator('input[name="cardExpiry"]').fill("1234")
+            await card.locator('input[name="cardCvc"]').fill("123")
             postal = card.locator('input[name="billingPostalCode"]')
             if await postal.count():
                 await postal.fill("12345")
