@@ -1,5 +1,21 @@
 # Isolated synthetic-data test only. Do not attach existing volumes or data.
 services:
+  source:
+    profiles: ["rehearsal"]
+    image: mongo:7.0.48
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: testuser
+      MONGO_INITDB_ROOT_PASSWORD: ${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}
+    volumes:
+      - source_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'quit(db.adminCommand({ping: 1}).ok === 1 ? 0 : 1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   database:
     image: mongo:7.0.48
     restart: unless-stopped
@@ -85,7 +101,7 @@ services:
     image: ${TEST_APP_IMAGE:?Set the local test app image}
     pull_policy: never
     restart: unless-stopped
-    environment:
+    environment: &test_app_environment
       MONGO_URL: mongodb://testuser:${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}@database:27017/synthetic_app?authSource=admin&replicaSet=rs0
       DB_NAME: synthetic_app
       JWT_SECRET: ${SERVICE_PASSWORD_JWTTEST:?Set a test-only secret}
@@ -113,5 +129,38 @@ services:
       retries: 3
       start_period: 60s
 
+  app-rehearsal-target:
+    profiles: ["rehearsal"]
+    image: ${TEST_APP_IMAGE:?Set the local test app image}
+    pull_policy: never
+    restart: "no"
+    environment:
+      <<: *test_app_environment
+      MONGO_URL: mongodb://testuser:${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}@database:27017/synthetic_migration?authSource=admin&replicaSet=rs0
+      DB_NAME: synthetic_migration
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  app-rehearsal-source:
+    profiles: ["rehearsal"]
+    image: ${TEST_APP_IMAGE:?Set the local test app image}
+    pull_policy: never
+    restart: "no"
+    environment:
+      <<: *test_app_environment
+      MONGO_URL: mongodb://testuser:${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}@source:27017/synthetic_migration?authSource=admin
+      DB_NAME: synthetic_migration
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 volumes:
   test_data:
+  source_data:

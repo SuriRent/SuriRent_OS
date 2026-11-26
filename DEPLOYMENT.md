@@ -52,6 +52,14 @@ It also starts the actual app container against the isolated replica and checks
 the app's MongoDB driver and transactions across database and app restarts.
 This does not test the Coolify deployment, real data, or the payment flow.
 
+`deploy/coolify-replica-test.yml` also has a `rehearsal` profile for a
+standalone synthetic source and separate source/target app containers. The CI
+workflow restores a synthetic dump to the isolated replica, starts the target
+app, restarts the database, and returns to the standalone source before
+customer writes. Never use this profile with an existing volume, customer data,
+real credentials or a real backup. It does not execute or validate a Coolify
+cutover; rollback after writes requires separate reconciliation.
+
 The same workflow also rehearses stopping a standalone MongoDB, converting its
 isolated test volume to a replica set, and checking existing data, its unique
 index, transaction commit and rollback, and a restart. This is not a migration

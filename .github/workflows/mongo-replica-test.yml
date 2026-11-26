@@ -111,9 +111,81 @@ jobs:
           asyncio.run(main())
           print("Test app connection and transactions passed")
           PY
+      - name: Rehearse synthetic Coolify copy, cutover and early rollback
+        shell: bash
+        run: |
+          set -eu
+          export TEST_APP_IMAGE="$(docker image inspect --format '{{.Id}}' "$TEST_APP_IMAGE")"
+          compose=(docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml --profile rehearsal)
+          "${compose[@]}" up -d --wait --wait-timeout 180 source
+          "${compose[@]}" exec -T source mongosh --quiet --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+            const d = db.getSiblingDB("synthetic_migration");
+            d.checks.createIndex({label: 1}, {unique: true});
+            d.checks.insertOne({_id: "original", label: "synthetic"});
+          '
+          "${compose[@]}" up -d --no-deps --wait --wait-timeout 180 app-rehearsal-source
+          "${compose[@]}" stop app-rehearsal-source
+          umask 077
+          "${compose[@]}" exec -T source sh -c '
+            exec mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" \
+              --authenticationDatabase admin --db synthetic_migration --archive --gzip
+          ' > synthetic-migration.archive.gz
+          test -s synthetic-migration.archive.gz
+          "${compose[@]}" exec -T database mongosh --quiet 'mongodb://database:27017/?replicaSet=rs0' --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Authentication failed");
+            if (db.getSiblingDB("synthetic_migration").getCollectionInfos().length !== 0) throw new Error("Target database is not empty");
+          '
+          "${compose[@]}" exec -T database sh -c '
+            exec mongorestore --host database --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" \
+              --authenticationDatabase admin --archive --gzip
+          ' < synthetic-migration.archive.gz
+          verify_app() {
+            expected="$1"
+            service="$2"
+            "${compose[@]}" exec -T -e EXPECTED_REPLICA="$expected" "$service" python - <<'PY'
+          import asyncio
+          import os
+          from motor.motor_asyncio import AsyncIOMotorClient
+
+          async def main():
+              client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=10000)
+              try:
+                  hello = await client.admin.command("hello")
+                  if (hello.get("setName") == "rs0") != (os.environ["EXPECTED_REPLICA"] == "yes"):
+                      raise RuntimeError("Application connected to the wrong topology")
+                  checks = client[os.environ["DB_NAME"]].checks
+                  if await checks.count_documents({"_id": "original", "label": "synthetic"}) != 1:
+                      raise RuntimeError("Synthetic record was not preserved")
+                  indexes = await checks.index_information()
+                  if not any(index.get("unique") and index.get("key") == [("label", 1)] for index in indexes.values()):
+                      raise RuntimeError("Synthetic unique index was not preserved")
+              finally:
+                  client.close()
+
+          asyncio.run(main())
+          PY
+          }
+          "${compose[@]}" up -d --no-deps --wait --wait-timeout 180 app-rehearsal-target
+          verify_app yes app-rehearsal-target
+          "${compose[@]}" restart database
+          "${compose[@]}" up -d --force-recreate replica-init
+          for i in {1..120}; do
+            init="$("${compose[@]}" ps -aq replica-init)"
+            if [ -n "$init" ] && [ "$(docker inspect -f '{{.State.Status}}' "$init")" = "exited" ]; then
+              [ "$(docker inspect -f '{{.State.ExitCode}}' "$init")" = "0" ]
+              break
+            fi
+            [ "$i" -lt 120 ]
+            sleep 1
+          done
+          verify_app yes app-rehearsal-target
+          "${compose[@]}" stop app-rehearsal-target
+          "${compose[@]}" up -d --no-deps --wait --wait-timeout 180 app-rehearsal-source
+          verify_app no app-rehearsal-source
       - name: Remove isolated containers and volume
         if: always()
-        run: docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml down --volumes --remove-orphans
+        run: docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml --profile rehearsal down --volumes --remove-orphans
 
   replica-deployment:
     runs-on: ubuntu-latest
