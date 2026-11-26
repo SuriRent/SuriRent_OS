@@ -6,7 +6,7 @@ import { Loader2, Lock, AlertCircle } from 'lucide-react';
 const cache = {};
 const getStripe = (pk) => { if (!cache[pk]) cache[pk] = loadStripe(pk); return cache[pk]; };
 
-function Form({ amountLabel, returnUrl, onPaid }) {
+function Form({ amountLabel, returnUrl, onPaid, onUncertain }) {
   const stripe = useStripe();
   const elements = useElements();
   const [busy, setBusy] = useState(false);
@@ -15,12 +15,32 @@ function Form({ amountLabel, returnUrl, onPaid }) {
     e.preventDefault();
     if (!stripe || !elements) return;
     setBusy(true); setErr('');
-    const { error, paymentIntent } = await stripe.confirmPayment({
-      elements, confirmParams: { return_url: returnUrl }, redirect: 'if_required',
-    });
-    if (error) { setErr(error.message || 'Betaling mislukt — probeer opnieuw.'); setBusy(false); return; }
-    if (paymentIntent?.status === 'succeeded' || paymentIntent?.status === 'processing') onPaid?.();
-    setBusy(false);
+    try {
+      const { error, paymentIntent } = await stripe.confirmPayment({
+        elements, confirmParams: { return_url: returnUrl }, redirect: 'if_required',
+      });
+      if (error) {
+        if (onUncertain && !['card_error', 'validation_error'].includes(error.type)) {
+          onUncertain();
+        } else {
+          setErr(error.message || 'Betaling mislukt — probeer opnieuw.');
+        }
+      } else if (paymentIntent?.status === 'succeeded' || paymentIntent?.status === 'processing') {
+        onPaid?.();
+      } else if (onUncertain) {
+        onUncertain();
+      } else {
+        setErr('De betaalstatus is nog niet bevestigd. Controleer deze voordat u opnieuw betaalt.');
+      }
+    } catch {
+      if (onUncertain) {
+        onUncertain();
+      } else {
+        setErr('De betaalstatus kon niet worden gecontroleerd. Controleer deze voordat u opnieuw betaalt.');
+      }
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <form onSubmit={submit} className="space-y-4" data-testid="stripe-pay-form">
@@ -38,13 +58,13 @@ function Form({ amountLabel, returnUrl, onPaid }) {
   );
 }
 
-export function StripePayElements({ publishableKey, clientSecret, amountLabel, returnUrl, onPaid }) {
+export function StripePayElements({ publishableKey, clientSecret, amountLabel, returnUrl, onPaid, onUncertain }) {
   return (
     <Elements stripe={getStripe(publishableKey)} options={{
       clientSecret, locale: 'nl',
       appearance: { theme: 'flat', variables: { colorPrimary: '#FF5C00', borderRadius: '12px', fontFamily: 'Outfit, system-ui, sans-serif' } },
     }}>
-      <Form amountLabel={amountLabel} returnUrl={returnUrl} onPaid={onPaid} />
+      <Form amountLabel={amountLabel} returnUrl={returnUrl} onPaid={onPaid} onUncertain={onUncertain} />
     </Elements>
   );
 }

@@ -194,7 +194,9 @@ provider before booking. Its public start and finish endpoints and the checkout
 UI are hard-disabled. The experimental UI stores a pending attempt in the
 browser session, uses a token-free provider return URL, and shows confirmation
 only after server verification. Lost or uncertain attempts may require manual
-review and cannot yet be safely unlocked through the UI. Stripe currently accepts EUR
+review and cannot yet be safely unlocked through the UI. An uncertain Stripe
+confirmation switches the SMS checkout to status verification rather than
+starting another payment. Stripe currently accepts EUR
 or SRD with a current configured rate; USD and amounts below the Stripe minimum
 are rejected, not silently converted or increased.
 

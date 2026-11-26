@@ -11,8 +11,11 @@ jest.mock('../lib/api', () => ({
   formatError: () => 'Ongeldige betaallink',
 }));
 jest.mock('../components/StripePayElements', () => ({
-  StripePayElements: ({ onPaid, returnUrl, amountLabel }) => (
-    <button onClick={onPaid} data-return-url={returnUrl}>Stripe {amountLabel}</button>
+  StripePayElements: ({ onPaid, onUncertain, returnUrl, amountLabel }) => (
+    <>
+      <button onClick={onPaid} data-return-url={returnUrl}>Stripe {amountLabel}</button>
+      <button onClick={onUncertain}>Onzekere betaalstatus</button>
+    </>
   ),
 }));
 
@@ -245,6 +248,41 @@ test('bewaarde poging blijft controleerbaar als de post niet meer openstaat', as
     await act(async () => root.render(<SmsPaymentPage />));
     await act(async () => host.querySelector('button').click());
     expect(host.textContent).toContain('KW-3');
+  } finally {
+    await act(async () => root.unmount());
+    globalThis.IS_REACT_ACT_ENVIRONMENT = previous;
+  }
+});
+
+test('controleert een onzekere Stripe-status zonder opnieuw te betalen', async () => {
+  mockToken = 'H'.repeat(22);
+  api.get.mockResolvedValue({ data: {
+    company: { name: 'Bedrijf' },
+    items: [{ kind: 'invoice', id: 'i1', reference: 'F-1', amount: 10, currency: 'EUR' }],
+    online_methods: [{ id: 'card', label: 'Creditcard' }], bank_accounts: [], online_payment_available: true,
+  } });
+  api.post.mockResolvedValueOnce({ data: {
+    item: { kind: 'invoice', id: 'i1' }, method: 'card', attempt_id: 'attempt1',
+    amount_cents: 1000, currency: 'EUR', provider_amount_cents: 1000, provider_currency: 'EUR',
+    publishable_key: 'pk_test_example', client_secret: 'secret',
+  } }).mockRejectedValueOnce(new Error('pending'));
+  const host = document.createElement('div');
+  const root = createRoot(host);
+  const previous = globalThis.IS_REACT_ACT_ENVIRONMENT;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  try {
+    await act(async () => root.render(<SmsPaymentPage />));
+    await act(async () => host.querySelector('button').click());
+    const uncertain = [...host.querySelectorAll('button')]
+      .find((button) => button.textContent === 'Onzekere betaalstatus');
+    await act(async () => uncertain.click());
+    expect(api.post).toHaveBeenNthCalledWith(2, '/public/sms-payment/finish',
+      { item: { kind: 'invoice', id: 'i1' }, attempt_id: 'attempt1' },
+      { headers: { 'X-Sms-Payment-Token': mockToken } });
+    expect(host.textContent).toContain('nog niet bevestigd');
+    expect(host.textContent).not.toContain('Betaling bevestigd');
+    expect(host.textContent).not.toContain('Verder met betalen');
+    expect(JSON.parse(sessionStorage.getItem('surirent_sms_checkout')).attempt_id).toBe('attempt1');
   } finally {
     await act(async () => root.unmount());
     globalThis.IS_REACT_ACT_ENVIRONMENT = previous;

@@ -202,7 +202,8 @@ export default function SmsCheckout({ token, items = [], methods = [], isReturn 
         <Suspense fallback={<p>Betaalformulier laden…</p>}>
           <StripePayElements publishableKey={checkout.publishableKey} clientSecret={checkout.clientSecret}
             amountLabel={fmtMoney(checkout.amount, 'EUR')} returnUrl={`${window.location.origin}/b/return`}
-            onPaid={() => { setCheckout(null); verify(saved); }} />
+            onPaid={() => { setCheckout(null); verify(saved); }}
+            onUncertain={() => { setCheckout(null); verify(saved); }} />
         </Suspense>
       )}
       {saved && (
