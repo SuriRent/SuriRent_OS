@@ -1,0 +1,85 @@
+# Isolated synthetic-data test only. Do not attach existing volumes or data.
+services:
+  database:
+    image: mongo:7.0.48
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: testuser
+      MONGO_INITDB_ROOT_PASSWORD: ${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}
+      MONGO_REPLICA_KEY: ${SERVICE_BASE64_64_REPLICA:?Set a test-only replica key}
+    entrypoint:
+      - bash
+      - -ec
+      - |
+        install -d -m 0700 -o mongodb -g mongodb /run/mongo-replica
+        umask 077
+        printf '%s' "$$MONGO_REPLICA_KEY" > /run/mongo-replica/key
+        chown mongodb:mongodb /run/mongo-replica/key
+        chmod 0400 /run/mongo-replica/key
+        unset MONGO_REPLICA_KEY
+        exec /usr/local/bin/docker-entrypoint.sh mongod --replSet rs0 --bind_ip_all --keyFile /run/mongo-replica/key
+    volumes:
+      - test_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet 'mongodb://127.0.0.1:27017/?directConnection=true' --eval 'quit(db.adminCommand({ping: 1}).ok === 1 ? 0 : 1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  replica-init:
+    image: mongo:7.0.48
+    restart: "no"
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      MONGO_ROOT_USERNAME: testuser
+      MONGO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}
+    entrypoint:
+      - mongosh
+      - --quiet
+      - mongodb://database:27017/?directConnection=true
+      - --eval
+      - |
+        const admin = db.getSiblingDB("admin");
+        if (!admin.auth(process.env.MONGO_ROOT_USERNAME, process.env.MONGO_ROOT_PASSWORD)) throw new Error("Authentication failed");
+        const expected = { _id: "rs0", members: [{ _id: 0, host: "database:27017" }] };
+        let status;
+        try {
+          status = admin.runCommand({ replSetGetStatus: 1 });
+        } catch (error) {
+          if (error.code !== 94) throw error;
+          status = { ok: 0, code: error.code };
+        }
+        if (status.ok !== 1 && status.code === 94) {
+          const result = admin.runCommand({ replSetInitiate: expected });
+          if (result.ok !== 1) throw new Error("Replica initialization failed");
+        } else if (status.ok !== 1) {
+          throw new Error("Replica status failed");
+        }
+        const config = admin.runCommand({ replSetGetConfig: 1 });
+        if (config.ok !== 1 || config.config._id !== "rs0"
+            || config.config.members.length !== 1 || config.config.members[0]._id !== 0
+            || config.config.members[0].host !== "database:27017") {
+          throw new Error("Unexpected replica configuration; manual review required");
+        }
+        for (let i = 0; i < 120; i++) {
+          if (admin.runCommand({ hello: 1 }).isWritablePrimary) {
+            print("Replica set is ready");
+            quit(0);
+          }
+          sleep(1000);
+        }
+        throw new Error("Replica did not elect a primary");
+
+  probe:
+    image: mongo:7.0.48
+    restart: unless-stopped
+    command: ["sleep", "infinity"]
+    environment:
+      MONGO_ROOT_USERNAME: testuser
+      MONGO_ROOT_PASSWORD: ${SERVICE_PASSWORD_MONGOTEST:?Set a test-only password}
+
+volumes:
+  test_data:

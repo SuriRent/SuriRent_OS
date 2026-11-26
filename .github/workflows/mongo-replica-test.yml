@@ -7,12 +7,70 @@ on:
       - 'docker-compose.yml'
       - 'docker-compose.replica-test.yml'
       - 'deploy/mongo-replica/**'
+      - 'deploy/coolify-replica-test.yml'
       - '.github/workflows/mongo-replica-test.yml'
 
 permissions:
   contents: read
 
 jobs:
+  coolify-template-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SERVICE_PASSWORD_MONGOTEST: ci-test-only-password
+      SERVICE_BASE64_64_REPLICA: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check isolated Compose template
+        shell: bash
+        run: |
+          set -eu
+          compose=(docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml)
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d database replica-init probe
+          wait_for_initializer() {
+            for i in {1..120}; do
+              container="$("${compose[@]}" ps -aq replica-init)"
+              if [ -n "$container" ] && [ "$(docker inspect -f '{{.State.Status}}' "$container")" = "exited" ]; then
+                "${compose[@]}" logs replica-init
+                [ "$(docker inspect -f '{{.State.ExitCode}}' "$container")" = "0" ]
+                return
+              fi
+              sleep 1
+            done
+            "${compose[@]}" logs database replica-init
+            return 1
+          }
+          verify_from_probe() {
+            "${compose[@]}" exec -T probe mongosh --quiet 'mongodb://database:27017/?replicaSet=rs0' --eval '
+              const admin = db.getSiblingDB("admin");
+              if (!admin.auth(process.env.MONGO_ROOT_USERNAME, process.env.MONGO_ROOT_PASSWORD)) throw new Error("Authentication failed");
+              const hello = admin.runCommand({hello: 1});
+              if (hello.setName !== "rs0" || !hello.isWritablePrimary) throw new Error("Writable replica not reached");
+              const session = db.getMongo().startSession();
+              const checks = session.getDatabase("synthetic_test").checks;
+              session.startTransaction();
+              checks.insertOne({_id: "commit"});
+              session.commitTransaction();
+              session.startTransaction();
+              checks.insertOne({_id: "abort"});
+              session.abortTransaction();
+              if (checks.countDocuments({_id: "commit"}) !== 1 || checks.countDocuments({_id: "abort"}) !== 0) throw new Error("Transaction check failed");
+              checks.deleteMany({});
+              session.endSession();
+            '
+          }
+          wait_for_initializer
+          verify_from_probe
+          "${compose[@]}" restart database
+          "${compose[@]}" up -d --force-recreate replica-init
+          wait_for_initializer
+          verify_from_probe
+      - name: Remove isolated containers and volume
+        if: always()
+        run: docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml down --volumes --remove-orphans
+
   replica-deployment:
     runs-on: ubuntu-latest
     timeout-minutes: 30
