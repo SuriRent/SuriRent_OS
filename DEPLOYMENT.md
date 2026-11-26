@@ -219,6 +219,13 @@ Stripe's test payment method; no real charge is made. The test does not send an
 SMS, exercise the browser or use the deployment database, and passing it does
 not make the checkout ready for customers. Never put keys in the repository,
 workflow inputs, chat or logs.
+For the separate opt-in browser test, set the environment variable
+`SMS_STRIPE_TEST_PUBLISHABLE_KEY` to the matching `pk_test_...` key in that
+same GitHub Actions environment. On a trusted branch, run the workflow with
+`run_stripe_browser_test` enabled. The browser test uses synthetic records,
+a disposable local replica set and a EUR 1.00 Stripe test-mode payment. It
+does not send an SMS or exercise the Coolify deployment, and it does not
+enable checkout for customers.
 The existing payment paths also need coordination before checkout can be
 enabled; do not treat the booking code as an active or complete integration.
 The planned coordination blocks other bookings for the same company and
