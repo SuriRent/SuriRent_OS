@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 from motor.motor_asyncio import AsyncIOMotorClient
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError, async_playwright
+from playwright.async_api import async_playwright
 from starlette.responses import FileResponse
 from starlette.staticfiles import StaticFiles
 import uvicorn
@@ -106,20 +106,11 @@ async def main():
             await page.goto(f"http://127.0.0.1:8123/b/{token}", wait_until="domcontentloaded")
             await page.get_by_text("Factuur TEST-1").first.wait_for()
             await page.get_by_role("button", name="Verder met betalen").click()
-            card = page.frame_locator('iframe[title="Secure payment input frame"][src*="elements-inner-easel"]')
-            try:
-                await card.locator('input[name="cardNumber"]').fill("4242424242424242")
-            except PlaywrightTimeoutError:
-                for frame in page.frames:
-                    if "js.stripe.com" in frame.url:
-                        fields = await frame.locator("input").evaluate_all(
-                            "(inputs) => inputs.map(({name, type, placeholder}) => ({name, type, placeholder}))"
-                        )
-                        print(f"Stripe frame {frame.url.split('?')[0].split('#')[0]}: {fields}", flush=True)
-                raise
-            await card.locator('input[name="cardExpiry"]').fill("1234")
-            await card.locator('input[name="cardCvc"]').fill("123")
-            postal = card.locator('input[name="billingPostalCode"]')
+            card = page.frame_locator('iframe[title="Secure payment input frame"][src*="elements-inner-accessory-target"]')
+            await card.locator('input[name="number"]').fill("4242424242424242")
+            await card.locator('input[name="expiry"]').fill("1234")
+            await card.locator('input[name="cvc"]').fill("123")
+            postal = card.locator('input[name="postalCode"]')
             if await postal.count():
                 await postal.fill("12345")
             if await database.payments.count_documents({}) != 0:
