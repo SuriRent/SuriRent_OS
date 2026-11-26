@@ -106,7 +106,20 @@ async def main():
             await page.goto(f"http://127.0.0.1:8123/b/{token}", wait_until="domcontentloaded")
             await page.get_by_text("Factuur TEST-1").first.wait_for()
             await page.get_by_role("button", name="Verder met betalen").click()
-            card = page.frame_locator('iframe[title="Secure payment input frame"][src*="elements-inner-accessory-target"]')
+            for _ in range(100):
+                matches = [
+                    frame for frame in page.frames
+                    if frame.url.startswith("https://js.stripe.com/")
+                    and await frame.locator('input[name="number"]').count()
+                ]
+                if len(matches) == 1:
+                    card = matches[0]
+                    break
+                if len(matches) > 1:
+                    raise RuntimeError("Multiple Stripe card input frames found")
+                await asyncio.sleep(0.3)
+            else:
+                raise RuntimeError("Stripe card input frame did not load")
             await card.locator('input[name="number"]').fill("4242424242424242")
             await card.locator('input[name="expiry"]').fill("1234")
             await card.locator('input[name="cvc"]').fill("123")
