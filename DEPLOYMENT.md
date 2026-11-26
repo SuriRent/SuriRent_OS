@@ -102,6 +102,12 @@ hostname, not `localhost`; the app's MongoDB URI must use that hostname and
 The exact Coolify configuration and cutover sequence still need to be reviewed
 and rehearsed before use.
 
+Coolify container labels can point at a temporary `/artifacts/...` build
+directory that no longer exists. Do not edit that path or run a replacement
+Compose project from it. Identify and change the managed Coolify resource and
+its persistent source configuration instead, after the procedure has been
+reviewed and approved.
+
 `deploy/coolify-cutover-rehearsal.yml` is a synthetic-only Compose overlay for
 testing this same-stack topology with a separate `replica_data` volume and
 `replica-database` hostname. Its CI rehearsal uses a disposable project and
