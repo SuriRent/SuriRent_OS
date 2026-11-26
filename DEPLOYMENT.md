@@ -239,9 +239,12 @@ terms. Both marker types remain claimed on crashes and must be investigated
 before any manual retry; acceptance is not proof of delivery. Claims are
 included in company backups, but restoring an older backup can lose later
 claims: pause reminders and reconcile delivery history before resuming.
-Other manual reminder routes are not yet connected; an actual Messente
-delivery has not been verified. Do not enable either gate solely on the
-basis of the isolated browser test.
+The manual overdue SMS route only creates a link when the tenant's calculated
+arrears exactly match scoped overdue rent invoices, with no active plan, and
+only sends it to the tenant's stored number. Otherwise it requires manual
+review. Ordinary invoice messages remain unchanged. Actual Messente delivery
+has not been verified. Do not enable either gate solely on the basis of the
+isolated browser test.
 The existing payment paths also need coordination before checkout can be
 enabled; do not treat the booking code as an active or complete integration.
 The planned coordination blocks other bookings for the same company and

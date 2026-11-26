@@ -22104,6 +22104,43 @@ async def message_overdue_reminder(tenant_id: str, body: MessageSendIn, user=Dep
     if bal.get("balance", 0) <= 0:
         raise HTTPException(status_code=400, detail="Deze huurder heeft geen achterstand")
     brand_name = await _brand_name_of(company_id_of(user))
+    if body.channel == "sms" and _SMS_CHECKOUT_READY and _SMS_PAYMENT_REMINDERS_READY:
+        from messente_service import MessenteError, _validate_number
+        from sms_payment_attempts import PaymentAttemptConflict
+        from sms_payment_booking import _cents
+        from sms_payment_checkout import _current_amount
+
+        try:
+            if _validate_number(to) != _validate_number(t.get("phone") or ""):
+                raise HTTPException(status_code=400, detail="Een betaalherinnering kan alleen naar het telefoonnummer van de huurder.")
+        except MessenteError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        cid = company_id_of(user)
+        currency = bal.get("currency") or "SRD"
+        currency_filter = {"$in": ["SRD", None]} if currency == "SRD" else currency
+        invoices = await db.invoices.find({
+            "company_id": cid, "tenant_id": tenant_id, "status": {"$in": ["open", "partial"]},
+            "archived": {"$ne": True}, "kind": {"$in": [None, "huur"]},
+            "currency": currency_filter, "due_date": {"$lt": now_utc().date().isoformat()},
+        }, {"_id": 0, "id": 1}).to_list(None)
+        grant = {"company_id": cid, "tenant_id": tenant_id}
+        try:
+            total_cents = 0
+            for invoice in invoices:
+                if await db.payment_plans.find_one({
+                    "company_id": cid, "invoice_ids": invoice["id"], "status": "active",
+                }):
+                    raise PaymentAttemptConflict("Een achterstallige factuur heeft een actieve betalingsregeling.")
+                amount, _ = await _current_amount(db, grant, {"kind": "invoice", "id": invoice["id"]})
+                total_cents += amount
+            if not invoices or total_cents != _cents(bal["balance"]):
+                raise PaymentAttemptConflict("De achterstand komt niet overeen met de vervallen facturen; controleer deze eerst.")
+        except PaymentAttemptConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        await _send_sms_payment_reminder(
+            cid, tenant_id, [invoice["id"] for invoice in invoices], "friendly", brand_name, cfg, to,
+        )
+        return {"ok": True, "sent_to": to, "channel": body.channel}
     extra = f"{body.message.strip()}\n\n" if body.message else ""
     msg = (
         f"{extra}"

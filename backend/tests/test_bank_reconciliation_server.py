@@ -364,6 +364,84 @@ class InstallmentPaymentSmsMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(grant["invoice_ids"], [])
 
 
+@unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
+class OverduePaymentSmsMongoTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.client = AsyncIOMotorClient(os.environ["SMS_BOOKING_MONGO_URL"], serverSelectionTimeoutMS=5000)
+        self.name = f"test_overdue_sms_{uuid4().hex}"
+        self.db = self.client[self.name]
+        await self.db.tenants.insert_one({"id": "t1", "company_id": "c1", "phone": "+5971234567"})
+        yesterday = (server.now_utc().date() - timedelta(days=1)).isoformat()
+        tomorrow = (server.now_utc().date() + timedelta(days=1)).isoformat()
+        await self.db.invoices.insert_many([
+            {"id": "i1", "company_id": "c1", "tenant_id": "t1", "status": "open",
+             "amount": 100, "paid_amount": 0, "currency": "SRD", "kind": "huur", "due_date": yesterday},
+            {"id": "future", "company_id": "c1", "tenant_id": "t1", "status": "open",
+             "amount": 100, "paid_amount": 0, "currency": "SRD", "due_date": tomorrow},
+            {"id": "other", "company_id": "c2", "tenant_id": "t1", "status": "open",
+             "amount": 100, "paid_amount": 0, "currency": "SRD", "due_date": yesterday},
+            {"id": "paid", "company_id": "c1", "tenant_id": "t1", "status": "paid",
+             "amount": 100, "paid_amount": 100, "currency": "SRD", "due_date": yesterday},
+        ])
+        self.send = AsyncMock()
+        self.balance = AsyncMock(return_value={"balance": 100, "currency": "SRD"})
+        self.patches = [
+            patch.object(server, "db", self.db),
+            patch.object(server, "_SMS_CHECKOUT_READY", True),
+            patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True),
+            patch.object(server, "scope", return_value={"company_id": "c1"}),
+            patch.object(server, "company_id_of", return_value="c1"),
+            patch.object(server, "_messente_or_400", AsyncMock(return_value={})),
+            patch.object(server, "_brand_name_of", AsyncMock(return_value="Bedrijf")),
+            patch.object(server, "_calc_balance", self.balance),
+            patch.object(server, "_send_sms_payment_reminder", self.send),
+        ]
+        for item in self.patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    async def asyncTearDown(self):
+        await self.client.drop_database(self.name)
+        self.client.close()
+
+    async def test_only_matching_overdue_invoices_are_sent(self):
+        result = await server.message_overdue_reminder(
+            "t1", server.MessageSendIn(channel="sms"), {"company_id": "c1"},
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(self.send.await_args.args[:5], ("c1", "t1", ["i1"], "friendly", "Bedrijf"))
+
+    async def test_unmatched_balance_or_active_plan_blocks_sms(self):
+        self.balance.return_value = {"balance": 150, "currency": "SRD"}
+        with self.assertRaises(HTTPException) as error:
+            await server.message_overdue_reminder("t1", server.MessageSendIn(channel="sms"), {"company_id": "c1"})
+        self.assertEqual(error.exception.status_code, 409)
+        self.balance.return_value = {"balance": 100, "currency": "SRD"}
+        await self.db.payment_plans.insert_one({"company_id": "c1", "invoice_ids": ["i1"], "status": "active"})
+        with self.assertRaises(HTTPException) as error:
+            await server.message_overdue_reminder("t1", server.MessageSendIn(channel="sms"), {"company_id": "c1"})
+        self.assertEqual(error.exception.status_code, 409)
+        self.send.assert_not_awaited()
+
+    async def test_custom_recipient_cannot_receive_payment_link(self):
+        with self.assertRaises(HTTPException) as error:
+            await server.message_overdue_reminder(
+                "t1", server.MessageSendIn(channel="sms", to="+5977654321"), {"company_id": "c1"},
+            )
+        self.assertEqual(error.exception.status_code, 400)
+        self.send.assert_not_awaited()
+
+    async def test_disabled_gate_preserves_existing_overdue_message(self):
+        legacy = AsyncMock()
+        with patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", False), \
+                patch.object(server, "_messente_send", legacy):
+            await server.message_overdue_reminder(
+                "t1", server.MessageSendIn(channel="sms", to="+5977654321"), {"company_id": "c1"},
+            )
+        self.assertEqual(legacy.await_count, 1)
+        self.send.assert_not_awaited()
+
+
 class BankReconciliationServerTests(unittest.IsolatedAsyncioTestCase):
     @classmethod
     def tearDownClass(cls):
