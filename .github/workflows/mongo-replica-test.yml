@@ -77,6 +77,7 @@ jobs:
         run: |
           set -eu
           docker build --quiet --target app -t "$TEST_APP_IMAGE" .
+          export TEST_APP_IMAGE="$(docker image inspect --format '{{.Id}}' "$TEST_APP_IMAGE")"
           compose=(docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml)
           if ! "${compose[@]}" up -d --no-deps --wait --wait-timeout 180 app-test; then
             "${compose[@]}" logs app-test
