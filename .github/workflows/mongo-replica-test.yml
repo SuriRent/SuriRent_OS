@@ -310,6 +310,10 @@ jobs:
           "${target[@]}" up -d --force-recreate replica-init
           wait_for_initializer
           verify_app yes "${target[@]}"
+          "${target[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 180 replica-database
+          "${target[@]}" up -d --no-deps --force-recreate replica-init
+          wait_for_initializer
+          verify_app yes "${target[@]}"
           "${target[@]}" stop app
           "${base[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 180 app
           verify_app no "${base[@]}"

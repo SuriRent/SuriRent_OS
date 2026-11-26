@@ -111,8 +111,9 @@ reviewed and approved.
 `deploy/coolify-cutover-rehearsal.yml` is a synthetic-only Compose overlay for
 testing this same-stack topology with a separate `replica_data` volume and
 `replica-database` hostname. Its CI rehearsal uses a disposable project and
-test credentials; it must never be applied to an existing Coolify resource or
-volume. It is not an approved sandbox migration configuration.
+test credentials and does not bind replica scripts from the temporary build
+directory; it must never be applied to an existing Coolify resource or volume.
+It is not an approved sandbox migration configuration.
 
 1. Agree on a maintenance window, inventory every writer and integration, and
    stop them. Check Coolify's auto-deploy and queued or running deployments:

@@ -11,15 +11,31 @@ services:
   replica-database:
     image: mongo:7.0.48
     restart: unless-stopped
-    entrypoint: ["bash", "/etc/mongo-replica/entrypoint.sh"]
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/run/mongo-replica/key"]
+    entrypoint:
+      - bash
+      - -ec
+      - |
+        key="$${MONGO_REPLICA_KEY:?Replica key is required}"
+        if [ "$${#key}" -lt 32 ] || [ "$${#key}" -gt 1024 ]; then
+          echo "Replica key must contain 32 to 1024 base64 characters" >&2
+          exit 1
+        fi
+        case "$$key" in
+          *[!A-Za-z0-9+/=]*) echo "Replica key must contain only base64 characters" >&2; exit 1 ;;
+        esac
+        install -d -m 0700 -o mongodb -g mongodb /run/mongo-replica
+        umask 077
+        printf '%s' "$$key" > /run/mongo-replica/key
+        chown mongodb:mongodb /run/mongo-replica/key
+        chmod 0400 /run/mongo-replica/key
+        unset key MONGO_REPLICA_KEY
+        exec /usr/local/bin/docker-entrypoint.sh mongod --replSet rs0 --bind_ip_all --keyFile /run/mongo-replica/key
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set test username}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set test password}
       MONGO_REPLICA_KEY: ${MONGO_REPLICA_KEY:?Set test replica key}
     volumes:
       - replica_data:/data/db
-      - ./deploy/mongo-replica/entrypoint.sh:/etc/mongo-replica/entrypoint.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "mongosh --quiet 'mongodb://127.0.0.1:27017/?directConnection=true' --eval 'quit(db.adminCommand({ping: 1}).ok === 1 ? 0 : 1)'"]
       interval: 10s
@@ -36,10 +52,42 @@ services:
     environment:
       MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set test username}
       MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set test password}
-      MONGO_REPLICA_HOST: replica-database:27017
-    volumes:
-      - ./deploy/mongo-replica/init.js:/etc/mongo-replica/init.js:ro
-    entrypoint: ["mongosh", "--quiet", "mongodb://replica-database:27017/?directConnection=true", "--file", "/etc/mongo-replica/init.js"]
+    entrypoint:
+      - mongosh
+      - --quiet
+      - mongodb://replica-database:27017/?directConnection=true
+      - --eval
+      - |
+        const admin = db.getSiblingDB("admin");
+        if (!admin.auth(process.env.MONGO_ROOT_USERNAME, process.env.MONGO_ROOT_PASSWORD)) throw new Error("Authentication failed");
+        const expected = { _id: "rs0", members: [{ _id: 0, host: "replica-database:27017" }] };
+        let status;
+        try {
+          status = admin.runCommand({ replSetGetStatus: 1 });
+        } catch (error) {
+          if (error.code !== 94) throw error;
+          status = { ok: 0, code: error.code };
+        }
+        if (status.ok !== 1 && status.code === 94) {
+          const result = admin.runCommand({ replSetInitiate: expected });
+          if (result.ok !== 1) throw new Error("Replica initialization failed");
+        } else if (status.ok !== 1) {
+          throw new Error("Replica status failed");
+        }
+        const config = admin.runCommand({ replSetGetConfig: 1 });
+        if (config.ok !== 1 || config.config._id !== "rs0"
+            || config.config.members.length !== 1 || config.config.members[0]._id !== 0
+            || config.config.members[0].host !== "replica-database:27017") {
+          throw new Error("Unexpected replica configuration; manual review required");
+        }
+        for (let i = 0; i < 120; i++) {
+          if (admin.runCommand({ hello: 1 }).isWritablePrimary) {
+            print("Replica set is ready");
+            quit(0);
+          }
+          sleep(1000);
+        }
+        throw new Error("Replica did not elect a primary");
 
 volumes:
   replica_data:
