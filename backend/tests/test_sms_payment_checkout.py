@@ -30,6 +30,35 @@ class CheckoutAmountTests(unittest.IsolatedAsyncioTestCase):
                 await _stripe_amount(10000, "USD")
 
 
+class CheckoutTopologyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unsupported_topology_cannot_reserve_or_contact_provider(self):
+        client = SimpleNamespace(admin=SimpleNamespace(command=AsyncMock()))
+        grant = {"company_id": "c1", "tenant_id": "t1"}
+        deps = SimpleNamespace(require_plan_feature=AsyncMock())
+        stripe_config = SimpleNamespace(
+            _active=lambda _: {"enabled": True, "methods": ["card"], "mode": "test"},
+            _cfg_doc=AsyncMock(return_value={"stripe_config": {}}),
+        )
+        with patch.dict(sys.modules, {"routes": SimpleNamespace(_deps=deps),
+                                     "routes.company_stripe": stripe_config}), \
+                patch("sms_payment_checkout._authorized_grant", new=AsyncMock(return_value=grant)), \
+                patch("sms_payment_checkout._current_amount", new=AsyncMock(return_value=(100, "EUR"))), \
+                patch("sms_payment_checkout.reserve_attempt", new_callable=AsyncMock) as reserve, \
+                patch("sms_payment_checkout.create_sms_stripe_intent", new_callable=AsyncMock) as create:
+            for topology in (
+                {"isWritablePrimary": True, "logicalSessionTimeoutMinutes": 30},
+                {"setName": "rs0", "isWritablePrimary": False, "logicalSessionTimeoutMinutes": 30},
+                {"setName": "rs0", "isWritablePrimary": True},
+            ):
+                with self.subTest(topology=topology):
+                    client.admin.command.return_value = topology
+                    with self.assertRaisesRegex(PaymentAttemptConflict, "databasetransacties ontbreken"):
+                        await start_sms_checkout(None, client, token="test", item={"kind": "invoice", "id": "i1"},
+                                                 method="card")
+            reserve.assert_not_awaited()
+            create.assert_not_awaited()
+
+
 @unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
 class CheckoutMongoTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

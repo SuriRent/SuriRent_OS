@@ -210,6 +210,11 @@ plan and specific installments on consistent plans. Inconsistent balances,
 pending installment payments, or overlapping plans require manual review.
 It requires MongoDB transactions. The Compose database
 above is a standalone MongoDB instance, so it cannot run this booking code.
+Before reserving an SMS checkout, the app checks that MongoDB reports a
+replica-set primary or sharded router with sessions. This early check prevents
+a standalone deployment from leaving a reservation, but does not prove that
+transactions or booking will succeed; the transactional preflight still runs
+before contacting the payment provider.
 The `SMS payment transaction tests` GitHub Actions workflow starts a separate,
 disposable replica set for the booking tests; it does not migrate or access the
 deployment database. Run it after pushing the branch and inspect its result.

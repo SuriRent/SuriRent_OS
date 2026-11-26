@@ -109,6 +109,12 @@ async def start_sms_checkout(db, client, *, token: str, item: dict, method: str)
             raise PaymentAttemptConflict("Deze Stripe-betaalmethode is niet ingeschakeld")
         provider_amount, provider_currency, mode = await _stripe_amount(amount, currency), "EUR", config["mode"]
 
+    topology = await client.admin.command("hello")
+    replica = bool(topology.get("setName") and topology.get("isWritablePrimary"))
+    router = topology.get("msg") == "isdbgrid"
+    if not (replica or router) or topology.get("logicalSessionTimeoutMinutes") is None:
+        raise PaymentAttemptConflict("Online betalen is tijdelijk niet beschikbaar: databasetransacties ontbreken")
+
     attempt = await reserve_attempt(
         db.sms_payment_attempts, company_id=grant["company_id"], tenant_id=grant["tenant_id"],
         item=item, method=method, amount_cents=amount, currency=currency,
