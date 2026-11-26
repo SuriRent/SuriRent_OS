@@ -140,14 +140,18 @@ async def create_sms_mope_request(db, client, attempt: dict) -> dict:
     return {"payment_id": provider_id, "payment_url": payment_url}
 
 
-async def _stripe_proof(attempt: dict) -> dict:
+async def _stripe_intent(attempt: dict) -> tuple[dict, dict]:
     from routes.company_stripe import _cfg_doc
 
     mode = attempt.get("stripe_mode")
-    if mode not in ("test", "live"):
-        raise PaymentAttemptConflict("Stripe-modus ontbreekt")
+    if (mode not in ("test", "live") or attempt.get("method") not in ("card", "ideal")
+            or not isinstance(attempt.get("provider_id"), str) or not attempt["provider_id"]
+            or type(attempt.get("provider_amount_cents")) is not int
+            or attempt["provider_amount_cents"] <= 0 or attempt.get("provider_currency") != "EUR"):
+        raise PaymentAttemptConflict("Stripe-betaalpoging is onvolledig")
     config = (await _cfg_doc(attempt["company_id"])).get("stripe_config") or {}
-    secret = (config.get(mode) or {}).get("secret_key")
+    keys = config.get(mode) or {}
+    secret = keys.get("secret_key")
     if not secret:
         raise PaymentAttemptConflict("Stripe-sleutel voor deze betaling ontbreekt")
     try:
@@ -165,8 +169,25 @@ async def _stripe_proof(attempt: dict) -> dict:
             or metadata.get("attempt_id") != attempt["attempt_id"]
             or metadata.get("company_id") != attempt["company_id"]
             or metadata.get("tenant_id") != attempt["tenant_id"]
-            or attempt["method"] not in (intent.get("payment_method_types") or [])):
+            or attempt["method"] not in (intent.get("payment_method_types") or [])
+            or type(intent.get("amount")) is not int
+            or intent.get("amount") != attempt.get("provider_amount_cents")
+            or intent.get("currency") != "eur" or attempt.get("provider_currency") != "EUR"):
         raise PaymentAttemptConflict("Stripe-betaling hoort niet bij deze betaalpoging")
+    return intent, keys
+
+
+async def resume_sms_stripe_intent(attempt: dict) -> dict:
+    intent, keys = await _stripe_intent(attempt)
+    if (intent.get("status") != "requires_payment_method"
+            or not isinstance(intent.get("client_secret"), str) or not intent["client_secret"]
+            or not isinstance(keys.get("publishable_key"), str) or not keys["publishable_key"]):
+        raise PaymentAttemptConflict("Stripe-betaling kan niet veilig worden hervat; controleer de status")
+    return {"client_secret": intent["client_secret"], "publishable_key": keys["publishable_key"]}
+
+
+async def _stripe_proof(attempt: dict) -> dict:
+    intent, _ = await _stripe_intent(attempt)
     paid = intent.get("status") == "succeeded"
     if paid and (type(intent.get("amount_received")) is not int
                  or intent.get("amount_received") != intent.get("amount")):

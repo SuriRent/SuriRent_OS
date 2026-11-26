@@ -77,7 +77,9 @@ async def main():
         config = {"enabled": True, "mode": "test", "methods": ["card"],
                   "secret_key": secret, "publishable_key": public}
         company_stripe._active = lambda _: config
-        company_stripe._cfg_doc = AsyncMock(return_value={"stripe_config": {"test": {"secret_key": secret}}})
+        company_stripe._cfg_doc = AsyncMock(return_value={"stripe_config": {"test": {
+            "secret_key": secret, "publishable_key": public,
+        }}})
 
         requests = []
 
@@ -160,6 +162,19 @@ async def main():
             await page.goto(f"http://127.0.0.1:8123/b/{token}", wait_until="domcontentloaded")
             await page.get_by_text("Factuur TEST-1").first.wait_for()
             await page.get_by_role("button", name="Verder met betalen").click()
+            await page.wait_for_function(
+                """() => {
+                    const raw = sessionStorage.getItem('surirent_sms_checkout');
+                    return raw && JSON.parse(raw).attempt_id;
+                }"""
+            )
+            attempt_id = await page.evaluate(
+                "JSON.parse(sessionStorage.getItem('surirent_sms_checkout')).attempt_id"
+            )
+            await page.reload(wait_until="domcontentloaded")
+            await page.get_by_role("button", name="Hervat betaling").click()
+            if await database.sms_payment_attempts.count_documents({"attempt_id": attempt_id}) != 1:
+                raise AssertionError("Reload did not preserve the original attempt")
             for _ in range(100):
                 matches = [
                     frame for frame in page.frames

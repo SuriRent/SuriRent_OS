@@ -124,6 +124,70 @@ test('toont alleen de opgehaalde posten en beschikbare instructies', async () =>
       }
     });
 
+test('hervat na herladen dezelfde Stripe-poging zonder geheim op te slaan', async () => {
+  mockToken = 'I'.repeat(22);
+  const item = { kind: 'invoice', id: 'i1' };
+  sessionStorage.setItem('surirent_sms_checkout', JSON.stringify({
+    token: mockToken, item, attempt_id: 'attempt1',
+  }));
+  api.get.mockResolvedValue({ data: {
+    company: { name: 'Bedrijf' }, items: [{ ...item, reference: 'F-1', amount: 10, currency: 'EUR' }],
+    online_methods: [{ id: 'card', label: 'Creditcard' }], bank_accounts: [], online_payment_available: true,
+  } });
+  api.post.mockResolvedValueOnce({ data: {
+    item, method: 'card', attempt_id: 'attempt1', amount_cents: 1000, currency: 'EUR',
+    provider_amount_cents: 1000, provider_currency: 'EUR',
+    publishable_key: 'pk_test_example', client_secret: 'secret',
+  } }).mockResolvedValueOnce({ data: { status: 'paid', receipt_number: 'KW-1' } });
+  const host = document.createElement('div');
+  const root = createRoot(host);
+  const previous = globalThis.IS_REACT_ACT_ENVIRONMENT;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  try {
+    await act(async () => root.render(<SmsPaymentPage />));
+    const resume = [...host.querySelectorAll('button')].find((button) => button.textContent.includes('Hervat'));
+    await act(async () => resume.click());
+    expect(api.post).toHaveBeenNthCalledWith(1, '/public/sms-payment/resume',
+      { item, attempt_id: 'attempt1' }, { headers: { 'X-Sms-Payment-Token': mockToken } });
+    expect(sessionStorage.getItem('surirent_sms_checkout')).not.toContain('secret');
+    const stripe = [...host.querySelectorAll('button')].find((button) => button.textContent.includes('Stripe'));
+    expect(stripe).toBeTruthy();
+    await act(async () => stripe.click());
+    expect(host.textContent).toContain('KW-1');
+    expect(sessionStorage.getItem('surirent_sms_checkout')).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+    globalThis.IS_REACT_ACT_ENVIRONMENT = previous;
+  }
+});
+
+test('hervat geen betaling als de server de status niet veilig vindt', async () => {
+  mockToken = 'J'.repeat(22);
+  const item = { kind: 'invoice', id: 'i1' };
+  sessionStorage.setItem('surirent_sms_checkout', JSON.stringify({
+    token: mockToken, item, attempt_id: 'attempt1',
+  }));
+  api.get.mockResolvedValue({ data: {
+    company: { name: 'Bedrijf' }, items: [{ ...item, reference: 'F-1', amount: 10, currency: 'EUR' }],
+    online_methods: [{ id: 'card', label: 'Creditcard' }], bank_accounts: [], online_payment_available: true,
+  } });
+  api.post.mockRejectedValue(new Error('processing'));
+  const host = document.createElement('div');
+  const root = createRoot(host);
+  const previous = globalThis.IS_REACT_ACT_ENVIRONMENT;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  try {
+    await act(async () => root.render(<SmsPaymentPage />));
+    await act(async () => [...host.querySelectorAll('button')].find((button) => button.textContent.includes('Hervat')).click());
+    expect(host.textContent).toContain('niet veilig worden hervat');
+    expect(host.textContent).not.toContain('Stripe EUR');
+    expect(JSON.parse(sessionStorage.getItem('surirent_sms_checkout')).attempt_id).toBe('attempt1');
+  } finally {
+    await act(async () => root.unmount());
+    globalThis.IS_REACT_ACT_ENVIRONMENT = previous;
+  }
+});
+
     test('start geen betaling als opslaan van de betaalstatus mislukt', async () => {
       mockToken = 'C'.repeat(22);
       api.get.mockResolvedValue({ data: {

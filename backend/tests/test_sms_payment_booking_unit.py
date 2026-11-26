@@ -162,6 +162,17 @@ class BookingUnitTests(unittest.IsolatedAsyncioTestCase):
         await self.book()
         self.assertEqual((invoice["paid_amount"], invoice["status"]), (100, "paid"))
 
+    async def test_reminder_invoice_statuses_can_be_booked_without_a_prior_payment(self):
+        for status in ("sent", "pending", "overdue"):
+            with self.subTest(status=status):
+                self.setUp()
+                invoice = self.db.invoices.docs[0]
+                invoice.pop("paid_amount")
+                invoice["status"] = status
+                self.db.sms_payment_attempts.docs[0]["amount_cents"] = 10000
+                await self.book()
+                self.assertEqual((invoice["paid_amount"], invoice["status"]), (100, "paid"))
+
     async def test_missing_invoice_balance_with_previous_payment_stays_blocked(self):
         invoice = self.db.invoices.docs[0]
         invoice.pop("paid_amount")

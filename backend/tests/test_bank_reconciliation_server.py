@@ -105,6 +105,30 @@ class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("https://app.example.com/b/", message)
         self.assertNotIn(message.split("/b/")[1].strip(), repr(doc))
 
+    async def test_payment_sms_accepts_unpaid_reminder_statuses(self):
+        inserts, send = AsyncMock(), AsyncMock()
+        invoices = {
+            status: {"id": status, "company_id": "c1", "tenant_id": "t1",
+                     "status": status, "amount": 100, "currency": "EUR"}
+            for status in ("sent", "pending", "overdue")
+        }
+        database = SimpleNamespace(
+            tenants=SimpleNamespace(find_one=AsyncMock(return_value={"id": "t1", "company_id": "c1"})),
+            invoices=SimpleNamespace(find_one=AsyncMock(side_effect=lambda query: invoices.get(query["id"]))),
+            payments=SimpleNamespace(find_one=AsyncMock(return_value=None)),
+            sms_payment_links=SimpleNamespace(insert_one=inserts),
+        )
+        with patch.object(server, "db", database), \
+                patch.object(server, "_SMS_CHECKOUT_READY", True), \
+                patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True), \
+                patch.object(server, "_send_company_sms", send), \
+                patch.dict(os.environ, {"APP_PUBLIC_URL": "https://app.example.com"}):
+            await server._send_sms_payment_reminder(
+                "c1", "t1", list(invoices), "friendly", "Bedrijf", {}, "+5971234567",
+            )
+        self.assertEqual(inserts.await_args.args[0]["invoice_ids"], list(invoices))
+        send.assert_awaited_once()
+
     async def test_payment_sms_rejects_stale_invoice_without_sending_or_creating_link(self):
         import sms_payment_checkout
 
@@ -1037,7 +1061,9 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
                   "secret_key": "test-secret", "publishable_key": "test-public"}
         stripe_route = SimpleNamespace(
             _active=lambda _: config,
-            _cfg_doc=AsyncMock(return_value={"stripe_config": {"test": {"secret_key": "test-secret"}}}),
+            _cfg_doc=AsyncMock(return_value={"stripe_config": {"test": {
+                "secret_key": "test-secret", "publishable_key": "test-public",
+            }}}),
         )
         intent = {"id": "pi_test", "client_secret": "test-client-secret", "amount": 10000,
                   "currency": "eur", "livemode": False}
@@ -1059,6 +1085,20 @@ class CreditReconciliationMongoTests(unittest.IsolatedAsyncioTestCase):
                                       "company_id": "c1", "tenant_id": "t1"}}
                 retrieve.return_value = stripe.PaymentIntent.construct_from(proof, key=None)
                 body = {"item": item, "attempt_id": attempt_id}
+                blocked = await http.post("/api/public/sms-payment/resume", json=body, headers=headers)
+                self.assertEqual(blocked.status_code, 409)
+                proof["status"] = "requires_payment_method"
+                retrieve.return_value = stripe.PaymentIntent.construct_from(proof, key=None)
+                resumed = await http.post("/api/public/sms-payment/resume", json=body, headers=headers)
+                self.assertEqual(resumed.status_code, 200)
+                self.assertEqual(resumed.headers["cache-control"], "private, no-store")
+                self.assertEqual(resumed.json()["attempt_id"], attempt_id)
+                self.assertEqual(resumed.json()["client_secret"], "test-client-secret")
+                forbidden = await http.post("/api/public/sms-payment/resume", json=body,
+                                            headers={"X-Sms-Payment-Token": "invalid"})
+                self.assertEqual(forbidden.status_code, 409)
+                proof["status"] = "processing"
+                retrieve.return_value = stripe.PaymentIntent.construct_from(proof, key=None)
                 pending = await http.post("/api/public/sms-payment/finish", json=body, headers=headers)
                 self.assertEqual(pending.status_code, 409)
                 self.assertEqual(await self.db.payments.count_documents({}), 0)

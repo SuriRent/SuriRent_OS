@@ -21719,6 +21719,25 @@ async def sms_checkout_finish(
         raise
 
 
+@api.post("/public/sms-payment/resume")
+async def sms_checkout_resume(
+    body: SmsCheckoutFinishIn, response: Response, token: str = Header(default="", alias="X-Sms-Payment-Token"),
+):
+    response.headers.update(_SMS_PAYMENT_HEADERS)
+    if not _SMS_CHECKOUT_READY:
+        raise HTTPException(status_code=503, detail="Online betalen is nog niet beschikbaar.", headers=_SMS_PAYMENT_HEADERS)
+    from sms_payment_attempts import PaymentAttemptConflict
+    from sms_payment_checkout import resume_sms_checkout
+
+    try:
+        return await resume_sms_checkout(db, token=token, item=body.item, attempt_id=body.attempt_id)
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc), headers=_SMS_PAYMENT_HEADERS) from exc
+    except HTTPException as exc:
+        exc.headers = {**(exc.headers or {}), **_SMS_PAYMENT_HEADERS}
+        raise
+
+
 async def _send_company_sms(company_id: str, cfg: dict, to: str, body: str, purpose: str):
     from urllib.parse import urlsplit
     from messente_service import send_sms, _validate_number

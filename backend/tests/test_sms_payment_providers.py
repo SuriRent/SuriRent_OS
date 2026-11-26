@@ -8,7 +8,9 @@ import stripe
 from sms_payment_attempts import (
     PaymentAttemptConflict, begin_provider_request, finish_provider_request, reserve_attempt,
 )
-from sms_payment_providers import create_sms_mope_request, create_sms_stripe_intent, verify_sms_provider_payment
+from sms_payment_providers import (
+    create_sms_mope_request, create_sms_stripe_intent, resume_sms_stripe_intent, verify_sms_provider_payment,
+)
 from test_sms_payment_attempts import Attempts
 
 
@@ -80,6 +82,36 @@ class PaymentProviderTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["state"], "verified")
             retrieve.assert_called_with("provider_1", api_key="test-key")
             config.assert_awaited_with("c1")
+
+    async def test_resume_only_returns_secret_for_matching_unconfirmed_intent(self):
+        attempt = await self._open("card")
+        attempt = await self.collection.find_one({"_id": attempt["_id"], "attempt_id": attempt["attempt_id"]})
+        payment = {
+            "id": "provider_1", "livemode": False, "status": "requires_payment_method",
+            "amount": 250, "currency": "eur", "client_secret": "secret",
+            "payment_method_types": ["card"],
+            "metadata": {"source": "surirent_sms_payment", "attempt_id": attempt["attempt_id"],
+                         "company_id": "c1", "tenant_id": "t1"},
+        }
+        config = AsyncMock(return_value={"stripe_config": {"test": {
+            "secret_key": "test-key", "publishable_key": "pk_test",
+        }}})
+        retrieve = Mock(return_value=stripe.PaymentIntent.construct_from(payment, key=None))
+        with patch.dict(sys.modules, {"routes.company_stripe": SimpleNamespace(_cfg_doc=config)}), \
+                patch("sms_payment_providers.stripe.PaymentIntent.retrieve", retrieve):
+            for changed in (
+                {"status": "processing"}, {"status": "succeeded"}, {"status": "requires_action"},
+                {"id": "other"}, {"payment_method_types": ["ideal"]},
+                {"amount": 251}, {"currency": "usd"}, {"livemode": True},
+                {"metadata": {**payment["metadata"], "tenant_id": "other"}}, {"client_secret": None},
+            ):
+                retrieve.return_value = stripe.PaymentIntent.construct_from({**payment, **changed}, key=None)
+                with self.subTest(changed=changed), self.assertRaises(PaymentAttemptConflict):
+                    await resume_sms_stripe_intent(attempt)
+            retrieve.return_value = stripe.PaymentIntent.construct_from(payment, key=None)
+            result = await resume_sms_stripe_intent(attempt)
+            self.assertEqual(result, {"client_secret": "secret", "publishable_key": "pk_test"})
+            self.assertEqual(self.collection.docs[attempt["_id"]]["state"], "open")
 
     async def test_stripe_request_is_created_once_with_reserved_amount_and_identity(self):
         attempt = await reserve_attempt(

@@ -31,7 +31,7 @@ def _cents(value) -> int:
 async def _invoice_paid_cents(db, invoice, session) -> int:
     if invoice.get("paid_amount") is not None:
         return _cents(invoice["paid_amount"])
-    if invoice.get("status") != "open":
+    if invoice.get("status") not in ("open", "sent", "pending", "overdue"):
         raise PaymentAttemptConflict("Factuursaldo moet eerst worden gecontroleerd")
     for field in ("invoice_id", "invoice_ids", "allocations.invoice_id"):
         if await db.payments.find_one({"status": "approved", field: invoice["id"]}, session=session):

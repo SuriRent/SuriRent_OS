@@ -293,13 +293,18 @@ is enabled. Public callers must authorize the exact attempt.
 
 The experimental checkout orchestrator accepts only an item authorized by an
 unexpired SMS grant, derives its amount from the database, and checks the
-provider before booking. Its public start and finish endpoints and the checkout
-UI are hard-disabled. The experimental UI stores a pending attempt in the
+provider before booking. Its public checkout endpoints and UI are controlled by
+`SMS_CHECKOUT_READY`, which defaults to disabled. The UI stores a pending attempt in the
 browser session, uses a token-free provider return URL, and shows confirmation
 only after server verification. Lost or uncertain attempts may require manual
 review and cannot yet be safely unlocked through the UI. An uncertain Stripe
 confirmation switches the SMS checkout to status verification rather than
-starting another payment. Stripe currently accepts EUR
+starting another payment. A saved Stripe attempt can be resumed after a page
+reload only when the server verifies its grant, guard, current booking context,
+provider identity, amount and `requires_payment_method` status. The same
+provider intent is reused; processing or ambiguous attempts remain blocked for
+status checking and review. A lost browser session, expired grant or uncertain
+provider creation can still require manual investigation. Stripe currently accepts EUR
 or SRD with a current configured rate; USD and amounts below the Stripe minimum
 are rejected, not silently converted or increased.
 

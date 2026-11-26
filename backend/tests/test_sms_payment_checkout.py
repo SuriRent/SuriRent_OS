@@ -10,13 +10,35 @@ import stripe
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from sms_payment_attempts import PaymentAttemptConflict, tenant_payment_key
-from sms_payment_checkout import _stripe_amount, finish_sms_checkout, start_sms_checkout
+from sms_payment_checkout import _current_amount, _stripe_amount, finish_sms_checkout, resume_sms_checkout, start_sms_checkout
 from sms_payment_links import create_payment_link
 from sms_payment_reconciliation import reconcile_sms_payment_batch
 from tenant_payment_guard import acquire_payment_guard
 
 
 class CheckoutAmountTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unpaid_reminder_statuses_require_provable_balance(self):
+        invoice = {"id": "i1", "amount": 100, "currency": "EUR"}
+        database = SimpleNamespace(
+            invoices=SimpleNamespace(find_one=AsyncMock()),
+            payments=SimpleNamespace(find_one=AsyncMock(return_value=None)),
+        )
+        grant, item = {"company_id": "c1", "tenant_id": "t1"}, {"kind": "invoice", "id": "i1"}
+        for status in ("open", "sent", "pending", "overdue"):
+            with self.subTest(status=status):
+                database.invoices.find_one.return_value = {**invoice, "status": status}
+                self.assertEqual(await _current_amount(database, grant, item), (10000, "EUR"))
+                database.payments.find_one.return_value = {"id": "previous"}
+                with self.assertRaises(PaymentAttemptConflict):
+                    await _current_amount(database, grant, item)
+                database.payments.find_one.return_value = None
+        database.invoices.find_one.return_value = {**invoice, "status": "partial"}
+        with self.assertRaises(PaymentAttemptConflict):
+            await _current_amount(database, grant, item)
+        database.invoices.find_one.return_value = {**invoice, "status": "paid", "paid_amount": 0}
+        with self.assertRaises(PaymentAttemptConflict):
+            await _current_amount(database, grant, item)
+
     async def test_conversion_requires_current_rate_and_does_not_inflate_small_amounts(self):
         deps = SimpleNamespace(get_eur_per_srd=AsyncMock(return_value={"rate": 0.025, "source": "live"}))
         with patch.dict(sys.modules, {"routes": SimpleNamespace(_deps=deps)}):
@@ -28,6 +50,46 @@ class CheckoutAmountTests(unittest.IsolatedAsyncioTestCase):
                 await _stripe_amount(49, "EUR")
             with self.assertRaises(PaymentAttemptConflict):
                 await _stripe_amount(10000, "USD")
+
+
+class CheckoutResumeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_resume_checks_authorization_guard_balance_and_snapshot(self):
+        item = {"kind": "invoice", "id": "i1"}
+        grant = {"company_id": "c1", "tenant_id": "t1"}
+        attempt = {
+            "attempt_id": "a1", "company_id": "c1", "tenant_id": "t1", "item": item,
+            "state": "open", "guard_owner": "a1", "method": "card", "provider_id": "pi_1",
+            "stripe_mode": "test", "amount_cents": 1000, "currency": "EUR",
+            "provider_amount_cents": 1000, "provider_currency": "EUR",
+        }
+        attempts = AsyncMock(return_value=attempt)
+        guards = AsyncMock(return_value={"owner": "a1"})
+        db = SimpleNamespace(sms_payment_attempts=SimpleNamespace(find_one=attempts),
+                             tenant_payment_guards=SimpleNamespace(find_one=guards))
+        with patch("sms_payment_checkout._authorized_grant", new=AsyncMock(return_value=grant)), \
+                patch("sms_payment_checkout._current_amount", new=AsyncMock(return_value=(1000, "EUR"))), \
+                patch("sms_payment_checkout._booking_context", new_callable=AsyncMock), \
+                patch("sms_payment_checkout.resume_sms_stripe_intent", new=AsyncMock(
+                    return_value={"client_secret": "secret", "publishable_key": "pk_test"},
+                )) as provider:
+            result = await resume_sms_checkout(db, token="token", item=item, attempt_id="a1")
+            self.assertEqual(result["attempt_id"], "a1")
+            self.assertEqual(result["client_secret"], "secret")
+            self.assertEqual(attempts.await_args.args[0]["provider_id"], "pi_1")
+            self.assertEqual(attempts.await_args.args[0]["item"], item)
+            self.assertEqual(attempts.await_args.args[0]["company_id"], "c1")
+            guards.return_value = None
+            with self.assertRaises(PaymentAttemptConflict):
+                await resume_sms_checkout(db, token="token", item=item, attempt_id="a1")
+            self.assertEqual(provider.await_count, 1)
+            guards.return_value = {"owner": "a1"}
+            attempts.return_value = None
+            with self.assertRaises(PaymentAttemptConflict):
+                await resume_sms_checkout(db, token="token", item=item, attempt_id="other")
+            self.assertEqual(provider.await_count, 1)
+            attempts.side_effect = [attempt, None]
+            with self.assertRaises(PaymentAttemptConflict):
+                await resume_sms_checkout(db, token="token", item=item, attempt_id="a1")
 
 
 class CheckoutTopologyTests(unittest.IsolatedAsyncioTestCase):

@@ -50,6 +50,26 @@ export default function SmsCheckout({ token, items = [], methods = [], isReturn 
   const [message, setMessage] = useState('');
   const returning = useRef(false);
 
+  const showCheckout = (data, item, expectedMethod) => {
+    if (!sameItem(data.item, item) || !['card', 'ideal', 'mope'].includes(data.method)
+        || (expectedMethod && data.method !== expectedMethod)
+        || !Number.isInteger(data.amount_cents) || data.amount_cents <= 0
+        || !['SRD', 'EUR', 'USD'].includes(data.currency)) throw new Error('Ongeldige betaalpost');
+    const original = { amount: data.amount_cents / 100, currency: data.currency };
+    if (data.method === 'mope') {
+      const url = mopeUrl(data.payment_url);
+      if (!url) throw new Error('Ongeldige betaallink van Mopé');
+      setCheckout({ method: data.method, url, original });
+    } else {
+      if (typeof data.client_secret !== 'string' || !data.client_secret
+          || typeof data.publishable_key !== 'string' || !data.publishable_key
+          || !Number.isInteger(data.provider_amount_cents) || data.provider_amount_cents <= 0
+          || data.provider_currency !== 'EUR') throw new Error('Ongeldig Stripe-betaalverzoek');
+      setCheckout({ method: data.method, clientSecret: data.client_secret, publishableKey: data.publishable_key,
+        amount: data.provider_amount_cents / 100, original });
+    }
+  };
+
   const verify = async (attempt) => {
     if (!attempt?.attempt_id) {
       setMessage('De betaalpoging kon niet worden teruggevonden. Neem contact op met uw verhuurder voordat u opnieuw betaalt.');
@@ -129,26 +149,30 @@ export default function SmsCheckout({ token, items = [], methods = [], isReturn 
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(attempt));
       storedAttempt = attempt;
       setSaved(attempt);
-      if (!sameItem(data.item, item)
-          || !Number.isInteger(data.amount_cents) || data.amount_cents <= 0
-          || !['SRD', 'EUR', 'USD'].includes(data.currency)) throw new Error('Ongeldige betaalpost');
-      const original = { amount: data.amount_cents / 100, currency: data.currency };
-      if (method === 'mope') {
-        const url = mopeUrl(data.payment_url);
-        if (!url) throw new Error('Ongeldige betaallink van Mopé');
-        setCheckout({ method, url, original });
-      } else {
-        if (typeof data.client_secret !== 'string' || !data.client_secret
-            || typeof data.publishable_key !== 'string' || !data.publishable_key
-            || !Number.isInteger(data.provider_amount_cents) || data.provider_amount_cents <= 0
-            || data.provider_currency !== 'EUR') throw new Error('Ongeldig Stripe-betaalverzoek');
-        setCheckout({ method, clientSecret: data.client_secret, publishableKey: data.publishable_key,
-          amount: data.provider_amount_cents / 100, original });
-      }
+      showCheckout(data, item, method);
     } catch {
       setMessage(storedAttempt.attempt_id
         ? 'Het betaalverzoek kon niet worden bevestigd. Controleer de status of neem contact op met uw verhuurder voordat u opnieuw betaalt.'
         : 'Het betaalverzoek kon niet worden teruggevonden. Neem contact op met uw verhuurder voordat u opnieuw betaalt.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resume = async () => {
+    if (!saved?.attempt_id || busy) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const { data } = await api.post('/public/sms-payment/resume', {
+        item: saved.item, attempt_id: saved.attempt_id,
+      }, { headers: { 'X-Sms-Payment-Token': saved.token } });
+      if (data.attempt_id !== saved.attempt_id || !['card', 'ideal'].includes(data.method)) {
+        throw new Error('Ongeldige betaalpoging');
+      }
+      showCheckout(data, saved.item);
+    } catch {
+      setMessage('Deze betaling kan niet veilig worden hervat. Controleer de status of neem contact op met uw verhuurder.');
     } finally {
       setBusy(false);
     }
@@ -207,10 +231,18 @@ export default function SmsCheckout({ token, items = [], methods = [], isReturn 
         </Suspense>
       )}
       {saved && (
-        <button type="button" disabled={busy || !saved.attempt_id} onClick={() => verify(saved)}
-          className="w-full rounded-xl border border-slate-300 p-3 font-bold disabled:text-slate-400">
-          {busy ? 'Betaalstatus controleren…' : 'Controleer betaalstatus'}
-        </button>
+        <>
+          <button type="button" disabled={busy || !saved.attempt_id} onClick={() => verify(saved)}
+            className="w-full rounded-xl border border-slate-300 p-3 font-bold disabled:text-slate-400">
+            {busy ? 'Betaalstatus controleren…' : 'Controleer betaalstatus'}
+          </button>
+          {!checkout && saved.attempt_id && (
+            <button type="button" disabled={busy} onClick={resume}
+              className="w-full rounded-xl bg-orange-600 p-3 font-bold text-white disabled:bg-slate-300">
+              Hervat betaling
+            </button>
+          )}
+        </>
       )}
     </section>
   );

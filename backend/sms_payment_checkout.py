@@ -5,10 +5,10 @@ The public checkout is disabled until all financial paths are coordinated.
 
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from sms_payment_attempts import PaymentAttemptConflict, _tenant_key, reserve_attempt
-from sms_payment_booking import _cents, _invoice_paid_cents, _installment_context
+from sms_payment_attempts import PaymentAttemptConflict, _tenant_key, reserve_attempt, tenant_payment_key
+from sms_payment_booking import _booking_context, _cents, _invoice_paid_cents, _installment_context
 from sms_payment_links import get_payment_grant
-from sms_payment_providers import create_sms_mope_request, create_sms_stripe_intent
+from sms_payment_providers import create_sms_mope_request, create_sms_stripe_intent, resume_sms_stripe_intent
 from sms_payment_reconciliation import reconcile_sms_payment
 
 
@@ -50,7 +50,7 @@ async def _current_amount(db, grant: dict, item: dict) -> tuple[int, str]:
     if item["kind"] == "invoice":
         invoice = await db.invoices.find_one({**scope, "id": item["id"]})
         if (not invoice or invoice.get("archived") is True
-                or invoice.get("status") not in ("open", "partial")):
+                or invoice.get("status") not in ("open", "sent", "pending", "overdue", "partial")):
             raise PaymentAttemptConflict("Factuur is niet meer open")
         amount = _cents(invoice.get("amount")) - await _invoice_paid_cents(db, invoice, None)
         currency = invoice.get("currency") or "SRD"
@@ -148,3 +148,38 @@ async def finish_sms_checkout(db, client, *, token: str, item: dict, attempt_id:
         raise PaymentAttemptConflict("Betaalpoging hoort niet bij deze betaallink")
     payment = await reconcile_sms_payment(db, client, key=key, attempt_id=attempt_id)
     return {"status": "paid", "receipt_number": payment["receipt_number"]}
+
+
+async def resume_sms_checkout(db, *, token: str, item: dict, attempt_id: str) -> dict:
+    grant = await _authorized_grant(db, token, item)
+    if not isinstance(attempt_id, str) or not attempt_id:
+        raise PaymentAttemptConflict("Ongeldige betaalpoging")
+    key = _tenant_key(grant["company_id"], grant["tenant_id"], item)
+    query = {"_id": key, "attempt_id": attempt_id, "company_id": grant["company_id"],
+             "tenant_id": grant["tenant_id"], "state": "open", "guard_owner": attempt_id}
+    attempt = await db.sms_payment_attempts.find_one(query)
+    if not attempt or attempt.get("item") != item or attempt.get("method") not in ("card", "ideal"):
+        raise PaymentAttemptConflict("Deze betaalpoging kan niet worden hervat")
+    guard_query = {"_id": tenant_payment_key(grant["company_id"], grant["tenant_id"]),
+                   "company_id": grant["company_id"], "tenant_id": grant["tenant_id"],
+                   "kind": "sms", "owner": attempt_id}
+    if not await db.tenant_payment_guards.find_one(guard_query):
+        raise PaymentAttemptConflict("Betaalvergrendeling ontbreekt of is gewijzigd")
+    amount, currency = await _current_amount(db, grant, item)
+    if (amount, currency) != (attempt.get("amount_cents"), attempt.get("currency")):
+        raise PaymentAttemptConflict("Openstaand bedrag is gewijzigd")
+    await _booking_context(db, attempt, None)
+    provider = await resume_sms_stripe_intent(attempt)
+    snapshot = {name: attempt.get(name) for name in (
+        "item", "method", "provider_id", "stripe_mode", "amount_cents", "currency",
+        "provider_amount_cents", "provider_currency",
+    )}
+    if (not await db.sms_payment_attempts.find_one({**query, **snapshot})
+            or not await db.tenant_payment_guards.find_one(guard_query)):
+        raise PaymentAttemptConflict("Betaalpoging is intussen gewijzigd")
+    return {
+        "attempt_id": attempt_id, "item": item, "method": attempt["method"],
+        "amount_cents": amount, "currency": currency,
+        "provider_amount_cents": attempt["provider_amount_cents"],
+        "provider_currency": attempt["provider_currency"], **provider,
+    }
