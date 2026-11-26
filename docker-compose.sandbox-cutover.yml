@@ -50,6 +50,8 @@ services:
         condition: service_healthy
       replica-init:
         condition: service_completed_successfully
+      cutover-release:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -98,6 +100,24 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  cutover-release:
+    image: mongo:7.0.48
+    restart: "no"
+    depends_on:
+      replica-init:
+        condition: service_completed_successfully
+    environment:
+      CUTOVER_APP_RELEASED: ${CUTOVER_APP_RELEASED:-0}
+    entrypoint:
+      - bash
+      - -ec
+      - |
+        case "$$CUTOVER_APP_RELEASED" in
+          0) echo "App start is blocked pending cutover verification" >&2; exit 1 ;;
+          1) echo "App start has been explicitly released" ;;
+          *) echo "CUTOVER_APP_RELEASED must be 0 or 1" >&2; exit 1 ;;
+        esac
 
   replica-database:
     image: mongo:7.0.48

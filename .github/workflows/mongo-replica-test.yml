@@ -232,7 +232,7 @@ jobs:
             candidate=(docker compose -p surirent-cutover-ci -f docker-compose.sandbox-cutover.yml -f cutover-ci-only.yml)
             target=(env CUTOVER_DATABASE_HOST=replica-database CUTOVER_DATABASE_QUERY='&replicaSet=rs0' docker compose -p surirent-cutover-ci -f docker-compose.sandbox-cutover.yml -f cutover-ci-only.yml)
             "${base[@]}" config --format json | jq -S '.services | {app: (.app | del(.depends_on."replica-init")), web, database}' > cutover-base.json
-            "${candidate[@]}" config --format json | jq -S '.services | {app: (.app | del(.depends_on."replica-init")), web, database}' > cutover-candidate.json
+            "${candidate[@]}" config --format json | jq -S '.services | {app: (.app | del(.depends_on."replica-init", .depends_on."cutover-release")), web, database}' > cutover-candidate.json
             diff -u cutover-base.json cutover-candidate.json
           else
             target=(docker compose -p surirent-cutover-ci -f docker-compose.yml -f cutover-ci-only.yml -f deploy/coolify-cutover-rehearsal.yml)
@@ -276,6 +276,33 @@ jobs:
             if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Replica authentication failed");
             if (db.getSiblingDB("synthetic_migration").getCollectionInfos().length !== 0) throw new Error("Target database is not empty");
           '
+          if [ "$CUTOVER_VARIANT" = candidate ]; then
+            for release in default 0 invalid; do
+              if [ "$release" = default ]; then
+                unset CUTOVER_APP_RELEASED
+              else
+                export CUTOVER_APP_RELEASED="$release"
+              fi
+              if "${target[@]}" up -d app; then
+                echo "App startup should be blocked for release value: $release" >&2
+                exit 1
+              fi
+              gate="$("${target[@]}" ps -aq cutover-release)"
+              test -n "$gate"
+              test "$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$gate")" = "exited 1"
+              if [ "$release" = invalid ]; then
+                docker logs "$gate" 2>&1 | grep -Fx 'CUTOVER_APP_RELEASED must be 0 or 1'
+              else
+                docker logs "$gate" 2>&1 | grep -Fx 'App start is blocked pending cutover verification'
+              fi
+              running="$(docker ps -q --filter label=com.docker.compose.project=surirent-cutover-ci --filter label=com.docker.compose.service=app)"
+              if [ -n "$running" ]; then
+                echo "App started before the replica was restored" >&2
+                exit 1
+              fi
+            done
+            unset CUTOVER_APP_RELEASED
+          fi
           "${target[@]}" exec -T replica-database sh -c '
             exec mongorestore --host replica-database --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" \
               --authenticationDatabase admin --archive --gzip
@@ -317,7 +344,25 @@ jobs:
           asyncio.run(main())
           PY
           }
-          "${target[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 180 app
+          if [ "$CUTOVER_VARIANT" = candidate ]; then
+            CUTOVER_APP_RELEASED=1 "${target[@]}" up -d app
+            gate="$("${target[@]}" ps -aq cutover-release)"
+            test -n "$gate"
+            test "$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$gate")" = "exited 0"
+            for i in {1..120}; do
+              app="$("${target[@]}" ps -q app)"
+              if [ -n "$app" ] && [ "$(docker inspect -f '{{.State.Health.Status}}' "$app")" = healthy ]; then
+                break
+              fi
+              if [ "$i" = 120 ]; then
+                "${target[@]}" logs app
+                exit 1
+              fi
+              sleep 1
+            done
+          else
+            "${target[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 180 app
+          fi
           verify_app yes "${target[@]}"
           "${target[@]}" restart replica-database
           "${target[@]}" up -d --force-recreate replica-init

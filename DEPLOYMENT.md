@@ -133,11 +133,25 @@ Compose configuration, not an instruction to deploy. It preserves the
 and defaults the app to the original database. Its replica requires a retained,
 secret `MONGO_REPLICA_KEY`. The app uses the replica only when both
 `CUTOVER_DATABASE_HOST=replica-database` and
-`CUTOVER_DATABASE_QUERY=&replicaSet=rs0` are set. Neither setting, a deployment,
-nor customer payments are enabled automatically. Verify the Coolify-generated
-Compose, volume names and persisted key before any approved deployment. The
-candidate starts an app by default, so block traffic and stop writers as needed;
-never deploy the target settings before the target restore is verified.
+`CUTOVER_DATABASE_QUERY=&replicaSet=rs0` are set. `CUTOVER_APP_RELEASED`
+defaults to `0`: the one-shot `cutover-release` service fails and Compose
+does not start its dependent app. After the target has been restored and
+verified, explicitly set `CUTOVER_APP_RELEASED=1` to allow a normal Compose
+start. Other values fail. Neither database setting nor customer payments are
+enabled automatically. The gate also applies when the app still points at the
+original database. A future deployment of this candidate will therefore fail
+unless it is explicitly released; the currently pinned sandbox deployment is
+unchanged. Once set to `1`, the release remains open for later deployments
+until the setting is changed.
+
+The start block is a manual operational safeguard, not proof that the replica
+is correct. It does not stop an already running app or other writers, prevent
+manual Docker starts or commands that bypass dependencies, or block traffic to
+an older deployment. A closed gate causes the Compose deployment to fail;
+Coolify's exact behavior after this failure must be rehearsed on an isolated
+resource before any production use. Verify the Coolify-generated Compose,
+volume names and persisted key before any approved deployment. Block traffic,
+stop all writers, and prevent deployments as needed until the target is checked.
 
 1. Agree on a maintenance window, inventory every writer and integration, and
    stop them. Check Coolify's auto-deploy and queued or running deployments:
@@ -156,8 +170,9 @@ never deploy the target settings before the target restore is verified.
    compare data and indexes, verify authentication, commit and abort
    transactions, and check restart and network reachability. Keep real
    integrations and background jobs from sending while verifying.
-4. With users still blocked, point the app to the new replica and check its
-   database connection and restart. Startup itself can write data. Do not
+4. With users still blocked, point the app to the new replica, explicitly
+   release its start only after verification, and check its database
+   connection and restart. Startup itself can write data. Do not
    enable customer payments or SMS reminders until the complete payment flow
    has been verified and separately approved.
 5. Before any writes that must be retained, rollback means stopping the target
