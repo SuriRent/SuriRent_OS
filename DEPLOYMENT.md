@@ -251,6 +251,10 @@ The manual invoice-reminder SMS integration is prepared behind both
 `_SMS_CHECKOUT_READY` and the separate `_SMS_PAYMENT_REMINDERS_READY` gate,
 which remain false. When enabled, it checks the tenant and each invoice,
 creates a scoped payment grant and sends the selected 160-character tone.
+The templates use complete optional sentences rather than trailing-space
+padding, which may be stripped during delivery. They fail closed if a
+160-character message cannot be formed without truncating the payment link.
+Actual delivery and the received character count still require verification.
 Existing reminders continue unchanged while the gates are off. The upcoming
 invoice SMS reminder is also prepared behind these gates: it claims the
 existing unique invoice/day marker before sending, so a crash or uncertain

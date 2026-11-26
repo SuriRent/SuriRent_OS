@@ -6,10 +6,35 @@ from urllib.parse import urlsplit
 
 
 _TONES = {
-    "friendly": "Vriendelijke herinnering: uw betaling staat nog open.",
-    "reminder": "Herinnering: uw betaling staat nog open. Betaal alstublieft spoedig.",
-    "urgent": "Dringende herinnering: uw betaling staat nog open. Neem snel actie.",
+    "friendly": (
+        "Vriendelijke herinnering: uw betaling staat nog open.",
+        "Vriendelijke herinnering: er staat een betaling open.",
+        "Vriendelijke herinnering: er staat nog een betaling open.",
+    ),
+    "reminder": (
+        "Herinnering: uw betaling staat nog open. Betaal alstublieft spoedig.",
+        "Herinnering: uw betaling staat nog open. Betaal deze alstublieft.",
+        "Herinnering: er staat nog een betaling open. Betaal alstublieft.",
+    ),
+    "urgent": (
+        "Dringende herinnering: uw betaling staat nog open. Neem snel actie.",
+        "Dringende herinnering: er staat nog een betaling open. Reageer snel.",
+        "Dringende herinnering: uw betaling staat open. Neem snel actie.",
+    ),
 }
+
+_OPTIONAL_SENTENCES = (
+    ("", " Heeft u al betaald? Negeer dit bericht.", " Heeft u al betaald? Negeer dan dit bericht.",
+     " Al betaald? Dan kunt u dit bericht negeren.", " Al betaald? Negeer dan dit bericht."),
+    ("", " Vragen? Neem contact op.", " Bij vragen kunt u contact opnemen.",
+     " Neem bij vragen contact met ons op.", " Bij vragen helpen wij u graag."),
+    ("", " Dank u.", " Dank u wel.", " Bedankt.", " Bedankt voor uw aandacht.", " Dank voor uw medewerking."),
+    ("", " De link is 30 dagen geldig.", " Deze link is 30 dagen geldig.", " De betaallink is 30 dagen geldig."),
+)
+_LINK_LABELS = (
+    " Betaal via: ", " Betaal via ", " Betaal op: ", " Betaal op ",
+    " Bekijk en betaal: ", " Betaal veilig via: ", " Uw betaallink: ",
+)
 
 
 def reminder_sms(tone: str, company_name: str, payment_url: str) -> str:
@@ -35,10 +60,26 @@ def reminder_sms(tone: str, company_name: str, payment_url: str) -> str:
     if not company:
         raise ValueError("Bedrijfsnaam ontbreekt")
 
-    suffix = f" Betaal via: {payment_url}"
-    prefix = f"{_TONES[tone]} Van: "
-    available = 160 - len(prefix) - len(suffix)
-    if available < 1:
-        raise ValueError("De betaallink is te lang voor een SMS van 160 tekens")
-    message = prefix + company[:available].rstrip() + suffix
-    return message.ljust(160)
+    additions = {0: ""}
+    for alternatives in _OPTIONAL_SENTENCES:
+        next_additions = {}
+        for existing in additions.values():
+            for alternative in alternatives:
+                combined = existing + alternative
+                next_additions.setdefault(len(combined), combined)
+        additions = next_additions
+
+    for length in range(min(len(company), 160), 0, -1):
+        name = company[:length].rstrip()
+        if not name:
+            continue
+        punctuation = "" if name.endswith(".") else "."
+        for opening in _TONES[tone]:
+            for sender in (" Van: ", " Van "):
+                for label in _LINK_LABELS:
+                    prefix = opening + sender + name + punctuation
+                    suffix = label + payment_url
+                    extra_length = 160 - len(prefix) - len(suffix)
+                    if extra_length in additions:
+                        return prefix + additions[extra_length] + suffix
+    raise ValueError("Geen geschikt SMS-bericht van 160 tekens voor deze naam en link")

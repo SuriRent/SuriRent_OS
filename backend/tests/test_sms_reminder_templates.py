@@ -12,6 +12,19 @@ class ReminderSmsTests(unittest.TestCase):
                 self.assertEqual(len(result), 160)
                 self.assertTrue(result.isascii())
                 self.assertIn(url, result)
+                self.assertTrue(result.endswith(url))
+                self.assertEqual(result, result.strip())
+
+    def test_exact_length_without_padding_for_varied_link_and_company_lengths(self):
+        for tone in ("friendly", "reminder", "urgent"):
+            for host_length in range(1, 36):
+                url = "https://" + "a" * host_length + ".example/b/" + "x" * 22
+                for name in ("X", "TEST", "Huurbedrijf"):
+                    with self.subTest(tone=tone, host_length=host_length, name=name):
+                        result = reminder_sms(tone, name, url)
+                        self.assertEqual(len(result), 160)
+                        self.assertTrue(result.endswith(url))
+                        self.assertEqual(result, result.strip())
 
     def test_company_name_can_be_shortened_but_not_the_link(self):
         url = "https://example.com/b/" + "a" * 25
