@@ -143,7 +143,7 @@ jobs:
 
   stripe-browser-test:
     if: github.event_name == 'workflow_dispatch' && inputs.run_stripe_browser_test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: SMS_STRIPE_TEST_SECRET_KEY
     timeout-minutes: 20
     steps:
