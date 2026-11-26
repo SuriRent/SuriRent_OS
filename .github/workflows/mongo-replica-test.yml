@@ -8,6 +8,7 @@ on:
       - 'docker-compose.replica-test.yml'
       - 'deploy/mongo-replica/**'
       - 'deploy/coolify-replica-test.yml'
+      - 'deploy/coolify-cutover-rehearsal.yml'
       - '.github/workflows/mongo-replica-test.yml'
 
 permissions:
@@ -186,6 +187,135 @@ jobs:
       - name: Remove isolated containers and volume
         if: always()
         run: docker compose -p surirent-coolify-template-ci -f deploy/coolify-replica-test.yml --profile rehearsal down --volumes --remove-orphans
+
+  same-stack-cutover-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MONGO_ROOT_USERNAME: testuser
+      MONGO_ROOT_PASSWORD: testpassword
+      MONGO_REPLICA_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      DB_NAME: synthetic_migration
+      JWT_SECRET: test-only-jwt-secret
+      PDF_AES_PASSWORD: test-only-pdf-password
+      ADMIN_EMAIL: admin@example.test
+      ADMIN_PASSWORD: test-only-admin-password
+      SUPERADMIN_EMAIL: superadmin@example.test
+      SUPERADMIN_PASSWORD: test-only-superadmin-password
+      APP_PUBLIC_URL: https://app.example.test
+      CORS_ORIGINS: https://app.example.test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rehearse copy, app cutover and early rollback
+        shell: bash
+        run: |
+          set -eu
+          cat > cutover-ci-only.yml <<'EOF'
+          services:
+            database:
+              image: mongo:7.0.48
+            app:
+              environment:
+                DISABLE_TRIAL_REMINDERS: "1"
+                DISABLE_OVERDUE_PUSH: "1"
+                DISABLE_AUTO_INVOICE: "1"
+                DISABLE_BILLING_CRON: "1"
+                DISABLE_INSTALLMENT_REMINDERS: "1"
+          EOF
+          base=(docker compose -p surirent-cutover-ci -f docker-compose.yml -f cutover-ci-only.yml)
+          target=(docker compose -p surirent-cutover-ci -f docker-compose.yml -f cutover-ci-only.yml -f deploy/coolify-cutover-rehearsal.yml)
+          "${target[@]}" config --quiet
+          "${base[@]}" up -d --wait --wait-timeout 180 database
+          "${base[@]}" exec -T database mongosh --quiet --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Source authentication failed");
+            const d = db.getSiblingDB("synthetic_migration");
+            d.checks.createIndex({label: 1}, {unique: true});
+            d.checks.insertOne({_id: "original", label: "synthetic"});
+          '
+          "${base[@]}" build --quiet app
+          "${base[@]}" up -d --no-deps --wait --wait-timeout 180 app
+          "${base[@]}" stop app
+          umask 077
+          "${base[@]}" exec -T database sh -c '
+            exec mongodump --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" \
+              --authenticationDatabase admin --db synthetic_migration --archive --gzip
+          ' > cutover-ci.archive.gz
+          test -s cutover-ci.archive.gz
+          "${target[@]}" up -d replica-database replica-init
+          wait_for_initializer() {
+            for i in {1..120}; do
+              init="$("${target[@]}" ps -aq replica-init)"
+              if [ -n "$init" ] && [ "$(docker inspect -f '{{.State.Status}}' "$init")" = "exited" ]; then
+                "${target[@]}" logs replica-init
+                [ "$(docker inspect -f '{{.State.ExitCode}}' "$init")" = "0" ]
+                return
+              fi
+              sleep 1
+            done
+            "${target[@]}" logs replica-database replica-init
+            return 1
+          }
+          wait_for_initializer
+          source_volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data/db"}}{{.Name}}{{end}}{{end}}' "$("${base[@]}" ps -q database)")"
+          target_volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/data/db"}}{{.Name}}{{end}}{{end}}' "$("${target[@]}" ps -q replica-database)")"
+          [ -n "$source_volume" ] && [ -n "$target_volume" ] && [ "$source_volume" != "$target_volume" ]
+          "${target[@]}" exec -T replica-database mongosh --quiet 'mongodb://replica-database:27017/?replicaSet=rs0' --eval '
+            if (!db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)) throw new Error("Replica authentication failed");
+            if (db.getSiblingDB("synthetic_migration").getCollectionInfos().length !== 0) throw new Error("Target database is not empty");
+          '
+          "${target[@]}" exec -T replica-database sh -c '
+            exec mongorestore --host replica-database --username "$MONGO_INITDB_ROOT_USERNAME" --password "$MONGO_INITDB_ROOT_PASSWORD" \
+              --authenticationDatabase admin --archive --gzip
+          ' < cutover-ci.archive.gz
+          verify_app() {
+            expected="$1"
+            shift
+            "$@" exec -T -e EXPECTED_REPLICA="$expected" app python - <<'PY'
+          import asyncio
+          import os
+          from motor.motor_asyncio import AsyncIOMotorClient
+
+          async def main():
+              client = AsyncIOMotorClient(os.environ["MONGO_URL"], serverSelectionTimeoutMS=10000)
+              try:
+                  hello = await client.admin.command("hello")
+                  if (hello.get("setName") == "rs0") != (os.environ["EXPECTED_REPLICA"] == "yes"):
+                      raise RuntimeError("Application connected to the wrong topology")
+                  checks = client[os.environ["DB_NAME"]].checks
+                  if await checks.count_documents({"_id": "original", "label": "synthetic"}) != 1:
+                      raise RuntimeError("Synthetic record was not preserved")
+                  indexes = await checks.index_information()
+                  if not any(index.get("unique") and index.get("key") == [("label", 1)] for index in indexes.values()):
+                      raise RuntimeError("Synthetic unique index was not preserved")
+                  if os.environ["EXPECTED_REPLICA"] == "yes":
+                      async with await client.start_session() as session:
+                          session.start_transaction()
+                          await checks.insert_one({"_id": "committed", "label": "committed"}, session=session)
+                          await session.commit_transaction()
+                          session.start_transaction()
+                          await checks.insert_one({"_id": "aborted", "label": "aborted"}, session=session)
+                          await session.abort_transaction()
+                      if await checks.count_documents({"_id": "committed"}) != 1 or await checks.count_documents({"_id": "aborted"}) != 0:
+                          raise RuntimeError("Transaction check failed")
+                      await checks.delete_one({"_id": "committed"})
+              finally:
+                  client.close()
+
+          asyncio.run(main())
+          PY
+          }
+          "${target[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 180 app
+          verify_app yes "${target[@]}"
+          "${target[@]}" restart replica-database
+          "${target[@]}" up -d --force-recreate replica-init
+          wait_for_initializer
+          verify_app yes "${target[@]}"
+          "${target[@]}" stop app
+          "${base[@]}" up -d --no-deps --force-recreate --wait --wait-timeout 180 app
+          verify_app no "${base[@]}"
+      - name: Remove isolated containers and volumes
+        if: always()
+        run: docker compose -p surirent-cutover-ci -f docker-compose.yml -f deploy/coolify-cutover-rehearsal.yml down --volumes --remove-orphans
 
   replica-deployment:
     runs-on: ubuntu-latest

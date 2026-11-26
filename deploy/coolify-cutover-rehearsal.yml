@@ -1,0 +1,45 @@
+# Synthetic rehearsal only. Never apply this overlay to an existing Coolify
+# resource or volume; the sandbox cutover configuration is not yet approved.
+services:
+  app:
+    environment:
+      MONGO_URL: mongodb://${MONGO_ROOT_USERNAME:?Set test username}:${MONGO_ROOT_PASSWORD:?Set test password}@replica-database:27017/${DB_NAME:-vastgoed_kiosk}?authSource=admin&replicaSet=rs0
+    depends_on:
+      replica-init:
+        condition: service_completed_successfully
+
+  replica-database:
+    image: mongo:7.0.48
+    restart: unless-stopped
+    entrypoint: ["bash", "/etc/mongo-replica/entrypoint.sh"]
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--keyFile", "/run/mongo-replica/key"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set test username}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set test password}
+      MONGO_REPLICA_KEY: ${MONGO_REPLICA_KEY:?Set test replica key}
+    volumes:
+      - replica_data:/data/db
+      - ./deploy/mongo-replica/entrypoint.sh:/etc/mongo-replica/entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet 'mongodb://127.0.0.1:27017/?directConnection=true' --eval 'quit(db.adminCommand({ping: 1}).ok === 1 ? 0 : 1)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  replica-init:
+    image: mongo:7.0.48
+    restart: "no"
+    depends_on:
+      replica-database:
+        condition: service_healthy
+    environment:
+      MONGO_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set test username}
+      MONGO_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set test password}
+      MONGO_REPLICA_HOST: replica-database:27017
+    volumes:
+      - ./deploy/mongo-replica/init.js:/etc/mongo-replica/init.js:ro
+    entrypoint: ["mongosh", "--quiet", "mongodb://replica-database:27017/?directConnection=true", "--file", "/etc/mongo-replica/init.js"]
+
+volumes:
+  replica_data:

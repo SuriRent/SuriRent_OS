@@ -3,7 +3,7 @@ if (!admin.auth(process.env.MONGO_ROOT_USERNAME, process.env.MONGO_ROOT_PASSWORD
   throw new Error("MongoDB authentication failed");
 }
 
-const expected = { _id: "rs0", members: [{ _id: 0, host: "database:27017" }] };
+const expected = { _id: "rs0", members: [{ _id: 0, host: process.env.MONGO_REPLICA_HOST || "database:27017" }] };
 let status;
 try {
   status = admin.runCommand({ replSetGetStatus: 1 });

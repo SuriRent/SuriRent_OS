@@ -102,6 +102,12 @@ hostname, not `localhost`; the app's MongoDB URI must use that hostname and
 The exact Coolify configuration and cutover sequence still need to be reviewed
 and rehearsed before use.
 
+`deploy/coolify-cutover-rehearsal.yml` is a synthetic-only Compose overlay for
+testing this same-stack topology with a separate `replica_data` volume and
+`replica-database` hostname. Its CI rehearsal uses a disposable project and
+test credentials; it must never be applied to an existing Coolify resource or
+volume. It is not an approved sandbox migration configuration.
+
 1. Agree on a maintenance window, inventory every writer and integration, and
    stop them. Keep SMS checkout and payment reminders disabled. Verify that
    no writes can reach the source while the final backup is made.
