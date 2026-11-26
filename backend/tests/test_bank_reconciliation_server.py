@@ -33,6 +33,90 @@ with patch.dict(sys.modules, mock_modules), patch.dict(os.environ, {
 
 
 class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
+    async def test_payment_sms_requires_both_launch_gates(self):
+        for checkout, reminders in ((False, False), (True, False), (False, True)):
+            with self.subTest(checkout=checkout, reminders=reminders), \
+                    patch.object(server, "_SMS_CHECKOUT_READY", checkout), \
+                    patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", reminders):
+                with self.assertRaises(HTTPException) as error:
+                    await server._send_sms_payment_reminder("c1", "t1", ["i1"], "friendly", "Bedrijf", {}, "+5971234567")
+                self.assertEqual(error.exception.status_code, 503)
+
+    async def test_manual_payment_sms_contains_scoped_link_and_selected_tone(self):
+        import sms_payment_checkout
+
+        inserts = AsyncMock()
+        amounts = AsyncMock(return_value=(10000, "SRD"))
+        send = AsyncMock()
+        tenant = AsyncMock(return_value={"id": "t1", "company_id": "c1"})
+        database = SimpleNamespace(tenants=SimpleNamespace(find_one=tenant),
+                                   sms_payment_links=SimpleNamespace(insert_one=inserts))
+        with patch.object(server, "db", database), \
+                patch.object(server, "_SMS_CHECKOUT_READY", True), \
+                patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True), \
+                patch.object(server, "_send_company_sms", send), \
+                patch.object(sms_payment_checkout, "_current_amount", amounts), \
+                patch.dict(os.environ, {"APP_PUBLIC_URL": "https://app.example.com"}):
+            await server._send_sms_payment_reminder(
+                "c1", "t1", ["i1", "i2"], "urgent", "Bedrijf", {}, "+5971234567",
+            )
+        self.assertEqual(tenant.await_args.args[0]["company_id"], "c1")
+        self.assertEqual(amounts.await_count, 2)
+        doc = inserts.await_args.args[0]
+        self.assertEqual((doc["company_id"], doc["tenant_id"], doc["invoice_ids"]), ("c1", "t1", ["i1", "i2"]))
+        message = send.await_args.args[3]
+        self.assertEqual(len(message), 160)
+        self.assertIn("Dringende herinnering", message)
+        self.assertIn("https://app.example.com/b/", message)
+        self.assertNotIn(message.split("/b/")[1].strip(), repr(doc))
+
+    async def test_payment_sms_rejects_stale_invoice_without_sending_or_creating_link(self):
+        import sms_payment_checkout
+
+        inserts, send = AsyncMock(), AsyncMock()
+        database = SimpleNamespace(
+            tenants=SimpleNamespace(find_one=AsyncMock(return_value={"id": "t1", "company_id": "c1"})),
+            sms_payment_links=SimpleNamespace(insert_one=inserts),
+        )
+        with patch.object(server, "db", database), \
+                patch.object(server, "_SMS_CHECKOUT_READY", True), \
+                patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True), \
+                patch.object(server, "_send_company_sms", send), \
+                patch.object(sms_payment_checkout, "_current_amount",
+                             AsyncMock(side_effect=PaymentAttemptConflict("Factuur is niet meer open"))):
+            with self.assertRaises(HTTPException) as error:
+                await server._send_sms_payment_reminder("c1", "t1", ["i1"], "friendly", "Bedrijf", {}, "+5971234567")
+        self.assertEqual(error.exception.status_code, 409)
+        inserts.assert_not_awaited()
+        send.assert_not_awaited()
+
+    async def test_manual_reminder_routes_sms_tone_and_selected_invoices_only_when_enabled(self):
+        invoices = [
+            {"id": "i1", "period_month": 1, "period_year": 2026, "amount": 100, "currency": "SRD"},
+            {"id": "i2", "period_month": 2, "period_year": 2026, "amount": 50, "currency": "SRD"},
+        ]
+        cursor = SimpleNamespace(sort=lambda *_: SimpleNamespace(to_list=AsyncMock(return_value=invoices)))
+        database = SimpleNamespace(
+            tenants=SimpleNamespace(find_one=AsyncMock(return_value={"id": "t1", "phone": "+5971234567"})),
+            invoices=SimpleNamespace(find=lambda *_: cursor),
+        )
+        new_send, legacy_send = AsyncMock(), AsyncMock()
+        with patch.object(server, "db", database), \
+                patch.object(server, "_SMS_CHECKOUT_READY", True), \
+                patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True), \
+                patch.object(server, "scope", return_value={"company_id": "c1"}), \
+                patch.object(server, "company_id_of", return_value="c1"), \
+                patch.object(server, "_messente_or_400", AsyncMock(return_value={})), \
+                patch.object(server, "_brand_name_of", AsyncMock(return_value="Bedrijf")), \
+                patch.object(server, "_send_sms_payment_reminder", new_send), \
+                patch.object(server, "_messente_send", legacy_send):
+            result = await server.tenant_payment_reminder(
+                "t1", {"channel": "sms", "tone": "reminder"}, {"company_id": "c1"},
+            )
+        self.assertTrue(result["sent"])
+        self.assertEqual(new_send.await_args.args[:5], ("c1", "t1", ["i1", "i2"], "reminder", "Bedrijf"))
+        legacy_send.assert_not_awaited()
+
     async def test_sms_payment_info_hides_mope_for_first_release(self):
         import sms_payment_links
 

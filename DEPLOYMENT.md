@@ -226,6 +226,14 @@ same GitHub Actions environment. On a trusted branch, run the workflow with
 a disposable local replica set and a EUR 1.00 Stripe test-mode payment. It
 does not send an SMS or exercise the Coolify deployment, and it does not
 enable checkout for customers.
+The manual invoice-reminder SMS integration is prepared behind both
+`_SMS_CHECKOUT_READY` and the separate `_SMS_PAYMENT_REMINDERS_READY` gate,
+which remain false. When enabled, it checks the tenant and each invoice,
+creates a scoped payment grant and sends the selected 160-character tone.
+Existing reminders continue unchanged while the gates are off. Automatic
+reminders and other manual reminder routes are not yet connected; an actual
+Messente delivery has not been verified. Do not enable either gate solely on
+the basis of the isolated browser test.
 The existing payment paths also need coordination before checkout can be
 enabled; do not treat the booking code as an active or complete integration.
 The planned coordination blocks other bookings for the same company and

@@ -21654,6 +21654,7 @@ async def sms_payment_info(response: Response, token: str = Header(default="", a
 
 
 _SMS_CHECKOUT_READY = False
+_SMS_PAYMENT_REMINDERS_READY = False
 _SMS_PAYMENT_HEADERS = {
     "Cache-Control": "private, no-store",
     "Referrer-Policy": "no-referrer",
@@ -21745,6 +21746,48 @@ async def _send_company_sms(company_id: str, cfg: dict, to: str, body: str, purp
         {"$set": {"status": "accepted" if callback else "status_unavailable"}},
     )
     return result
+
+
+async def _send_sms_payment_reminder(company_id: str, tenant_id: str, invoice_ids: list[str],
+                                     tone: str, brand_name: str, cfg: dict, to: str):
+    from messente_service import MessenteError, _validate_number
+    from sms_payment_attempts import PaymentAttemptConflict
+    from sms_payment_checkout import _current_amount
+    from sms_payment_links import create_payment_link
+    from sms_reminder_templates import reminder_sms
+
+    if not (_SMS_CHECKOUT_READY and _SMS_PAYMENT_REMINDERS_READY):
+        raise HTTPException(status_code=503, detail="SMS-betaalherinneringen zijn nog niet beschikbaar.")
+    if tone not in ("friendly", "reminder", "urgent"):
+        raise HTTPException(status_code=400, detail="Onbekende herinneringstoon.")
+    if not company_id or not tenant_id or not invoice_ids:
+        raise HTTPException(status_code=400, detail="Bedrijf, huurder en facturen zijn vereist.")
+    tenant = await db.tenants.find_one({
+        "id": tenant_id, "company_id": company_id, "status": {"$nin": ["archived", "archiving"]},
+    })
+    if not tenant:
+        raise HTTPException(status_code=409, detail="De huurder is niet beschikbaar voor een betaalherinnering.")
+    try:
+        _validate_number(to)
+    except MessenteError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    grant = {"company_id": company_id, "tenant_id": tenant_id}
+    try:
+        for invoice_id in invoice_ids:
+            await _current_amount(db, grant, {"kind": "invoice", "id": invoice_id})
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    try:
+        link = await create_payment_link(
+            db.sms_payment_links, os.environ.get("APP_PUBLIC_URL", ""), company_id, tenant_id, invoice_ids, [],
+        )
+        message = reminder_sms(tone, brand_name, link)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        await _send_company_sms(company_id, cfg, to, message, "Betalingsherinnering")
+    except MessenteError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @api.post("/public/messente/sms-status/{record_id}")
@@ -21910,8 +21953,11 @@ async def tenant_payment_reminder(
     if not tenant:
         raise HTTPException(status_code=404, detail="Huurder niet gevonden")
 
+    invoice_statuses = ["open", "sent", "pending", "overdue"]
+    if channel == "sms" and _SMS_CHECKOUT_READY and _SMS_PAYMENT_REMINDERS_READY:
+        invoice_statuses.append("partial")
     invs = await db.invoices.find(
-        {**sc, "tenant_id": tenant_id, "status": {"$in": ["open", "sent", "pending", "overdue"]}},
+        {**sc, "tenant_id": tenant_id, "status": {"$in": invoice_statuses}},
         {"_id": 0},
     ).sort([("period_year", 1), ("period_month", 1)]).to_list(60)
     if not invs:
@@ -21971,6 +22017,12 @@ async def tenant_payment_reminder(
     if not to:
         raise HTTPException(status_code=400, detail="Geen telefoonnummer bij huurder")
     brand_name = await _brand_name_of(company_id_of(user))
+    if channel == "sms" and _SMS_CHECKOUT_READY and _SMS_PAYMENT_REMINDERS_READY:
+        await _send_sms_payment_reminder(
+            company_id_of(user), tenant_id, [invoice["id"] for invoice in invs],
+            body.get("tone") or "friendly", brand_name, cfg, to,
+        )
+        return {"sent": True, "channel": channel, "to": to, "count": len(invs)}
     extra = f"{custom_msg}\n\n" if custom_msg else ""
     msg = (
         f"{extra}"

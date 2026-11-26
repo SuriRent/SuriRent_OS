@@ -9,13 +9,14 @@ import KeyboardSafeModal from '../../../../components/KeyboardSafeModal';
 export default function ReminderModal({ group, initialChannel = 'whatsapp', onClose, onSent }) {
   const [channel, setChannel] = useState(initialChannel);
   const [message, setMessage] = useState('');
+  const [tone, setTone] = useState('none');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const send = async () => {
     setLoading(true); setError('');
     try {
-      await api.post(`/tenants/${group.tenant_id}/reminder`, { channel, message });
+      await api.post(`/tenants/${group.tenant_id}/reminder`, { channel, message, tone: tone === 'none' ? 'friendly' : tone });
       onSent(channel);
     } catch (e) { setError(formatError(e)); }
     finally { setLoading(false); }
@@ -71,7 +72,7 @@ export default function ReminderModal({ group, initialChannel = 'whatsapp', onCl
             ].map((opt) => {
               const sel = message === opt.text;
               return (
-                <button key={opt.key} type="button" onClick={() => setMessage(opt.text)}
+                <button key={opt.key} type="button" onClick={() => { setMessage(opt.text); setTone(opt.key); }}
                   data-testid={`reminder-tone-${opt.key}`}
                   className={`text-left p-3 rounded-xl border-2 transition ${
                     sel ? 'border-[#FF5C00] bg-orange-50' : 'border-slate-200 bg-white hover:border-orange-300'
