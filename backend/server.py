@@ -449,6 +449,7 @@ BACKUP_EXTRA_COLLECTIONS = {
     "subscription_invoices": "id", "subscription_payments": "id",
     "saas_payment_requests": "id", "saas_payment_plans": "id", "saas_stripe_transactions": "id",
     "sent_upcoming_invoice_reminders": ("invoice_id", "days_bucket"),
+    "sms_payment_reminder_claims": "id",
     "sent_trial_warnings": "_key",
 }
 # Records zonder `id` krijgen bij herstel deze logische sleutel i.p.v. een nieuw id.
@@ -536,6 +537,7 @@ async def lifespan(app: FastAPI):
     await db.payments.create_index([("company_id", 1), ("paid_at", -1)])
     await db.sms_history.create_index([("company_id", 1), ("created_at", -1)])
     await db.sms_payment_links.create_index("expires_at", expireAfterSeconds=0)
+    await db.sms_payment_reminder_claims.create_index([("company_id", 1), ("id", 1)], unique=True)
     await db.payments.create_index([("tenant_id", 1), ("paid_at", -1)])
     await db.payments.create_index([("company_id", 1), ("status", 1)])
     await db.payments.create_index([("company_id", 1), ("status", 1), ("paid_at", -1)])
@@ -21749,7 +21751,8 @@ async def _send_company_sms(company_id: str, cfg: dict, to: str, body: str, purp
 
 
 async def _send_sms_payment_reminder(company_id: str, tenant_id: str, invoice_ids: list[str],
-                                     tone: str, brand_name: str, cfg: dict, to: str):
+                                     tone: str, brand_name: str, cfg: dict, to: str,
+                                     *, installments: Optional[list[dict]] = None):
     from messente_service import MessenteError, _validate_number
     from sms_payment_attempts import PaymentAttemptConflict
     from sms_payment_checkout import _current_amount
@@ -21760,8 +21763,14 @@ async def _send_sms_payment_reminder(company_id: str, tenant_id: str, invoice_id
         raise HTTPException(status_code=503, detail="SMS-betaalherinneringen zijn nog niet beschikbaar.")
     if tone not in ("friendly", "reminder", "urgent"):
         raise HTTPException(status_code=400, detail="Onbekende herinneringstoon.")
-    if not company_id or not tenant_id or not invoice_ids:
-        raise HTTPException(status_code=400, detail="Bedrijf, huurder en facturen zijn vereist.")
+    installments = installments if installments is not None else []
+    if (not company_id or not tenant_id or not isinstance(invoice_ids, list)
+            or not isinstance(installments, list) or not (invoice_ids or installments)
+            or any(not isinstance(item, str) or not item for item in invoice_ids)
+            or any(not isinstance(item, dict) or not isinstance(item.get("plan_id"), str)
+                   or not item["plan_id"] or type(item.get("sequence")) is not int
+                   or item["sequence"] < 1 for item in installments)):
+        raise HTTPException(status_code=400, detail="Bedrijf, huurder en geldige betaalposten zijn vereist.")
     tenant = await db.tenants.find_one({
         "id": tenant_id, "company_id": company_id, "status": {"$nin": ["archived", "archiving"]},
     })
@@ -21775,11 +21784,16 @@ async def _send_sms_payment_reminder(company_id: str, tenant_id: str, invoice_id
     try:
         for invoice_id in invoice_ids:
             await _current_amount(db, grant, {"kind": "invoice", "id": invoice_id})
+        for item in installments:
+            await _current_amount(db, grant, {
+                "kind": "installment", "plan_id": item["plan_id"], "sequence": item["sequence"],
+            })
     except PaymentAttemptConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
         link = await create_payment_link(
-            db.sms_payment_links, os.environ.get("APP_PUBLIC_URL", ""), company_id, tenant_id, invoice_ids, [],
+            db.sms_payment_links, os.environ.get("APP_PUBLIC_URL", ""), company_id, tenant_id, invoice_ids,
+            installments,
         )
         message = reminder_sms(tone, brand_name, link)
     except ValueError as exc:
@@ -23408,6 +23422,7 @@ async def _send_overdue_installment_reminders():
             "_id": {"tenant_id": "$plan.tenant_id", "company_id": "$plan.company_id"},
             "currency": {"$first": "$plan.currency"},
             "plan_ids": {"$addToSet": "$plan.id"},
+            "installments": {"$addToSet": {"plan_id": "$plan.id", "sequence": "$sequence"}},
             "overdue_count": {"$sum": 1},
             "overdue_total": {"$sum": "$amount"},
             "earliest_due": {"$min": "$due_date"},
@@ -23446,17 +23461,42 @@ async def _send_overdue_installment_reminders():
                 f"Eerst-vervallen: {earliest}\n\n"
                 f"Gelieve zo spoedig mogelijk te voldoen via onze kiosk of betaalapp.\n\n— {brand_name_wa}"
             )
+            channel = "whatsapp" if messente_cfg.get("whatsapp_from") else "sms"
+            payment_sms = channel == "sms" and _SMS_CHECKOUT_READY and _SMS_PAYMENT_REMINDERS_READY
+            claim = None
+            if payment_sms:
+                claim_id = hashlib.sha256(json.dumps(
+                    ["installment", tenant_id, today_key], separators=(",", ":"), ensure_ascii=True,
+                ).encode("utf-8")).hexdigest()
+                claim = {"company_id": cid, "id": claim_id}
+                try:
+                    await db.sms_payment_reminder_claims.insert_one({
+                        **claim, "tenant_id": tenant_id, "day": today_key, "kind": "installment",
+                        "created_at": iso(now_utc()), "status": "claimed",
+                    })
+                except DuplicateKeyError:
+                    continue
             try:
-                await _messente_send(
-                    messente_cfg, "whatsapp" if messente_cfg.get("whatsapp_from") else "sms",
-                    tenant["phone"], msg, template_kind="reminder", company_id=cid, purpose="Betalingsherinnering",
-                    variables=whatsapp_variables(
-                        tenant.get("name") or "Huurder", brand_name_wa, f"{cur} {total:.2f}",
-                        f"{n} achterstallige termijnen", _public_url("/kiosk/huurder"),
-                    ),
-                )
+                if payment_sms:
+                    await _send_sms_payment_reminder(
+                        cid, tenant_id, [], "friendly", brand_name_wa, messente_cfg, tenant["phone"],
+                        installments=grp["installments"],
+                    )
+                else:
+                    await _messente_send(
+                        messente_cfg, channel, tenant["phone"], msg, template_kind="reminder",
+                        company_id=cid, purpose="Betalingsherinnering",
+                        variables=whatsapp_variables(
+                            tenant.get("name") or "Huurder", brand_name_wa, f"{cur} {total:.2f}",
+                            f"{n} achterstallige termijnen", _public_url("/kiosk/huurder"),
+                        ),
+                    )
+                sms_state = "accepted"
             except Exception as e:  # noqa: BLE001
+                sms_state = "unconfirmed"
                 print(f"[reminder] messente installment fail: {e}")
+            if claim is not None:
+                await db.sms_payment_reminder_claims.update_one(claim, {"$set": {"status": sms_state}})
 
         # Email via smtp
         smtp_cfg = await get_company_section(cid, "smtp")

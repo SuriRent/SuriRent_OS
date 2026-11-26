@@ -233,11 +233,15 @@ creates a scoped payment grant and sends the selected 160-character tone.
 Existing reminders continue unchanged while the gates are off. The upcoming
 invoice SMS reminder is also prepared behind these gates: it claims the
 existing unique invoice/day marker before sending, so a crash or uncertain
-send is not automatically retried. A claimed or unconfirmed marker requires
-manual investigation; acceptance is not proof of delivery. Installment
-reminders and other manual reminder routes are not yet connected; an actual
-Messente delivery has not been verified. Do not enable either gate solely on
-the basis of the isolated browser test.
+send is not automatically retried. Overdue installment SMS reminders use a
+company-scoped, per-tenant daily claim and include only the selected overdue
+terms. Both marker types remain claimed on crashes and must be investigated
+before any manual retry; acceptance is not proof of delivery. Claims are
+included in company backups, but restoring an older backup can lose later
+claims: pause reminders and reconcile delivery history before resuming.
+Other manual reminder routes are not yet connected; an actual Messente
+delivery has not been verified. Do not enable either gate solely on the
+basis of the isolated browser test.
 The existing payment paths also need coordination before checkout can be
 enabled; do not treat the booking code as an active or complete integration.
 The planned coordination blocks other bookings for the same company and

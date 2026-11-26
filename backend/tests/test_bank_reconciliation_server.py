@@ -91,6 +91,41 @@ class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
         inserts.assert_not_awaited()
         send.assert_not_awaited()
 
+    async def test_installment_sms_checks_and_grants_only_selected_terms(self):
+        import sms_payment_checkout
+
+        inserts, send = AsyncMock(), AsyncMock()
+        amounts = AsyncMock(return_value=(5000, "SRD"))
+        database = SimpleNamespace(
+            tenants=SimpleNamespace(find_one=AsyncMock(return_value={"id": "t1", "company_id": "c1"})),
+            sms_payment_links=SimpleNamespace(insert_one=inserts),
+        )
+        installments = [{"plan_id": "p1", "sequence": 1}, {"plan_id": "p1", "sequence": 2}]
+        with patch.object(server, "db", database), \
+                patch.object(server, "_SMS_CHECKOUT_READY", True), \
+                patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True), \
+                patch.object(server, "_send_company_sms", send), \
+                patch.object(sms_payment_checkout, "_current_amount", amounts), \
+                patch.dict(os.environ, {"APP_PUBLIC_URL": "https://app.example.com"}):
+            await server._send_sms_payment_reminder(
+                "c1", "t1", [], "friendly", "Bedrijf", {}, "+5971234567", installments=installments,
+            )
+        self.assertEqual(inserts.await_args.args[0]["installments"], installments)
+        self.assertEqual([call.args[2] for call in amounts.await_args_list], [
+            {"kind": "installment", **item} for item in installments
+        ])
+        self.assertEqual(len(send.await_args.args[3]), 160)
+
+    async def test_installment_sms_rejects_invalid_sequence_before_creating_link(self):
+        with patch.object(server, "_SMS_CHECKOUT_READY", True), \
+                patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True):
+            with self.assertRaises(HTTPException) as error:
+                await server._send_sms_payment_reminder(
+                    "c1", "t1", [], "friendly", "Bedrijf", {}, "+5971234567",
+                    installments=[{"plan_id": "p1", "sequence": True}],
+                )
+        self.assertEqual(error.exception.status_code, 400)
+
     async def test_manual_reminder_routes_sms_tone_and_selected_invoices_only_when_enabled(self):
         invoices = [
             {"id": "i1", "period_month": 1, "period_year": 2026, "amount": 100, "currency": "SRD"},
@@ -235,6 +270,98 @@ class UpcomingPaymentSmsMongoTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.send.await_count, 1)
         marker = await self.db.sent_upcoming_invoice_reminders.find_one({"invoice_id": "i1"})
         self.assertEqual(marker["sms_payment_state"], "unconfirmed")
+
+
+@unittest.skipUnless(os.environ.get("SMS_BOOKING_MONGO_URL"), "MongoDB replica set is required")
+class InstallmentPaymentSmsMongoTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.client = AsyncIOMotorClient(os.environ["SMS_BOOKING_MONGO_URL"], serverSelectionTimeoutMS=5000)
+        self.name = f"test_installment_sms_{uuid4().hex}"
+        self.db = self.client[self.name]
+        await self.db.sms_payment_reminder_claims.create_index([("company_id", 1), ("id", 1)], unique=True)
+        await self.db.tenants.insert_one({"id": "t1", "company_id": "c1", "phone": "+5971234567"})
+        await self.db.companies.insert_one({"id": "c1", "name": "Bedrijf"})
+        await self.db.payment_plans.insert_one({
+            "id": "p1", "company_id": "c1", "tenant_id": "t1", "status": "active", "total_amount": 150,
+        })
+        yesterday = (server.now_utc().date() - timedelta(days=1)).isoformat()
+        tomorrow = (server.now_utc().date() + timedelta(days=1)).isoformat()
+        await self.db.payment_plan_installments.insert_many([
+            {"plan_id": "p1", "company_id": "c1", "sequence": 1, "status": "pending", "due_date": yesterday, "amount": 50},
+            {"plan_id": "p1", "company_id": "c1", "sequence": 2, "status": "paid", "due_date": yesterday, "amount": 50},
+            {"plan_id": "p1", "company_id": "c1", "sequence": 3, "status": "pending", "due_date": tomorrow, "amount": 50},
+        ])
+        self.original_sender = server._send_sms_payment_reminder
+        self.send = AsyncMock()
+        self.patches = [
+            patch.object(server, "db", self.db),
+            patch.object(server, "_SMS_CHECKOUT_READY", True),
+            patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True),
+            patch.object(server, "_send_sms_payment_reminder", self.send),
+            patch.object(server, "get_company_section", AsyncMock(
+                side_effect=lambda _cid, section: {"enabled": True, "sms_from": "Bedrijf"} if section == "messente" else {},
+            )),
+        ]
+        for item in self.patches:
+            item.start()
+            self.addCleanup(item.stop)
+
+    async def asyncTearDown(self):
+        await self.client.drop_database(self.name)
+        self.client.close()
+
+    async def test_concurrent_runs_send_only_overdue_term_once(self):
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def hold(*_args, **_kwargs):
+            entered.set()
+            await release.wait()
+
+        self.send.side_effect = hold
+        first = asyncio.create_task(server._send_overdue_installment_reminders())
+        await asyncio.wait_for(entered.wait(), 5)
+        try:
+            await server._send_overdue_installment_reminders()
+        finally:
+            release.set()
+            await first
+        self.assertEqual(self.send.await_count, 1)
+        self.assertEqual(self.send.await_args.kwargs["installments"], [{"plan_id": "p1", "sequence": 1}])
+        self.assertEqual((await self.db.sms_payment_reminder_claims.find_one({}))["status"], "accepted")
+
+    async def test_unconfirmed_claim_prevents_retry_even_without_legacy_marker(self):
+        self.send.side_effect = RuntimeError("unconfirmed test send")
+        await server._send_overdue_installment_reminders()
+        await self.db.payment_plan_reminders.delete_many({})
+        await server._send_overdue_installment_reminders()
+        self.assertEqual(self.send.await_count, 1)
+        self.assertEqual((await self.db.sms_payment_reminder_claims.find_one({}))["status"], "unconfirmed")
+
+    async def test_disabled_gate_keeps_existing_sms_path(self):
+        legacy = AsyncMock()
+        with patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", False), \
+                patch.object(server, "_messente_send", legacy):
+            await server._send_overdue_installment_reminders()
+        self.send.assert_not_awaited()
+        self.assertEqual(legacy.await_count, 1)
+        self.assertEqual(await self.db.sms_payment_reminder_claims.count_documents({}), 0)
+
+    async def test_real_term_validation_creates_scoped_grant(self):
+        import sms_payment_links
+
+        send = AsyncMock()
+        with patch.object(server, "_send_company_sms", send), \
+                patch.dict(os.environ, {"APP_PUBLIC_URL": "https://app.example.com"}):
+            await self.original_sender(
+                "c1", "t1", [], "friendly", "Bedrijf", {}, "+5971234567",
+                installments=[{"plan_id": "p1", "sequence": 1}],
+            )
+        token = send.await_args.args[3].split("/b/")[1].strip()
+        grant = await sms_payment_links.get_payment_grant(self.db.sms_payment_links, token)
+        self.assertEqual(grant["company_id"], "c1")
+        self.assertEqual(grant["tenant_id"], "t1")
+        self.assertEqual(grant["installments"], [{"plan_id": "p1", "sequence": 1}])
+        self.assertEqual(grant["invoice_ids"], [])
 
 
 class BankReconciliationServerTests(unittest.IsolatedAsyncioTestCase):
