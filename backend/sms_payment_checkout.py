@@ -15,6 +15,14 @@ from sms_payment_reconciliation import reconcile_sms_payment
 SMS_MOPE_READY = False
 
 
+async def require_transaction_support(client) -> None:
+    topology = await client.admin.command("hello")
+    replica = bool(topology.get("setName") and topology.get("isWritablePrimary"))
+    router = topology.get("msg") == "isdbgrid"
+    if not (replica or router) or topology.get("logicalSessionTimeoutMinutes") is None:
+        raise PaymentAttemptConflict("Online betalen is tijdelijk niet beschikbaar: databasetransacties ontbreken")
+
+
 async def _authorized_grant(db, token: str, item: dict) -> dict:
     grant = await get_payment_grant(db.sms_payment_links, token)
     if not grant:
@@ -109,11 +117,7 @@ async def start_sms_checkout(db, client, *, token: str, item: dict, method: str)
             raise PaymentAttemptConflict("Deze Stripe-betaalmethode is niet ingeschakeld")
         provider_amount, provider_currency, mode = await _stripe_amount(amount, currency), "EUR", config["mode"]
 
-    topology = await client.admin.command("hello")
-    replica = bool(topology.get("setName") and topology.get("isWritablePrimary"))
-    router = topology.get("msg") == "isdbgrid"
-    if not (replica or router) or topology.get("logicalSessionTimeoutMinutes") is None:
-        raise PaymentAttemptConflict("Online betalen is tijdelijk niet beschikbaar: databasetransacties ontbreken")
+    await require_transaction_support(client)
 
     attempt = await reserve_attempt(
         db.sms_payment_attempts, company_id=grant["company_id"], tenant_id=grant["tenant_id"],

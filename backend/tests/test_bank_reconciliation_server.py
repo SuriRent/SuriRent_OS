@@ -34,6 +34,23 @@ with patch.dict(sys.modules, mock_modules), patch.dict(os.environ, {
 
 
 class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        client = SimpleNamespace(admin=SimpleNamespace(command=AsyncMock(return_value={
+            "setName": "rs0", "isWritablePrimary": True, "logicalSessionTimeoutMinutes": 30,
+        })))
+        self.client_patch = patch.object(server, "client", client)
+        self.client_patch.start()
+        self.addCleanup(self.client_patch.stop)
+
+    def test_launch_flags_default_to_disabled_and_require_explicit_values(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(server._sms_payment_launch_flag("SMS_CHECKOUT_READY"))
+        with patch.dict(os.environ, {"SMS_CHECKOUT_READY": "1"}):
+            self.assertTrue(server._sms_payment_launch_flag("SMS_CHECKOUT_READY"))
+        with patch.dict(os.environ, {"SMS_CHECKOUT_READY": "invalid"}):
+            with self.assertRaisesRegex(RuntimeError, "SMS_CHECKOUT_READY"):
+                server._sms_payment_launch_flag("SMS_CHECKOUT_READY")
+
     async def test_payment_sms_requires_both_launch_gates(self):
         for checkout, reminders in ((False, False), (True, False), (False, True)):
             with self.subTest(checkout=checkout, reminders=reminders), \
@@ -42,6 +59,23 @@ class SmsCheckoutGateTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(HTTPException) as error:
                     await server._send_sms_payment_reminder("c1", "t1", ["i1"], "friendly", "Bedrijf", {}, "+5971234567")
                 self.assertEqual(error.exception.status_code, 503)
+
+    async def test_payment_sms_rejects_standalone_before_creating_link_or_sending(self):
+        inserts, send = AsyncMock(), AsyncMock()
+        database = SimpleNamespace(
+            tenants=SimpleNamespace(find_one=AsyncMock(return_value={"id": "t1", "company_id": "c1"})),
+            sms_payment_links=SimpleNamespace(insert_one=inserts),
+        )
+        server.client.admin.command.return_value = {"isWritablePrimary": True, "logicalSessionTimeoutMinutes": 30}
+        with patch.object(server, "db", database), \
+                patch.object(server, "_SMS_CHECKOUT_READY", True), \
+                patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True), \
+                patch.object(server, "_send_company_sms", send):
+            with self.assertRaises(HTTPException) as error:
+                await server._send_sms_payment_reminder("c1", "t1", ["i1"], "friendly", "Bedrijf", {}, "+5971234567")
+        self.assertEqual(error.exception.status_code, 503)
+        inserts.assert_not_awaited()
+        send.assert_not_awaited()
 
     async def test_manual_payment_sms_contains_scoped_link_and_selected_tone(self):
         import sms_payment_checkout
@@ -295,6 +329,7 @@ class InstallmentPaymentSmsMongoTests(unittest.IsolatedAsyncioTestCase):
         self.send = AsyncMock()
         self.patches = [
             patch.object(server, "db", self.db),
+            patch.object(server, "client", self.client),
             patch.object(server, "_SMS_CHECKOUT_READY", True),
             patch.object(server, "_SMS_PAYMENT_REMINDERS_READY", True),
             patch.object(server, "_send_sms_payment_reminder", self.send),

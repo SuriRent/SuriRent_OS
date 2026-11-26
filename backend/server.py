@@ -21655,8 +21655,15 @@ async def sms_payment_info(response: Response, token: str = Header(default="", a
     }
 
 
-_SMS_CHECKOUT_READY = False
-_SMS_PAYMENT_REMINDERS_READY = False
+def _sms_payment_launch_flag(name: str) -> bool:
+    value = os.environ.get(name, "0")
+    if value not in ("0", "1"):
+        raise RuntimeError(f"{name} must be 0 or 1")
+    return value == "1"
+
+
+_SMS_CHECKOUT_READY = _sms_payment_launch_flag("SMS_CHECKOUT_READY")
+_SMS_PAYMENT_REMINDERS_READY = _sms_payment_launch_flag("SMS_PAYMENT_REMINDERS_READY")
 _SMS_PAYMENT_HEADERS = {
     "Cache-Control": "private, no-store",
     "Referrer-Policy": "no-referrer",
@@ -21755,7 +21762,7 @@ async def _send_sms_payment_reminder(company_id: str, tenant_id: str, invoice_id
                                      *, installments: Optional[list[dict]] = None):
     from messente_service import MessenteError, _validate_number
     from sms_payment_attempts import PaymentAttemptConflict
-    from sms_payment_checkout import _current_amount
+    from sms_payment_checkout import _current_amount, require_transaction_support
     from sms_payment_links import create_payment_link
     from sms_reminder_templates import reminder_sms
 
@@ -21780,6 +21787,10 @@ async def _send_sms_payment_reminder(company_id: str, tenant_id: str, invoice_id
         _validate_number(to)
     except MessenteError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        await require_transaction_support(client)
+    except PaymentAttemptConflict as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     grant = {"company_id": company_id, "tenant_id": tenant_id}
     try:
         for invoice_id in invoice_ids:

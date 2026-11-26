@@ -19,6 +19,16 @@ The API starts with one worker because background jobs and PIN throttling are pr
 
 Optional third-party integrations (AI, Stripe, push notifications, SMTP) are disabled or unused until configured. Their corresponding variables are present as empty placeholders in `.env.example`; configure only the integrations you use.
 
+SMS checkout and payment reminders default to off. `SMS_CHECKOUT_READY=1`
+enables checkout and its recovery worker; setting `SMS_PAYMENT_REMINDERS_READY=1`
+as well enables payment links in SMS reminders, including automatic scheduled
+reminders. Use only `0` or `1`. Enable them only after the replica, payment
+configuration and end-to-end flow have been verified and the release approved.
+Sending a payment SMS is blocked if the database does not report transaction
+support. An automatic reminder already claimed before such a failure is marked
+unconfirmed and requires review rather than an automatic retry. Mopé remains
+disabled independently.
+
 ## Operations
 
 Use the Coolify resource to redeploy, inspect logs, and restart services. Back up MongoDB regularly; the named volume is persistent storage, not a backup. Before restoring or moving data, back up the `mongo_data` volume using `mongodump` with the configured MongoDB root credentials.
