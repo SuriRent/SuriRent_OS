@@ -9989,7 +9989,10 @@ async def ocr_id_card(file: UploadFile = File(...),
 
     ctype = (file.content_type or "image/jpeg").lower()
     if azure:
-        return await scan_id_with_azure(raw, ctype, *azure)
+        _logging.getLogger("uvicorn.error").info("ID-scan provider: Azure Document Intelligence")
+        result = await scan_id_with_azure(raw, ctype, *azure)
+        return {**result, "provider": "azure"}
+    _logging.getLogger("uvicorn.error").info("ID-scan provider: Gemini")
     mime = "image/png" if "png" in ctype else ("image/webp" if "webp" in ctype else "image/jpeg")
 
     prompt = (
@@ -10052,6 +10055,7 @@ async def ocr_id_card(file: UploadFile = File(...),
         "id_number": (data.get("id_number") or "").upper(),
         "birth_date": data.get("birth_date") or "",
         "confidence": float(data.get("confidence") or 0),
+        "provider": "gemini",
     }
 
 

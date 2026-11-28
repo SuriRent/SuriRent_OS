@@ -22,7 +22,7 @@ import {
 import { TenantMoveOutModal, ArchivedTenants } from '../../components/TenantMoveOut';
 import Cropper from 'react-easy-crop';
 import { api, formatError, fmtMoney, MONTHS_NL, openAuthedPdf } from '../../lib/api';
-import { postIdOcr } from '../../lib/idOcr';
+import { idOcrProviderLabel, postIdOcr } from '../../lib/idOcr';
 import { useAuth } from '../../lib/auth';
 import { useHidePwaSplash } from '../../lib/use-hide-pwa-splash';
 import { resolveLogoUrl, readCachedBranding } from '../../lib/branding';
@@ -3241,7 +3241,7 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
         <div className="mt-2 rounded-lg bg-sky-50 border border-sky-200 p-2 flex items-center gap-2 text-xs font-bold text-sky-700"
           data-testid="tenant-ocr-loading">
           <Loader2 className="w-4 h-4 animate-spin" />
-          ID-kaart wordt gelezen via Gemini…
+          ID-kaart wordt gelezen…
         </div>
       )}
       {ocrResult && !ocrResult.error && ocrResult.confidence > 0 && (
@@ -3250,6 +3250,9 @@ function IdScannerField({ pendingFile, onFile, onOcr }) {
           ✓ Ingevuld: <b>{ocrResult.name || '?'}</b> · {ocrResult.id_number || '?'} · {ocrResult.birth_date || '?'}
           <span className="opacity-60 ml-1">({Math.round(ocrResult.confidence * 100)}%)</span>
         </div>
+      )}
+      {!ocrResult?.error && idOcrProviderLabel(ocrResult?.provider) && (
+        <p className="mt-1 text-xs text-slate-500">Gescand met {idOcrProviderLabel(ocrResult.provider)}</p>
       )}
       {ocrResult?.error && (
         <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-800">
@@ -3407,7 +3410,7 @@ function TenantForm({ initial, apartments, onCancel, onSaved }) {
           {/* ID-kaart scanner — opent camera op mobiel en fallback file-picker
               op desktop. Foto wordt direct als `pending_id_photo` in state
               gezet en pas geüpload NA het aanmaken/opslaan van de huurder.
-              onOcr vult automatisch naam/ID-nr/geboortedatum in via Gemini. */}
+              onOcr vult automatisch naam/ID-nr/geboortedatum in. */}
           <IdScannerField pendingFile={pendingIdPhoto} onFile={setPendingIdPhoto}
             onOcr={(ocr) => setData((d) => ({
               ...d,

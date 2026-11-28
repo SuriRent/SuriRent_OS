@@ -99,6 +99,8 @@ Optionele integraties zijn niet bruikbaar totdat ze correct zijn geconfigureerd.
 
 Maak een [Azure Document Intelligence-resource](https://portal.azure.com/#create/Microsoft.CognitiveServicesFormRecognizer) aan en kopieer **Keys and Endpoint** naar `AZURE_DOCUMENT_INTELLIGENCE_KEY` en `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` in de serveromgeving of Coolify. Vul beide waarden in en herstart de backend. Azure heeft dan voorrang op Gemini; zonder Azure-instellingen blijft de bestaande Gemini-scan werken. Bij een Azure-fout wordt niet automatisch naar Gemini overgeschakeld.
 
+Na een scan toont de app de gebruikte dienst. In de backendlogs staat ook `ID-scan provider`, zonder ID-gegevens of sleutels. Controleer bij een onverwachte Gemini-scan of de bijgewerkte sandbox-versie is gedeployed en beide Azure-variabelen daadwerkelijk voor de `app`-service zijn ingesteld; herstart of redeploy de service na een wijziging.
+
 De foto wordt naar Azure gestuurd voor verwerking. Controleer de privacyvoorwaarden en de herkenning van de gebruikte ID-kaarten; uitlezen kan fouten bevatten. De gratis Azure-laag heeft beperkingen, waaronder maximaal 4 MB per foto. Raadpleeg de [actuele prijzen](https://azure.microsoft.com/en-us/pricing/details/document-intelligence/).
 
 ## Lokale ontwikkeling

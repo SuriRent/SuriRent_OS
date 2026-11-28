@@ -21,7 +21,7 @@ import {
   import PowerControl, { ApartmentPower } from './admin/PowerControl';
 import { api, formatError, fmtMoney, MONTHS_NL } from '../../lib/api';
 import { resolveLogoUrl } from '../../lib/branding';
-import { postIdOcr } from '../../lib/idOcr';
+import { idOcrProviderLabel, postIdOcr } from '../../lib/idOcr';
 import { StripePayElements } from '../../components/StripePayElements';
 import { QRCodeSVG } from 'qrcode.react';
 import { playSuccessPing, playErrorBuzz } from '../../lib/tap-sounds';
@@ -1322,6 +1322,7 @@ function LinkTenantModal({ apartment, onClose, onLinked }) {
             {scanning ? 'ID-kaart lezen…' : scan ? 'Opnieuw scannen' : 'Scan ID-kaart'}
           </button>
           {phoneScanned && <p className="text-xs font-bold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2" data-testid="link-tenant-phone-scanned">Gegevens ontvangen van uw telefoon</p>}
+          {idOcrProviderLabel(scan?.scan?.provider) && <p className="text-xs text-slate-500">Gescand met {idOcrProviderLabel(scan.scan.provider)}</p>}
           <p className="hidden md:block text-[11px] text-slate-400 text-center" data-testid="link-tenant-phone-hint">Of scan met uw telefoon via de knop "Scan ID" — de gegevens verschijnen hier vanzelf.</p>
           {scan?.id_photo_url && (
             <img src={`${process.env.REACT_APP_BACKEND_URL}${scan.id_photo_url}`} alt="Gescande ID-kaart" data-testid="link-tenant-scan-preview"
@@ -5644,7 +5645,7 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
   // ID-scan (live camera) state
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const [scanMsg, setScanMsg] = useState(prefill ? 'ID-scan ontvangen van telefoon — foto wordt opgeslagen' : '');
+  const [scanMsg, setScanMsg] = useState(prefill ? `ID-scan ontvangen van telefoon${idOcrProviderLabel(prefill?.scan?.provider) ? ` via ${idOcrProviderLabel(prefill.scan.provider)}` : ''} — foto wordt opgeslagen` : '');
   // Bewaar de gescande ID-kaart foto zodat we deze na het opslaan van de
   // huurder direct uploaden naar `/tenants/{id}/upload-id-photo`. Anders
   // ziet de beheerder alleen tekst en niet de originele scan.
@@ -5677,7 +5678,8 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
       if (d.birth_date) setBirthDate(d.birth_date);
       if (d.id_number) setIdNumber(d.id_number);
       const conf = typeof d.confidence === 'number' ? Math.round(d.confidence * 100) : null;
-      setScanMsg(conf != null ? `Gescand · ${conf}% zekerheid — foto wordt opgeslagen` : 'Gescand — foto wordt opgeslagen');
+      const provider = idOcrProviderLabel(d.provider);
+      setScanMsg(`Gescand${provider ? ` via ${provider}` : ''}${conf != null ? ` · ${conf}% zekerheid` : ''} — foto wordt opgeslagen`);
     } catch (e2) { setErr(formatError(e2)); }
     finally { setScanning(false); }
   };
@@ -5746,7 +5748,7 @@ function AddTenantModal({ onClose, onSaved, prefill = null }) {
       )}>
       {({ accent }) => (
         <>
-          {/* Live ID-scan camera + Gemini Vision — auto-invullen NAW velden */}
+          {/* Live ID-scan camera — auto-invullen NAW velden */}
           <button type="button" onClick={() => setShowScanner(true)}
             disabled={scanning}
             data-testid="add-tenant-scan-id"
