@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ScanLine, Loader2, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { api, formatError } from '../lib/api';
-import { postIdOcr } from '../lib/idOcr';
+import { idOcrProviderLabel, postIdOcr } from '../lib/idOcr';
 import { getKioskUserKey } from '../lib/kiosk-live';
 
 // Telefoon: SCAN ID → camera → OCR op de server → desktop van dezelfde gebruiker opent Nieuwe huurder.
@@ -39,6 +39,7 @@ export function PhoneIdScan({ onClose, CameraModal }) {
             <p className="font-black text-lg text-slate-900">Verzonden naar je desktop</p>
             <p className="text-slate-600 mt-1" data-testid="phone-id-scan-name">{result?.name || 'Naam niet herkend'}</p>
             {result?.id_number && <p className="text-sm text-slate-500">ID {result.id_number}</p>}
+            {idOcrProviderLabel(result?.provider) && <p className="text-sm text-slate-500">Gescand met {idOcrProviderLabel(result.provider)}</p>}
           </div>
         )}
         {phase === 'error' && (
