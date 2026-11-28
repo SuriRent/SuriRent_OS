@@ -9970,25 +9970,30 @@ async def public_signature_request_submit(token: str, file: UploadFile = File(..
 @api.post("/tenants/ocr-id-card")
 async def ocr_id_card(file: UploadFile = File(...),
                        user=Depends(get_current_user)):
+    return await _ocr_id_card(file, company_id_of(user))
+
+
+async def _ocr_id_card(file: UploadFile, company_id: str | None):
     """Lees ID-kaartvelden met Azure Document Intelligence of Google Gemini."""
     import os
     import json as _json
     import httpx
-    from id_scan_azure import azure_configuration, scan_id_with_azure
-    azure = azure_configuration(
+    from id_scan_azure import id_scan_provider, scan_id_with_azure
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    provider, azure = id_scan_provider(
+        company_id,
+        os.getenv("AZURE_DOCUMENT_INTELLIGENCE_COMPANY_IDS", ""),
         os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", ""),
         os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY", ""),
+        api_key,
     )
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not azure and not api_key:
-        raise HTTPException(status_code=500, detail="Geen API-sleutel voor ID-scan ingesteld op de server")
 
     raw = await file.read()
     if len(raw) > MAX_LANDING_ASSET_BYTES:
         raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB")
 
     ctype = (file.content_type or "image/jpeg").lower()
-    if azure:
+    if provider == "azure":
         _logging.getLogger("uvicorn.error").info("ID-scan provider: Azure Document Intelligence")
         result = await scan_id_with_azure(raw, ctype, *azure)
         return {**result, "provider": "azure"}
@@ -11850,7 +11855,7 @@ async def kiosk_id_scan(file: UploadFile = File(...), user_key: str = Form(""),
     if not (file.content_type or "").lower().startswith("image/"):
         raise HTTPException(status_code=400, detail="Upload een foto van de ID-kaart")
     try:
-        scan = await ocr_id_card(file=file, user={})
+        scan = await _ocr_id_card(file, cid)
     except HTTPException:
         raise
     except Exception:

@@ -6,7 +6,7 @@ import httpx
 from fastapi import HTTPException
 from PIL import Image
 
-from id_scan_azure import _image_for_azure, azure_configuration, scan_id_with_azure
+from id_scan_azure import _image_for_azure, azure_configuration, id_scan_provider, scan_id_with_azure
 
 
 ENDPOINT = "https://example.cognitiveservices.azure.com"
@@ -105,6 +105,24 @@ class AzureIdScanTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(endpoint=endpoint), self.assertRaises(HTTPException) as exc:
                 azure_configuration(endpoint, key)
             self.assertEqual(exc.exception.status_code, 500)
+
+    def test_only_listed_companies_use_azure(self):
+        args = (" company-a, company-c ", ENDPOINT, "azure-key", "gemini-key")
+        self.assertEqual(id_scan_provider("company-a", *args), ("azure", (ENDPOINT, "azure-key")))
+        self.assertEqual(id_scan_provider("company-b", *args), ("gemini", None))
+        self.assertEqual(id_scan_provider("company-c", *args), ("azure", (ENDPOINT, "azure-key")))
+        self.assertEqual(id_scan_provider("company", *args), ("gemini", None))
+
+    def test_missing_company_or_gemini_key_is_rejected(self):
+        with self.assertRaises(HTTPException):
+            id_scan_provider(None, "company-a", ENDPOINT, "azure-key", "gemini-key")
+        with self.assertRaises(HTTPException):
+            id_scan_provider("company-b", "", ENDPOINT, "azure-key", "")
+
+    def test_listed_company_never_falls_back_to_gemini(self):
+        for endpoint, key in (("", ""), (ENDPOINT, "")):
+            with self.subTest(endpoint=endpoint), self.assertRaises(HTTPException):
+                id_scan_provider("company-a", "company-a", endpoint, key, "gemini-key")
 
     async def test_invalid_endpoint_is_rejected(self):
         with self.assertRaises(HTTPException) as exc:

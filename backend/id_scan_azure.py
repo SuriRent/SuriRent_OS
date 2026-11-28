@@ -21,6 +21,21 @@ def azure_configuration(endpoint: str, api_key: str) -> tuple[str, str] | None:
     return (endpoint, api_key) if endpoint else None
 
 
+def id_scan_provider(company_id: str | None, azure_company_ids: str, azure_endpoint: str,
+                     azure_key: str, gemini_key: str) -> tuple[str, tuple[str, str] | None]:
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Selecteer een bedrijf om een ID-kaart te scannen")
+    allowed = {cid.strip() for cid in azure_company_ids.split(",") if cid.strip()}
+    if company_id in allowed:
+        azure = azure_configuration(azure_endpoint, azure_key)
+        if not azure:
+            raise HTTPException(status_code=500, detail="Azure ID-scan is niet geconfigureerd voor dit bedrijf")
+        return "azure", azure
+    if not gemini_key.strip():
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ontbreekt voor ID-scan")
+    return "gemini", None
+
+
 def _image_for_azure(raw: bytes, content_type: str) -> tuple[bytes, str]:
     if content_type in ("image/jpeg", "image/png") and len(raw) <= _MAX_IMAGE_BYTES:
         return raw, content_type

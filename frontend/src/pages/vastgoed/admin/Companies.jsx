@@ -380,6 +380,7 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [days, setDays] = useState(14);
+  const [copyStatus, setCopyStatus] = useState('');
   const status = BILLING_STATUSES[company.billing_status] || {
     label: company.billing_status || 'Onbekend',
     className: 'bg-slate-100 text-slate-600 ring-slate-200',
@@ -409,6 +410,15 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
       await onOpenAsCustomer(company);
     } catch (e) {
       setError(formatError(e, 'Klantomgeving kon niet worden geopend'));
+    }
+  };
+
+  const copyCompanyId = async () => {
+    try {
+      await navigator.clipboard.writeText(company.id);
+      setCopyStatus('Bedrijfs-ID gekopieerd');
+    } catch {
+      setCopyStatus('Kopiëren is niet gelukt. Selecteer de bedrijfs-ID en kopieer deze handmatig.');
     }
   };
 
@@ -463,7 +473,14 @@ function CompanyDetails({ company, plan, selected, onClose, onEdit, onSelect, on
           <div className="rounded-2xl bg-white border border-slate-200 grid sm:grid-cols-2">
             <div className="p-3 flex items-start gap-2.5 border-b border-slate-100 sm:border-r">
               <Building2 className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />
-              <div className="min-w-0"><p className="text-xs font-bold text-slate-600">Bedrijf</p><p className="text-sm font-semibold text-slate-900 break-words">{company.name} <span className="text-slate-500 font-normal">/{company.slug}</span></p></div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-600">Bedrijf</p>
+                <p className="text-sm font-semibold text-slate-900 break-words">{company.name} <span className="text-slate-500 font-normal">/{company.slug}</span></p>
+                <p className="mt-2 text-xs font-bold text-slate-600">Bedrijfs-ID</p>
+                <p className="select-all break-all text-xs text-slate-700" data-testid="company-id">{company.id}</p>
+                <button type="button" onClick={copyCompanyId} className="mt-1 text-xs font-bold text-orange-600 hover:underline">Kopieer bedrijfs-ID</button>
+                {copyStatus && <p role="status" className="mt-1 text-xs text-slate-600">{copyStatus}</p>}
+              </div>
             </div>
             <div className="p-3 flex items-start gap-2.5 border-b border-slate-100">
               <Mail className="w-4 h-4 mt-0.5 text-slate-400 shrink-0" />

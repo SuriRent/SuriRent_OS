@@ -75,9 +75,10 @@ Vul placeholders met eigen waarden in voordat je deployt. Zet geen productiegehe
 | `REACT_APP_MARKETING_HOST` | Ja bij gescheiden domeinen | Marketing-hostname zonder `https://` of afsluitende slash; bepaalt waar de marketingwebsite wordt getoond. |
 | `REACT_APP_APP_URL` | Ja bij gescheiden domeinen | Volledige publieke app-URL; marketinglinks naar aanmelden/inloggen verwijzen hiernaartoe. |
 | `EMERGENT_LLM_KEY` | Nee | Optionele AI-, spraak- en gerelateerde Emergent-integraties. |
-| `GEMINI_API_KEY` | Voor Scan ID zonder Azure | Google Gemini-key om ID-kaarten uit te lezen. |
+| `GEMINI_API_KEY` | Voor Scan ID zonder Azure | Centrale Google Gemini-key om ID-kaarten uit te lezen. |
 | `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | Voor Scan ID met Azure | HTTPS-endpoint van de Azure Document Intelligence-resource. |
 | `AZURE_DOCUMENT_INTELLIGENCE_KEY` | Voor Scan ID met Azure | API-sleutel van dezelfde Azure-resource. |
+| `AZURE_DOCUMENT_INTELLIGENCE_COMPANY_IDS` | Voor Scan ID met Azure | Bedrijfs-ID's die Azure mogen gebruiken, gescheiden door komma's. |
 | `INTEGRATION_PROXY_URL` | Nee | Optionele basis-URL voor de object-storage-integratie. |
 | `STRIPE_PUBLISHABLE_KEY` | Nee | Optionele Stripe publishable key. |
 | `STRIPE_SECRET_KEY` | Nee | Optionele Stripe secret key. |
@@ -97,9 +98,11 @@ Optionele integraties zijn niet bruikbaar totdat ze correct zijn geconfigureerd.
 
 ### ID-kaarten scannen met Azure
 
-Maak een [Azure Document Intelligence-resource](https://portal.azure.com/#create/Microsoft.CognitiveServicesFormRecognizer) aan en kopieer **Keys and Endpoint** naar `AZURE_DOCUMENT_INTELLIGENCE_KEY` en `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` in de serveromgeving of Coolify. Vul beide waarden in en herstart de backend. Azure heeft dan voorrang op Gemini; zonder Azure-instellingen blijft de bestaande Gemini-scan werken. Bij een Azure-fout wordt niet automatisch naar Gemini overgeschakeld.
+Maak een [Azure Document Intelligence-resource](https://portal.azure.com/#create/Microsoft.CognitiveServicesFormRecognizer) aan en kopieer **Keys and Endpoint** naar `AZURE_DOCUMENT_INTELLIGENCE_KEY` en `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` in de serveromgeving of Coolify. Zet de exacte bedrijfs-ID's van de toegestane bedrijven, gescheiden door komma's, in `AZURE_DOCUMENT_INTELLIGENCE_COMPANY_IDS`. Een superadmin vindt de bedrijfs-ID bij **Bedrijven > Beheren**, of via `GET /api/companies` (het veld `id`; niet de slug). Een lege lijst geeft geen enkel bedrijf toegang tot Azure.
 
-Na een scan toont de app de gebruikte dienst. In de backendlogs staat ook `ID-scan provider`, zonder ID-gegevens of sleutels. Controleer bij een onverwachte Gemini-scan of de bijgewerkte sandbox-versie is gedeployed en beide Azure-variabelen daadwerkelijk voor de `app`-service zijn ingesteld; herstart of redeploy de service na een wijziging.
+Andere bedrijven gebruiken de centrale `GEMINI_API_KEY`; de applicatie kan niet controleren of die bij een gratis of betaald project hoort. Google verbiedt het versturen van persoonlijke gegevens naar de gratis Gemini-dienst; controleer de [voorwaarden](https://aistudio.google.com/docs/terms) en gebruik voor echte ID-kaarten een geschikt betaald project. Bij een Azure-fout of ontbrekende Azure-configuratie wordt niet automatisch naar Gemini overgeschakeld. Een superadmin moet eerst een actief bedrijf selecteren om een ID te scannen.
+
+Na een scan toont de app de gebruikte dienst. In de backendlogs staat ook `ID-scan provider`, zonder ID-gegevens of sleutels. Controleer bij een onverwachte Gemini-scan of de bijgewerkte versie is gedeployed en de bedrijfs-ID in de Azure-lijst staat; herstart of redeploy de `app`-service na een wijziging.
 
 De foto wordt naar Azure gestuurd voor verwerking. Controleer de privacyvoorwaarden en de herkenning van de gebruikte ID-kaarten; uitlezen kan fouten bevatten. De gratis Azure-laag heeft beperkingen, waaronder maximaal 4 MB per foto. Raadpleeg de [actuele prijzen](https://azure.microsoft.com/en-us/pricing/details/document-intelligence/).
 
