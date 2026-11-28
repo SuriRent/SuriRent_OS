@@ -12,6 +12,29 @@ class MessenteError(Exception):
 MESSENTE_API = "https://api.messente.com/v1/omnimessage"
 TEMPLATE_KINDS = ("receipt", "receipt_media", "reminder", "authentication")
 
+GSM_BASIC = frozenset(
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ"
+    " !\"#¤%&'()*+,-./0123456789:;<=>?"
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
+)
+GSM_EXTENDED = frozenset("\f^{}\\[~]|€")
+
+
+def validate_sms_body(body: str) -> None:
+    if not body:
+        raise MessenteError("SMS-bericht is leeg")
+    if all(char in GSM_BASIC or char in GSM_EXTENDED for char in body):
+        size = sum(2 if char in GSM_EXTENDED else 1 for char in body)
+        limit = 160
+    else:
+        size = len(body.encode("utf-16-be", errors="surrogatepass")) // 2
+        limit = 70
+    if size > limit:
+        raise MessenteError(
+            "SMS-bericht is te lang voor één SMS. Kort het bericht in "
+            "(maximaal 160 GSM-tekens of 70 Unicode-tekens)."
+        )
+
 
 def _validate_number(number: str, kind: str = "ontvanger") -> str:
     value = (number or "").strip().removeprefix("whatsapp:").strip()
@@ -124,6 +147,5 @@ async def send_whatsapp(cfg: dict, to: str, body: str, media_url: str | None = N
 
 
 async def send_sms(cfg: dict, to: str, body: str, *, dlr_url: str | None = None) -> dict:
-    if not body:
-        raise MessenteError("SMS-bericht is leeg")
+    validate_sms_body(body)
     return await _send(cfg, "sms", to, {"text": body, "autoconvert": "off"}, dlr_url=dlr_url)

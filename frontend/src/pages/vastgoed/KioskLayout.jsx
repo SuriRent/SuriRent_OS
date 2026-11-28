@@ -62,6 +62,7 @@ import { PrintChoiceMenu, usePrintOptions } from '../../components/PrintChoiceMe
 import { KasgeldReceiptScreen } from '../../components/KasgeldReceipt';
 import { NfcLinkModal } from '../../components/NfcLinkModal';
 import { KioskTenantSearch } from '../../components/KioskTenantSearch';
+import KioskTenantSms from '../../components/KioskTenantSms';
 import { KioskBankTransferModal } from '../../components/KioskBankTransferModal';
 import { KIOSK_ADMIN_PAGES } from '../../components/KioskAdminInvoices';
 import ImpersonationBanner from '../../components/ImpersonationBanner';
@@ -4097,6 +4098,7 @@ function ReceiptScreen({ payment, overview, onDone, posLayout = false }) {
             Automatisch terug naar startscherm in 15 seconden
             {emailStatus?.email?.sent && <span className="text-emerald-600" data-testid="receipt-email-status"> · E-mail verzonden</span>}
             {emailStatus?.msg?.sent && <span className="text-emerald-600" data-testid="receipt-whatsapp-status"> · {emailStatus.msg.channel === 'whatsapp' ? 'WhatsApp' : 'SMS'} verzonden</span>}
+            {emailStatus?.msg?.reason === 'send_failed' && <span className="text-red-600"> · Bericht niet verzonden{emailStatus.msg.detail ? `: ${emailStatus.msg.detail}` : ''}</span>}
           </p>
         </div>
       </div>
@@ -7376,6 +7378,7 @@ export default function KioskLayout() {
     { id: 'maintenance', label: 'Onderhoud', icon: Wrench, testid: 'kiosk-tb-maintenance', onClick: () => { setTenantModal(null); openOnly('add-maintenance'); } },
     { id: 'info', label: 'Gegevens', icon: User, testid: 'kiosk-tb-info', onClick: () => { openOnly(null); setTenantModal('info'); } },
     { id: 'contact', label: 'Contact', icon: Smartphone, testid: 'kiosk-tb-contact', onClick: () => { openOnly(null); setTenantModal('contact'); } },
+    { id: 'sms', label: 'SMS', icon: MessageCircle, testid: 'kiosk-tb-sms', onClick: () => { openOnly(null); setTenantModal('sms'); } },
     ...(hasPowerAccess ? [{ id: 'power', label: 'Stroom', icon: Zap, testid: 'kiosk-tb-power', onClick: () => { openOnly(null); setTenantModal('power'); } }] : []),
     { id: 'close', label: 'Sluiten', icon: X, testid: 'kiosk-tb-close', onClick: () => { openOnly(null); setTenantModal(null); reset(); } },
   ];
@@ -7821,7 +7824,7 @@ export default function KioskLayout() {
         <nav data-testid="kiosk-mobile-tenant-bar" aria-label="Appartement acties"
           className="kiosk-white-nav md:hidden fixed bottom-0 left-0 right-0 z-[109] h-[52px] overflow-hidden border-t border-slate-200 bg-white shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.15)]"
           style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxSizing: 'content-box' }}>
-          <div className={`grid h-full w-full ${hasAdminAccess ? 'grid-cols-5' : 'grid-cols-4'} items-stretch px-1`}>
+          <div className={`grid h-full w-full ${hasPowerAccess ? 'grid-cols-6' : 'grid-cols-5'} items-stretch px-1`}>
             {tenantBarItems.filter(({ id }) => !['overview', 'close', 'info'].includes(id)).map(({ id, label, icon: Icon, onClick }) => {
               const active = (id === 'pay' && step !== 'overview') || id === tenantModal;
               return (
@@ -7960,8 +7963,11 @@ export default function KioskLayout() {
           </div>
         </nav>
       ), document.body)}
-      {tenantModal && tenantModal !== 'power' && apartment && (
+      {tenantModal && !['power', 'sms'].includes(tenantModal) && apartment && (
         <TenantInfoModal apartment={apartment} mode={tenantModal} onClose={() => setTenantModal(null)} />
+      )}
+      {tenantModal === 'sms' && apartment && (
+        <KioskTenantSms apartment={apartment} Shell={KioskModalShell} onClose={() => setTenantModal(null)} />
       )}
       {tenantModal === 'power' && apartment && (
         <ApartmentPower apartmentId={apartment.id} onClose={() => setTenantModal(null)} />

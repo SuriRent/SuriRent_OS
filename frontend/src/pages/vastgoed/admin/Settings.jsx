@@ -208,6 +208,7 @@ export function MessenteForm({ initial, receiptMediaUrl, platform = false }) {
           placeholder="Afzender uit Messente" helper="Neem de geregistreerde WhatsApp-afzender exact over uit Messente, zonder whatsapp:-prefix." />
         <TextField label="SMS afzender" testid="messente-sms-from" value={d.sms_from} onChange={(v) => s.onField('sms_from', v)}
           placeholder="SuriRent" helper="Een door Messente toegestane afzendernaam of telefoonnummer." />
+        <p className="text-sm text-muted-foreground">SMS-berichten worden beperkt tot één segment: 160 GSM-tekens (sommige tekens tellen dubbel) of 70 Unicode-tekens. Bon- en factuurlinks zijn 30 dagen geldig. Bij automatisch aangemaakte huurfacturen wordt direct een SMS geprobeerd.</p>
       </div>
       <div className="space-y-3 rounded-xl border border-slate-200 p-4">
         <p className="text-sm font-bold text-slate-900">Goedgekeurde WhatsApp-templates</p>
@@ -585,7 +586,9 @@ export function InvoicingForm({ initial, onSaved, onDirty }) {
             <b className="text-purple-800">Automatische reminder actief:</b>{' '}
             huurders krijgen <b>{d.reminder_days_before}</b> dag{Number(d.reminder_days_before) === 1 ? '' : 'en'} vóór de vervaldatum
             een WhatsApp/SMS-bericht + email (mits kanaal is ingeschakeld en huurder een telefoon/email heeft).
-            De loop draait dagelijks om 09:00 (Suriname-tijd).
+            Als de factuur nog openstaat, volgt eenmalig een dringende SMS op de dag na de vervaldatum,
+            mits Messente is ingeschakeld en de huurder een telefoonnummer heeft.
+            De loop draait tussen 09:00 en 10:00 (Suriname-tijd).
           </div>
           <button type="button"
             onClick={async () => {
