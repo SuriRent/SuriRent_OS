@@ -9970,20 +9970,26 @@ async def public_signature_request_submit(token: str, file: UploadFile = File(..
 @api.post("/tenants/ocr-id-card")
 async def ocr_id_card(file: UploadFile = File(...),
                        user=Depends(get_current_user)):
-    """ID-kaart velden via Google Gemini (eigen GEMINI_API_KEY). Werkt met
-    Surinaamse ID's, paspoorten en NL rijbewijzen."""
+    """Lees ID-kaartvelden met Azure Document Intelligence of Google Gemini."""
     import os
     import json as _json
     import httpx
+    from id_scan_azure import azure_configuration, scan_id_with_azure
+    azure = azure_configuration(
+        os.getenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", ""),
+        os.getenv("AZURE_DOCUMENT_INTELLIGENCE_KEY", ""),
+    )
     api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ontbreekt op de server")
+    if not azure and not api_key:
+        raise HTTPException(status_code=500, detail="Geen API-sleutel voor ID-scan ingesteld op de server")
 
     raw = await file.read()
     if len(raw) > MAX_LANDING_ASSET_BYTES:
         raise HTTPException(status_code=413, detail="Bestand groter dan 5 MB")
 
     ctype = (file.content_type or "image/jpeg").lower()
+    if azure:
+        return await scan_id_with_azure(raw, ctype, *azure)
     mime = "image/png" if "png" in ctype else ("image/webp" if "webp" in ctype else "image/jpeg")
 
     prompt = (

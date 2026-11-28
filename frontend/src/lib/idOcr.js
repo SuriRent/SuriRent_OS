@@ -1,6 +1,6 @@
 import { api } from './api';
 
-// Stuurt de ID-foto naar de server; die leest de kaart uit via Gemini.
+// Stuurt de ID-foto naar de server voor OCR.
 export function postIdOcr(url, file, extra = {}) {
   const fd = new FormData();
   fd.append('file', file);

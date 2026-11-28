@@ -75,7 +75,9 @@ Vul placeholders met eigen waarden in voordat je deployt. Zet geen productiegehe
 | `REACT_APP_MARKETING_HOST` | Ja bij gescheiden domeinen | Marketing-hostname zonder `https://` of afsluitende slash; bepaalt waar de marketingwebsite wordt getoond. |
 | `REACT_APP_APP_URL` | Ja bij gescheiden domeinen | Volledige publieke app-URL; marketinglinks naar aanmelden/inloggen verwijzen hiernaartoe. |
 | `EMERGENT_LLM_KEY` | Nee | Optionele AI-, spraak- en gerelateerde Emergent-integraties. |
-| `GEMINI_API_KEY` | Voor Scan ID | Google Gemini-key om ID-kaarten uit te lezen (gratis via aistudio.google.com/apikey). |
+| `GEMINI_API_KEY` | Voor Scan ID zonder Azure | Google Gemini-key om ID-kaarten uit te lezen. |
+| `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | Voor Scan ID met Azure | HTTPS-endpoint van de Azure Document Intelligence-resource. |
+| `AZURE_DOCUMENT_INTELLIGENCE_KEY` | Voor Scan ID met Azure | API-sleutel van dezelfde Azure-resource. |
 | `INTEGRATION_PROXY_URL` | Nee | Optionele basis-URL voor de object-storage-integratie. |
 | `STRIPE_PUBLISHABLE_KEY` | Nee | Optionele Stripe publishable key. |
 | `STRIPE_SECRET_KEY` | Nee | Optionele Stripe secret key. |
@@ -92,6 +94,12 @@ Vul placeholders met eigen waarden in voordat je deployt. Zet geen productiegehe
 | `PLATFORM_FROM_EMAIL` | Nee | Afzenderadres voor platformmails. |
 
 Optionele integraties zijn niet bruikbaar totdat ze correct zijn geconfigureerd. Instellingen voor klantgebonden e-mail- en andere integraties kunnen daarnaast in de applicatie worden ingesteld.
+
+### ID-kaarten scannen met Azure
+
+Maak een [Azure Document Intelligence-resource](https://portal.azure.com/#create/Microsoft.CognitiveServicesFormRecognizer) aan en kopieer **Keys and Endpoint** naar `AZURE_DOCUMENT_INTELLIGENCE_KEY` en `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` in de serveromgeving of Coolify. Vul beide waarden in en herstart de backend. Azure heeft dan voorrang op Gemini; zonder Azure-instellingen blijft de bestaande Gemini-scan werken. Bij een Azure-fout wordt niet automatisch naar Gemini overgeschakeld.
+
+De foto wordt naar Azure gestuurd voor verwerking. Controleer de privacyvoorwaarden en de herkenning van de gebruikte ID-kaarten; uitlezen kan fouten bevatten. De gratis Azure-laag heeft beperkingen, waaronder maximaal 4 MB per foto. Raadpleeg de [actuele prijzen](https://azure.microsoft.com/en-us/pricing/details/document-intelligence/).
 
 ## Lokale ontwikkeling
 
