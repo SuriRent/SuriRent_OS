@@ -480,6 +480,7 @@ async def lifespan(app: FastAPI):
     await db.payments.create_index("receipt_number", unique=True)
     await db.payments.create_index([("company_id", 1), ("paid_at", -1)])
     await db.sms_history.create_index([("company_id", 1), ("created_at", -1)])
+    await db.sms_receipt_links.create_index("expires_at", expireAfterSeconds=0)
     await db.payments.create_index([("tenant_id", 1), ("paid_at", -1)])
     await db.payments.create_index([("company_id", 1), ("status", 1)])
     await db.payments.create_index([("company_id", 1), ("status", 1), ("paid_at", -1)])
@@ -2127,11 +2128,7 @@ async def _send_password_reset_sms(phone: str, name: str, code: str, company_id:
     if not cfg.get("enabled"):
         doc = await db.saas_settings.find_one({"id": SAAS_SETTINGS_ID}, {"_id": 0, "messente": 1}) or {}
         cfg = _reveal_section("messente", doc.get("messente") or {})
-    msg = (
-        f"Hallo {name or 'gebruiker'},\n\n"
-        f"Je SuriRent herstelcode: {code}\n\n"
-        f"15 minuten geldig. Heb je dit niet aangevraagd? Negeer dit bericht."
-    )
+    msg = f"SuriRent herstelcode: {code}. 15 minuten geldig. Niet aangevraagd? Negeer dit bericht."
     if company_id:
         await _send_company_sms(company_id, cfg, phone, msg, "Wachtwoordherstel")
     else:
@@ -7778,7 +7775,8 @@ async def tenant_forgot_pin(body: TenantForgotPinIn, request: Request):
                     print(f"[forgot-pin] whatsapp send failed: {e}")
                     # Val terug op SMS als WhatsApp faalt.
                     try:
-                        await _send_company_sms(cid, cfg, phone, msg, "PIN-herstel")
+                        sms_msg = f"Uw nieuwe kiosk-PIN: {new_pin}. Niet aangevraagd? Neem contact op met de receptie."
+                        await _send_company_sms(cid, cfg, phone, sms_msg, "PIN-herstel")
                         via.append("sms")
                     except MessenteError as e2:
                         print(f"[forgot-pin] whatsapp+sms send failed: {e2}")
@@ -9870,6 +9868,9 @@ async def request_tenant_signature(tenant_id: str, body: SignatureRequestIn,
         f"Deze link is 24 uur geldig.\n\n"
         f"— {brand_name}"
     )
+    sms_msg = f"Uw handtekening is gevraagd. Teken binnen 24 uur: {sign_url}"
+    if body.message:
+        sms_msg = f"{body.message.strip()}\n{sms_msg}"
 
     # Probeer WhatsApp eerst (indien gekozen); fallback naar SMS.
     from messente_service import send_whatsapp, send_sms, MessenteError
@@ -9879,13 +9880,13 @@ async def request_tenant_signature(tenant_id: str, body: SignatureRequestIn,
             await send_whatsapp(messente_cfg, phone, msg)
             used_channel = "whatsapp"
         else:
-            await _send_company_sms(cid, messente_cfg, phone, msg, "Handtekeningverzoek")
+            await _send_company_sms(cid, messente_cfg, phone, sms_msg, "Handtekeningverzoek")
             used_channel = "sms"
     except MessenteError as e:
         # Val terug op SMS wanneer WhatsApp faalde (bv. niet gejoinde sandbox).
         if body.channel == "whatsapp":
             try:
-                await _send_company_sms(cid, messente_cfg, phone, msg, "Handtekeningverzoek")
+                await _send_company_sms(cid, messente_cfg, phone, sms_msg, "Handtekeningverzoek")
                 used_channel = "sms"
             except MessenteError as e2:
                 raise HTTPException(status_code=502, detail=f"Zowel WhatsApp als SMS faalden: {e2}") from e2
@@ -10787,6 +10788,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
     #  • Anders: pak de oudst openstaande huur-factuur van deze huurder.
     #  • Bij pending_approval: koppelen we NIET automatisch — pas bij goedkeuring.
     matched_invoice = None
+    auto_invoice_created = False
     explicit_invoice_ids = list(body.invoice_ids or [])
     if body.category in ("huur", "vooruitbetaling") and status == "approved":
         inv_q = {"tenant_id": body.tenant_id, "status": {"$nin": ["paid", "archived"]}}
@@ -10867,6 +10869,7 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                         await db.invoices.insert_one(new_inv)
                         new_inv.pop("_id", None)
                         matched_invoice = new_inv
+                        auto_invoice_created = True
                     except Exception as _e:  # noqa: BLE001
                         # Best-effort — betaling gaat sowieso door. Log alleen.
                         print(f"[auto-invoice on payment] create failed: {_e}")
@@ -10983,6 +10986,8 @@ async def _create_payment_doc(body: PaymentIn, company_id: Optional[str] = None,
                     )
         except Exception as e:
             print(f"[payments] invoice apply failed: {e}")
+    if auto_invoice_created:
+        asyncio.create_task(_notify_auto_invoice_sms(matched_invoice, tenant))
     if status == "approved":
         await _reconcile_power_after_payment(doc.get("company_id"))
     return doc
@@ -13907,11 +13912,15 @@ async def kiosk_whatsapp_receipt(payment_id: str, _session=Depends(get_kiosk_ses
 
     if has_sms:
         try:
-            await _send_company_sms(cid, cfg, to, msg, "Betaalbewijs")
+            sms_msg = await _receipt_sms(cid, payment_id, p_enriched["currency"], p_enriched["amount"])
+            await _send_company_sms(cid, cfg, to, sms_msg, "Betaalbewijs")
             return {"sent": True, "channel": "sms", "to": to}
-        except MessenteError as e:
+        except (MessenteError, HTTPException) as e:
             print(f"[kiosk-messente] sms failed payment={payment_id} err={e}")
-            return {"sent": False, "reason": "send_failed"}
+            result = {"sent": False, "reason": "send_failed"}
+            if isinstance(e, MessenteError) and str(e).startswith("SMS-bericht is te lang"):
+                result["detail"] = str(e)
+            return result
 
     return {"sent": False, "reason": "send_failed" if has_wa else "no_channel_configured"}
 
@@ -15282,6 +15291,10 @@ async def payment_image(payment_id: str):
     p = await db.payments.find_one({"id": payment_id}, {"_id": 0})
     if not p:
         raise HTTPException(status_code=404, detail="Kwitantie niet gevonden")
+    return await _payment_image_response(p)
+
+
+async def _payment_image_response(p: dict):
     data = await _receipt_print_data(p)
     png = await asyncio.to_thread(_render_receipt_png, data)
     jpg = await asyncio.to_thread(_receipt_png_to_jpg, png)
@@ -15291,6 +15304,36 @@ async def payment_image(payment_id: str):
         media_type="image/jpeg",
         headers={"Content-Disposition": f'inline; filename="bon-{p["receipt_number"]}.jpg"'},
     )
+
+
+@api.get("/r/{token}")
+async def sms_receipt_image(token: str):
+    if not re.fullmatch(r"[A-Za-z0-9_-]{22}", token):
+        raise HTTPException(status_code=404, detail="Bon niet beschikbaar")
+    token_hash = hashlib.sha256(token.encode("ascii")).hexdigest()
+    link = await db.sms_receipt_links.find_one({
+        "_id": token_hash, "expires_at": {"$gt": now_utc()},
+    })
+    if not link:
+        raise HTTPException(status_code=404, detail="Bon niet beschikbaar")
+    if link.get("document_type") == "invoice":
+        invoice = await db.invoices.find_one({
+            "id": link["invoice_id"], "company_id": link["company_id"],
+        }, {"_id": 0})
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Factuur niet beschikbaar")
+        response = await _invoice_image_response(invoice)
+    else:
+        payment = await db.payments.find_one({
+            "id": link["payment_id"], "company_id": link["company_id"],
+        }, {"_id": 0})
+        if not payment:
+            raise HTTPException(status_code=404, detail="Bon niet beschikbaar")
+        response = await _payment_image_response(payment)
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 @api.get("/public/whatsapp-receipts/{token}.jpg")
@@ -16549,7 +16592,8 @@ async def _apply_tenant_credit_to_invoice(
 
 
 async def _generate_month_invoices_for_company(
-    company_id: str, period_month: int, period_year: int, *, scope_user=None, only_tenant_id: str = None
+    company_id: str, period_month: int, period_year: int, *, scope_user=None, only_tenant_id: str = None,
+    notify_sms: bool = False,
 ) -> dict:
     """Gedeelde factuur-generatie. Maakt facturen voor elk bewoond appartement,
     skipt duplicates, en verrekent automatisch eventueel krediet.
@@ -16593,7 +16637,7 @@ async def _generate_month_invoices_for_company(
             continue
         seq = await _next_seq(f"invoice_{period_year}")
         inv_id = new_id()
-        await db.invoices.insert_one({
+        invoice = {
             "id": inv_id,
             "company_id": company_id,
             "invoice_number": f"F{period_year}-{seq:05d}",
@@ -16604,11 +16648,14 @@ async def _generate_month_invoices_for_company(
             "invoice_date": invoice_date_iso,
             "due_date": due_date_iso,
             "status": "open", "created_at": iso(now_utc()),
-        })
+        }
+        await db.invoices.insert_one(invoice)
         # Verreken positief saldo van deze huurder met de nieuwe factuur
         applied = await _apply_tenant_credit_to_invoice(t["id"], inv_id, company_id)
         credit_applied_total += applied
         created += 1
+        if notify_sms:
+            asyncio.create_task(_notify_auto_invoice_sms(invoice, t))
     return {
         "created": created,
         "skipped": skipped,
@@ -16793,7 +16840,7 @@ async def _auto_invoice_tick():
         # Genereer huidige maand
         try:
             res = await _generate_month_invoices_for_company(
-                company_id, today.month, today.year
+                company_id, today.month, today.year, notify_sms=True
             )
             await db.company_settings.update_one(
                 {"company_id": company_id},
@@ -17421,6 +17468,11 @@ async def invoice_image_endpoint(invoice_id: str):
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     if not inv:
         raise HTTPException(status_code=404, detail="Factuur niet gevonden")
+    return await _invoice_image_response(inv)
+
+
+async def _invoice_image_response(inv: dict):
+    invoice_id = inv["id"]
     inv = await _enrich_invoice(inv)
     t = await db.tenants.find_one({"id": inv["tenant_id"]}, {"_id": 0}) or {}
     a = await db.apartments.find_one({"id": inv.get("apartment_id")}, {"_id": 0}) or {}
@@ -18746,7 +18798,9 @@ async def _activate_after_deposit(cid: str, tenant_id: str, deposit_id: str) -> 
                                 {"$set": {"deposit_status": "paid", "deposit_id": deposit_id}})
     await db.contracts.update_many({"tenant_id": tenant_id, "company_id": cid}, {"$set": {"active": True}})
     n = now_utc()
-    gen = await _generate_month_invoices_for_company(cid, n.month, n.year, only_tenant_id=tenant_id)
+    gen = await _generate_month_invoices_for_company(
+        cid, n.month, n.year, only_tenant_id=tenant_id, notify_sms=True,
+    )
     return gen.get("created", 0)
 
 
@@ -21093,12 +21147,62 @@ def _receipt_template(cfg: dict, payment_id: Optional[str], name: str, company: 
     return "receipt", whatsapp_variables(name, company, amount, reference, image_url)
 
 
+async def _sms_document_message(company_id: str, document_type: str, document_id: str,
+                                text: str) -> str:
+    from urllib.parse import urlsplit
+    from messente_service import validate_sms_body
+
+    base = _public_url("")
+    parsed = urlsplit(base)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+            or parsed.path not in ("", "/") or parsed.query or parsed.fragment):
+        raise HTTPException(status_code=500, detail="APP_PUBLIC_URL moet een publieke HTTPS-apporigin zijn voor SMS-documentlinks.")
+    token = secrets.token_urlsafe(16)
+    url = _public_url(f"/api/r/{token}")
+    body = f"{text} {url}"
+    validate_sms_body(body)
+    await db.sms_receipt_links.insert_one({
+        "_id": hashlib.sha256(token.encode("ascii")).hexdigest(),
+        "company_id": company_id, "document_type": document_type,
+        f"{document_type}_id": document_id,
+        "expires_at": now_utc() + timedelta(days=30),
+    })
+    return body
+
+
+async def _receipt_sms(company_id: str, payment_id: str, currency: str, amount: float,
+                       extra: str = "") -> str:
+    text = f"Betaling {currency} {amount:.2f} ontvangen. Bekijk bon:"
+    if extra.strip():
+        text = f"{extra.strip()}\n{text}"
+    return await _sms_document_message(company_id, "payment", payment_id, text)
+
+
+async def _notify_auto_invoice_sms(invoice: dict, tenant: dict) -> None:
+    company_id = invoice.get("company_id")
+    phone = (tenant.get("phone") or "").strip()
+    try:
+        if not company_id or not phone:
+            raise ValueError("Bedrijf of telefoonnummer ontbreekt")
+        cfg = await get_company_section(company_id, "messente")
+        if not cfg.get("enabled") or not (cfg.get("sms_from") or "").strip():
+            raise ValueError("Messente SMS is niet ingeschakeld of de SMS-afzender ontbreekt")
+        text = f"Factuur {invoice['invoice_number']}: {invoice['currency']} {float(invoice['amount']):.2f}. Bekijk factuur:"
+        msg = await _sms_document_message(company_id, "invoice", invoice["id"], text)
+        await _send_company_sms(company_id, cfg, phone, msg, "Nieuwe factuur")
+    except Exception as exc:
+        _logging.getLogger("uvicorn.error").warning(
+            "Automatische factuur-SMS niet verzonden voor factuur %s: %s", invoice.get("id"), exc,
+        )
+
+
 async def _send_company_sms(company_id: str, cfg: dict, to: str, body: str, purpose: str):
     from urllib.parse import urlsplit
-    from messente_service import send_sms, _validate_number
+    from messente_service import send_sms, _validate_number, validate_sms_body
     from settings_service import encrypt
 
     recipient = _validate_number(to)
+    validate_sms_body(body)
     record_id = secrets.token_urlsafe(24)
     base = (os.environ.get("APP_PUBLIC_URL") or "").rstrip("/")
     parsed = urlsplit(base)
@@ -21230,6 +21334,12 @@ async def message_payment_receipt(payment_id: str, body: MessageSendIn, user=Dep
             f"{p['currency']} {p['amount']:.2f}", p["receipt_number"],
             _public_url(f"/api/payments/{payment_id}/image"),
         )
+    else:
+        from messente_service import MessenteError
+        try:
+            msg = await _receipt_sms(company_id_of(user), payment_id, p["currency"], p["amount"], body.message or "")
+        except MessenteError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     await _messente_send(
         cfg, body.channel, to, msg, template_kind=template_kind, variables=variables,
         media_url=_public_url(f"/api/payments/{payment_id}/image"),
@@ -21263,6 +21373,15 @@ async def message_invoice(invoice_id: str, body: MessageSendIn, user=Depends(get
         f"Bon JPG: {_public_url(f'/api/invoices/{invoice_id}/image')}\n\n"
         f"— {brand_name}"
     )
+    if body.channel == "sms":
+        from messente_service import MessenteError
+        try:
+            msg = await _sms_document_message(
+                company_id_of(user), "invoice", invoice_id,
+                f"{extra}Factuur {inv['invoice_number']}: {inv['currency']} {inv['amount']:.2f}. Bekijk factuur:",
+            )
+        except MessenteError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     await _messente_send(
         cfg, body.channel, to, msg, template_kind="reminder", company_id=company_id_of(user), purpose="Factuur",
         variables=whatsapp_variables(
@@ -21366,6 +21485,9 @@ async def tenant_payment_reminder(
         f"Periodes: {period_label}\n\n"
         f"Gelieve zo spoedig mogelijk te betalen.\n\n— {brand_name}"
     )
+    if channel == "sms":
+        msg = (f"{extra}Herinnering: {len(invs)} openstaande factuur(en), "
+               f"totaal {cur} {total:.2f}. Betaal via de kiosk.")
     await _messente_send(
         cfg, channel, to, msg, template_kind="reminder", company_id=company_id_of(user), purpose="Betalingsherinnering",
         variables=whatsapp_variables(
@@ -21404,6 +21526,8 @@ async def message_contract(contract_id: str, body: MessageSendIn, user=Depends(g
         f"{sign_line}\n\n"
         f"— {brand_name}"
     )
+    if body.channel == "sms":
+        msg = f"{extra}Contract {c['contract_number']}: {pdf_link}{sign_line}"
     await _messente_send(cfg, body.channel, to, msg, company_id=company_id_of(user), purpose="Contract")
     return {"ok": True, "sent_to": to, "channel": body.channel}
 
@@ -21430,6 +21554,8 @@ async def message_overdue_reminder(tenant_id: str, body: MessageSendIn, user=Dep
         f"Je kunt langskomen bij ons kantoor of via de Kiosk betalen.\n\n"
         f"— {brand_name}"
     )
+    if body.channel == "sms":
+        msg = f"{extra}Herinnering: {bal['currency']} {bal['balance']:.2f} staat open. Betaal via de kiosk."
     await _messente_send(
         cfg, body.channel, to, msg, template_kind="reminder", company_id=company_id_of(user), purpose="Betalingsherinnering",
         variables=whatsapp_variables(
@@ -21438,6 +21564,73 @@ async def message_overdue_reminder(tenant_id: str, body: MessageSendIn, user=Dep
         ),
     )
     return {"ok": True, "sent_to": to, "channel": body.channel}
+
+
+class KioskTenantSmsIn(BaseModel):
+    action: Literal["message", "invoice", "receipt", "reminder", "signature"]
+    document_id: Optional[str] = None
+    message: str = ""
+
+
+async def _kiosk_sms_tenant(tenant_id: str, session: dict) -> dict:
+    tenant = await db.tenants.find_one({"id": tenant_id, **kiosk_scope(session)}, {"_id": 0})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Huurder niet gevonden")
+    return tenant
+
+
+@api.get("/kiosk/tenants/{tenant_id}/sms")
+async def kiosk_tenant_sms_options(tenant_id: str, session=Depends(get_kiosk_session)):
+    tenant = await _kiosk_sms_tenant(tenant_id, session)
+    tenant_scope = {"tenant_id": tenant_id, **kiosk_scope(session)}
+    invoices, payments = await asyncio.gather(
+        db.invoices.find(
+            {**tenant_scope, "status": {"$nin": ["cancelled", "archived"]}},
+            {"_id": 0, "id": 1, "invoice_number": 1, "amount": 1, "currency": 1, "created_at": 1},
+        ).sort("created_at", -1).to_list(50),
+        db.payments.find(
+            {**tenant_scope, "status": "approved"},
+            {"_id": 0, "id": 1, "receipt_number": 1, "amount": 1, "currency": 1, "paid_at": 1},
+        ).sort("paid_at", -1).to_list(50),
+    )
+    return {"tenant": {"name": tenant.get("name", ""), "phone": tenant.get("phone", "")},
+            "invoices": invoices, "payments": payments}
+
+
+@api.post("/kiosk/tenants/{tenant_id}/sms")
+async def kiosk_tenant_send_sms(tenant_id: str, body: KioskTenantSmsIn, session=Depends(get_kiosk_session)):
+    tenant = await _kiosk_sms_tenant(tenant_id, session)
+    cid = session["company_id"]
+    phone = (tenant.get("phone") or "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="Deze huurder heeft geen telefoonnummer.")
+    user = {"active_company_id": cid, "email": "kiosk"}
+    if body.action in ("invoice", "receipt"):
+        if not body.document_id:
+            raise HTTPException(status_code=400, detail="Kies eerst een document.")
+        collection = db.invoices if body.action == "invoice" else db.payments
+        query = {"id": body.document_id, "tenant_id": tenant_id, "company_id": cid}
+        if body.action == "receipt":
+            query["status"] = "approved"
+        else:
+            query["status"] = {"$nin": ["cancelled", "archived"]}
+        if not await collection.find_one(query, {"_id": 1}):
+            raise HTTPException(status_code=404, detail="Document niet gevonden voor deze huurder.")
+        request = MessageSendIn(channel="sms")
+        if body.action == "invoice":
+            await message_invoice(body.document_id, request, user=user)
+        else:
+            await message_payment_receipt(body.document_id, request, user=user)
+    elif body.action == "reminder":
+        await tenant_payment_reminder(tenant_id, {"channel": "sms"}, user=user)
+    elif body.action == "signature":
+        await request_tenant_signature(tenant_id, SignatureRequestIn(channel="sms"), user=user)
+    else:
+        if not body.message.strip():
+            raise HTTPException(status_code=400, detail="Vul een SMS-bericht in.")
+        cfg = await _messente_or_400(user)
+        await _messente_send(cfg, "sms", phone, body.message, company_id=cid, purpose="Vrij bericht")
+    return {"ok": True, "sent_to": phone}
 
 
 # =====================================================================
@@ -21807,6 +22000,13 @@ async def _notify_tenant_installment_paid(plan_id: str, seq: int) -> None:
                         f"{cur} {amount:.2f}", f"Termijn {seq}/{total_inst}",
                         receipt_image_url or _public_url("/kiosk/huurder"),
                     )
+                elif payment_id:
+                    body = await _receipt_sms(
+                        cid, payment_id, cur, amount,
+                        f"Termijn {seq}/{total_inst} betaald. Nog {remaining} termijn(en).",
+                    )
+                else:
+                    body = f"Termijn {seq}/{total_inst} betaald: {cur} {amount:.2f}. Nog {remaining} termijn(en)."
                 await _messente_send(
                     cfg, channel, phone, body, media_url=receipt_image_url,
                     template_kind=template_kind, variables=variables, company_id=cid, purpose="Betalingsregeling",
@@ -22588,6 +22788,9 @@ async def _send_upcoming_invoice_reminders():
             if messente_cfg.get("enabled") and phone:
                 try:
                     channel = "whatsapp" if messente_cfg.get("whatsapp_from") else "sms"
+                    if channel == "sms":
+                        wa_msg = (f"Herinnering: factuur {inv.get('invoice_number', '')} "
+                                  f"vervalt op {due_nl}. Bedrag: {currency} {remaining:.2f}.")
                     await _messente_send(
                         messente_cfg, channel, phone, wa_msg, template_kind="reminder", company_id=cid,
                         purpose="Betalingsherinnering",
@@ -22653,6 +22856,64 @@ async def _send_upcoming_invoice_reminders():
             })
 
 
+async def _send_overdue_invoice_sms():
+    """Probeer eenmaal een SMS op de dag na de vervaldatum."""
+    yesterday = ((now_utc() - timedelta(hours=3)).date() - timedelta(days=1)).isoformat()
+    async for cs in db.company_settings.find({}, {"_id": 0, "company_id": 1, "invoicing": 1}):
+        cid = cs.get("company_id")
+        try:
+            enabled = int((cs.get("invoicing") or {}).get("reminder_days_before") or 0) > 0
+        except (TypeError, ValueError):
+            enabled = False
+        if not cid or not enabled:
+            continue
+        cfg = await get_company_section(cid, "messente")
+        if not cfg.get("enabled"):
+            continue
+        async for inv in db.invoices.find({
+            "company_id": cid,
+            "status": {"$nin": ["paid", "cancelled", "archived"]},
+            "due_date": yesterday,
+        }, {"_id": 0}):
+            try:
+                remaining = float(inv.get("amount") or 0) - float(inv.get("paid_amount") or 0)
+            except (TypeError, ValueError) as exc:
+                print(f"[reminder-overdue-sms] invalid amount inv={inv.get('id')}: {exc}")
+                continue
+            if remaining <= 0.01:
+                continue
+            tenant = await db.tenants.find_one(
+                {"id": inv.get("tenant_id"), "company_id": cid}, {"_id": 0, "phone": 1},
+            ) or {}
+            phone = (tenant.get("phone") or "").strip()
+            if not phone:
+                continue
+            marker = {"invoice_id": inv["id"], "days_bucket": -1}
+            try:
+                await db.sent_upcoming_invoice_reminders.insert_one({
+                    **marker, "company_id": cid, "tenant_id": inv.get("tenant_id"),
+                    "due_date": yesterday, "sent_at": iso(now_utc()), "sms_status": "attempting",
+                })
+            except DuplicateKeyError:
+                continue
+            amount = f"{remaining:.2f}".replace(".", ",")
+            msg = (f"Factuur {inv.get('invoice_number') or inv['id']} is vervallen. "
+                   f"Openstaand saldo: {inv.get('currency') or 'SRD'} {amount}. "
+                   "Betaal zo spoedig mogelijk om een boete en extra kosten te voorkomen.")
+            try:
+                await _messente_send(cfg, "sms", phone, msg, company_id=cid,
+                                     purpose="Dringende betalingsherinnering")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[reminder-overdue-sms] messente fail inv={inv['id']}: {exc}")
+                await db.sent_upcoming_invoice_reminders.update_one(
+                    marker, {"$set": {"sms_status": "failed"}},
+                )
+            else:
+                await db.sent_upcoming_invoice_reminders.update_one(
+                    marker, {"$set": {"sms_status": "accepted"}},
+                )
+
+
 async def _upcoming_invoice_reminder_loop():
     """Achtergrond-loop: probeert elke 30 min, maar stuurt alleen tussen 09:00
     en 10:00 lokale tijd (UTC-3 Suriname) — max 1× per drempel per factuur.
@@ -22662,9 +22923,13 @@ async def _upcoming_invoice_reminder_loop():
         try:
             hour_local = (now_utc().hour - 3) % 24
             if 9 <= hour_local < 10:
-                await _send_upcoming_invoice_reminders()
+                try:
+                    await _send_upcoming_invoice_reminders()
+                except Exception as e:  # noqa: BLE001
+                    print(f"[reminder-upcoming] loop fail: {e}")
+                await _send_overdue_invoice_sms()
         except Exception as e:  # noqa: BLE001
-            print(f"[reminder-upcoming] loop fail: {e}")
+            print(f"[reminder-overdue-sms] loop fail: {e}")
         await _aio.sleep(30 * 60)
 
 
@@ -22748,6 +23013,9 @@ async def _send_overdue_installment_reminders():
                 f"Eerst-vervallen: {earliest}\n\n"
                 f"Gelieve zo spoedig mogelijk te voldoen via onze kiosk of betaalapp.\n\n— {brand_name_wa}"
             )
+            if not messente_cfg.get("whatsapp_from"):
+                msg = (f"Herinnering: {n} achterstallige termijn(en), "
+                       f"totaal {cur} {total:.2f}. Eerst vervallen: {earliest}.")
             try:
                 await _messente_send(
                     messente_cfg, "whatsapp" if messente_cfg.get("whatsapp_from") else "sms",

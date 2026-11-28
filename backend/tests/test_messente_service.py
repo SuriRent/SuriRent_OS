@@ -69,6 +69,23 @@ def test_sms_requests_delivery_report_callback(monkeypatch):
     assert json.loads(requests[0].content)["dlr_url"] == "https://example.com/api/public/messente/sms-status/id"
 
 
+@pytest.mark.parametrize("body,valid", [
+    ("a" * 160, True), ("a" * 161, False),
+    ("a" * 158 + "€", True), ("a" * 159 + "€", False),
+    ("界" * 70, True), ("界" * 71, False),
+    ("😀" * 35, True), ("😀" * 36, False),
+])
+def test_sms_is_limited_to_one_encoded_segment(monkeypatch, body, valid):
+    requests = mock_api(monkeypatch)
+    if valid:
+        asyncio.run(send_sms(CONFIG, "+5971234567", body))
+        assert len(requests) == 1
+    else:
+        with pytest.raises(MessenteError, match="één SMS"):
+            asyncio.run(send_sms(CONFIG, "+5971234567", body))
+        assert requests == []
+
+
 @pytest.mark.parametrize("kind", ["receipt", "reminder", "receipt_media", "authentication"])
 def test_templates_use_messente_components_not_provider_sids(monkeypatch, kind):
     requests = mock_api(monkeypatch)

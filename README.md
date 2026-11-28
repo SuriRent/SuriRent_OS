@@ -96,6 +96,14 @@ Vul placeholders met eigen waarden in voordat je deployt. Zet geen productiegehe
 
 Optionele integraties zijn niet bruikbaar totdat ze correct zijn geconfigureerd. Instellingen voor klantgebonden e-mail- en andere integraties kunnen daarnaast in de applicatie worden ingesteld.
 
+Messente-SMS'jes zijn beperkt tot één segment: maximaal 160 GSM-septetten (sommige tekens tellen dubbel) of 70 UTF-16-code-eenheden. Betaalbewijzen gebruiken een korte link die 30 dagen geldig is; hiervoor moet `APP_PUBLIC_URL` een publiek bereikbare HTTPS-origin zijn. Te lange berichten worden niet verzonden.
+
+Bij automatisch aangemaakte huurfacturen probeert de app direct een SMS met een 30 dagen geldige factuurlink te sturen, ook als WhatsApp is ingesteld. Dit vereist een telefoonnummer en ingeschakelde bedrijfsinstellingen voor Messente SMS. Fouten worden gelogd en blokkeren de factuur of betaling niet; verzending wordt niet automatisch opnieuw geprobeerd.
+
+Als factuurherinneringen zijn ingeschakeld (`reminder_days_before` groter dan 0), probeert de dagelijkse herinneringsloop tussen 09:00 en 10:00 Surinaamse tijd eenmalig een dringende SMS te sturen op de dag na de vervaldatum als de factuur nog openstaat. Dit vereist ingeschakeld Messente en een telefoonnummer, ook als WhatsApp is ingesteld. Een mislukte of onderbroken verzendpoging wordt gelogd en niet automatisch opnieuw geprobeerd; bij langdurige uitval wordt de dag niet ingehaald.
+
+In de ontgrendelde bedrijfskiosk staat bij een geselecteerd appartement de knop **SMS**. Daarmee kan een medewerker een eigen bericht, factuur, betaalbewijs, herinnering of handtekeningverzoek sturen naar de gekoppelde huurder.
+
 ### ID-kaarten scannen met Azure
 
 Maak een [Azure Document Intelligence-resource](https://portal.azure.com/#create/Microsoft.CognitiveServicesFormRecognizer) aan en kopieer **Keys and Endpoint** naar `AZURE_DOCUMENT_INTELLIGENCE_KEY` en `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` in de serveromgeving of Coolify. Zet de exacte bedrijfs-ID's van de toegestane bedrijven, gescheiden door komma's, in `AZURE_DOCUMENT_INTELLIGENCE_COMPANY_IDS`. Een superadmin vindt de bedrijfs-ID bij **Bedrijven > Beheren**, of via `GET /api/companies` (het veld `id`; niet de slug). Een lege lijst geeft geen enkel bedrijf toegang tot Azure.
